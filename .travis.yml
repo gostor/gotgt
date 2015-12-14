@@ -1,0 +1,21 @@
+sudo: required
+dist: trusty
+
+language: go
+go:
+    - 1.4
+    - 1.5
+
+install:
+   - true
+
+before_script:
+    - go get golang.org/x/tools/cmd/vet
+    - go get github.com/kr/godep
+
+script:
+   - cd ${TRAVIS_BUILD_DIR}
+   - ./autogen.sh
+   - ./configure 
+   - make
+   - hack/verify-gofmt.sh
