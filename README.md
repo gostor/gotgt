@@ -1,6 +1,6 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-Cloud Integrated Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
+Cloud Integrated SCSI Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
 
 ```
 # citadm --help
