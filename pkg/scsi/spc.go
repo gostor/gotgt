@@ -30,18 +30,17 @@ package scsi
  * 7 Automation/Drive Interface (ADT)
  * 8 AT Attachment Interface (ATA/ATAPI-7)
  */
-type ProtocolIdentifier int
 
-var (
-	PIV_FCP   ProtocolIdentifier = iota
-	PIV_SPI   ProtocolIdentifier
-	PIV_S3P   ProtocolIdentifier
-	PIV_SBP   ProtocolIdentifier
-	PIV_SRP   ProtocolIdentifier
-	PIV_ISCSI ProtocolIdentifier
-	PIV_SAS   ProtocolIdentifier
-	PIV_ADT   ProtocolIdentifier
-	PIV_ATA   ProtocolIdentifier
+const (
+	PIV_FCP = iota
+	PIV_SPI
+	PIV_S3P
+	PIV_SBP
+	PIV_SRP
+	PIV_ISCSI
+	PIV_SAS
+	PIV_ADT
+	PIV_ATA
 )
 
 /*
@@ -88,18 +87,17 @@ var (
  * 7 - MD5 logical unit identifier - 7.6.3.10
  * 8 - SCSI name string - 7.6.3.11
  */
-type DesignatorType int
 
-var (
-	DESG_VENDOR       DesignatorType = iota
-	DESG_T10          DesignatorType
-	DESG_EUI64        DesignatorType
-	DESG_NAA          DesignatorType
-	DESG_REL_TGT_PORT DesignatorType
-	DESG_TGT_PORT_GRP DesignatorType
-	DESG_LU_GRP       DesignatorType
-	DESG_MD5          DesignatorType
-	DESG_SCSI         DesignatorType
+const (
+	DESG_VENDOR = iota
+	DESG_T10
+	DESG_EUI64
+	DESG_NAA
+	DESG_REL_TGT_PORT
+	DESG_TGT_PORT_GRP
+	DESG_LU_GRP
+	DESG_MD5
+	DESG_SCSI
 )
 
 func SPCIllegalOp(host int, cmd *SCSICommand) error {
@@ -175,4 +173,5 @@ func SPCRequestSense(host int, cmd *SCSICommand) error {
 }
 
 func SPCSendDiagnostics(host int, cmd *SCSICommand) error {
+	return nil
 }

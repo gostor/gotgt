@@ -39,8 +39,8 @@ func (sbc *SBCSCSIDeviceProtocol) OfflineLu(lu *SCSILu) error {
 
 func NewSBCDevice() (SBCSCSIDeviceProtocol, error) {
 	var sbc = SBCSCSIDeviceProtocol{
-		Type:          TYPE_DISK,
-		SCSIDeviceOps: make([]SCSIDeviceOperation, 0xff),
+		BaseSCSIDeviceProtocol{Type: TYPE_DISK,
+			SCSIDeviceOps: make([]SCSIDeviceOperation, 256)},
 	}
 	for i := 0; i <= 256; i++ {
 		sbc.SCSIDeviceOps = append(sbc.SCSIDeviceOps, NewSCSIDeviceOperation(SPCIllegalOp, nil, 0))
@@ -94,6 +94,8 @@ func NewSBCDevice() (SBCSCSIDeviceProtocol, error) {
 	sbc.SCSIDeviceOps[WRITE_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_WE_FA|PR_EA_FA|PR_WE_FA|PR_WE_FN)
 	sbc.SCSIDeviceOps[WRITE_VERIFY_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[VERIFY_12] = NewSCSIDeviceOperation(SBCVerify, nil, PR_EA_FA|PR_EA_FN)
+
+	return sbc, nil
 }
 
 func SBCModeSelect(host int, cmd *SCSICommand) error {
