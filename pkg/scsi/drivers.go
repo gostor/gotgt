@@ -17,7 +17,7 @@ limitations under the License.
 // Target Driver Interface
 package scsi
 
-var SCSITargetDriverState int
+type SCSITargetDriverState int
 
 const (
 	// just registered
@@ -51,7 +51,9 @@ type SCSITargetDriverOps interface {
 	CommandNotify(nid uint64, result int, cmd *SCSICommand) error
 }
 
-var fakeSCSITargetDriver SCSITargetDriver
+type fakeSCSITargetDriver struct {
+	SCSITargetDriver
+}
 
 func (fake *fakeSCSITargetDriver) Init() error {
 	return nil
