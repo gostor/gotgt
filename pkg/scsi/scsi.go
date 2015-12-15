@@ -58,3 +58,37 @@ var (
 
 	TYPE_PT SCSIDeviceType = 0xff
 )
+
+type CommandFunc func(host int, cmd *SCSICommand) error
+
+type SCSIServiceAction struct {
+	ServiceAction      uint32
+	CommandPerformFunc CommandFunc
+}
+
+type SCSIDeviceOperation struct {
+	CommandPerformFunc CommandFunc
+	ServiceAction      *SCSIServiceAction
+	PRConflictBits     uint8
+}
+
+type BaseSCSIDeviceProtocol struct {
+	Type          SCSIDeviceType
+	SCSIDeviceOps []SCSIDeviceOperation
+}
+
+type SCSIDeviceProtocol interface {
+	InitLu(lu *SCSILu) error
+	ExitLu(lu *SCSILu) error
+	ConfigLu(lu *SCSILu) error
+	OnlineLu(lu *SCSILu) error
+	OfflineLu(lu *SCSILu) error
+}
+
+func NewSCSIDeviceOperation(fn CommandFunc, sa *SCSIServiceAction, pr uint8) SCSIDeviceOperation {
+	return SCSIDeviceOperation{
+		CommandPerformFunc: fn,
+		ServiceAction:      sa,
+		PRConflictBits:     pr,
+	}
+}

@@ -101,3 +101,78 @@ var (
 	DESG_MD5          DesignatorType
 	DESG_SCSI         DesignatorType
 )
+
+func SPCIllegalOp(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCInquiry(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCReportLuns(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCStartStop(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCTestUnit(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPreventAllowMediaRemoval(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCModeSense(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCServiceAction(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRReadKeys(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRReadReservation(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRReportCapabilities(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRRegister(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRReserve(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRRelease(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRClear(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRPreempt(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCPRRegisterAndMove(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCRequestSense(host int, cmd *SCSICommand) error {
+	return nil
+}
+
+func SPCSendDiagnostics(host int, cmd *SCSICommand) error {
+}
