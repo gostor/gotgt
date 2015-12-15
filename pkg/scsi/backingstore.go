@@ -34,7 +34,7 @@ type BackingStore interface {
 
 type BackingStoreFunc func() (BackingStore, error)
 
-var registeredPlugins = map[name](BackingStoreFunc){}
+var registeredPlugins = map[string](BackingStoreFunc){}
 
 func RegisterBackingStore(name string, f BackingStoreFunc) {
 	registeredPlugins[name] = f

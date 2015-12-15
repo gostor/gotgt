@@ -63,7 +63,6 @@ var (
 	ASC_LOGICAL_UNIT_NOT_CONFIG SCSISubError = 0x3e00
 
 	/* Key 3: Medium Errors */
-	ASC_WRITE_ERROR                SCSISubError = 0x0c00
 	ASC_UNRECOVERED_READ           SCSISubError = 0x1100
 	ASC_RECORDED_ENTITY_NOT_FOUND  SCSISubError = 0x1400
 	ASC_UNKNOWN_FORMAT             SCSISubError = 0x3001

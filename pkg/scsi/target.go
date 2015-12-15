@@ -16,11 +16,20 @@ limitations under the License.
 
 package scsi
 
-var SCSITargetState int
+type SCSITargetState int
 
 var (
 	TargetOnline SCSITargetState = 1
 	TargetReady  SCSITargetState = 2
+)
+
+const (
+	PR_SPECIAL = (1 << 5)
+	PR_WE_FA   = (1 << 4)
+	PR_EA_FA   = (1 << 3)
+	PR_RR_FR   = (1 << 2)
+	PR_WE_FN   = (1 << 1)
+	PR_EA_FN   = (1 << 0)
 )
 
 type SCSITarget struct {

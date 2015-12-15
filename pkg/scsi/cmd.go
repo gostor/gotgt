@@ -162,6 +162,28 @@ const (
 	SCSIDataBidirection
 )
 
+const (
+	CBD_GROUPID_0 = iota
+	CBD_GROUPID_1
+	CBD_GROUPID_2
+	CBD_GROUPID_3
+	CBD_GROUPID_4
+	CBD_GROUPID_5
+	CBD_GROUPID_6
+	CBD_GROUPID_7
+)
+
+const (
+	CDB_GROUP0 = 6  /*  6-byte commands */
+	CDB_GROUP1 = 10 /* 10-byte commands */
+	CDB_GROUP2 = 10 /* 10-byte commands */
+	CDB_GROUP3 = 0  /* reserved */
+	CDB_GROUP4 = 16 /* 16-byte commands */
+	CDB_GROUP5 = 12 /* 12-byte commands */
+	CDB_GROUP6 = 0  /* vendor specific  */
+	CDB_GROUP7 = 0  /* vendor specific  */
+)
+
 type SCSIDataBuffer struct {
 	Buffer         uint64
 	Length         uint64
@@ -189,4 +211,8 @@ type SCSICommand struct {
 	Result       int
 	SenseBuffer  []byte
 	SenseLength  int
+}
+
+func SCSICDBGroupID(opcode byte) byte {
+	return ((opcode >> 5) & 0x7)
 }
