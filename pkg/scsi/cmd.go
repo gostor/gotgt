@@ -16,6 +16,8 @@ limitations under the License.
 
 package scsi
 
+import "bytes"
+
 type SCSICommandType byte
 
 var (
@@ -185,8 +187,8 @@ const (
 )
 
 type SCSIDataBuffer struct {
-	Buffer         uint64
-	Length         uint64
+	Buffer         *bytes.Buffer
+	Length         uint32
 	TransferLength uint32
 	Resid          int32
 }
@@ -197,20 +199,22 @@ type SCSICommand struct {
 	Device       *SCSILu
 	State        uint64
 	Direction    SCSIDataDirection
-	InSDBBuffer  *SCSIDataBuffer
-	OutSDBBuffer *SCSIDataBuffer
+	InSDBBuffer  SCSIDataBuffer
+	OutSDBBuffer SCSIDataBuffer
 	// Command ITN ID
-	CommandITNID uint64
-	Offset       uint64
-	TL           uint32
-	SCB          *[]byte
-	SCBLength    int
-	Lun          []uint8
-	Attribute    int
-	Tag          uint64
-	Result       int
-	SenseBuffer  []byte
-	SenseLength  int
+	CommandITNID  uint64
+	Offset        uint64
+	TL            uint32
+	SCB           *bytes.Buffer
+	SCBLength     int
+	Lun           []uint8
+	Attribute     int
+	Tag           uint64
+	Result        int
+	SenseBuffer   *bytes.Buffer
+	SenseLength   uint32
+	ITNexus       *ITNexus
+	ITNexusLuInfo *ITNexusLuInfo
 }
 
 func SCSICDBGroupID(opcode byte) byte {

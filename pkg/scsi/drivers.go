@@ -47,7 +47,7 @@ type SCSITargetDriverOps interface {
 	DestroyPortal(name string) error
 	CreateLu(lu *SCSILu) error
 
-	GetLun(lun uint8) (uint64, error)
+	GetLu(lun uint8) (uint64, error)
 	CommandNotify(nid uint64, result int, cmd *SCSICommand) error
 }
 

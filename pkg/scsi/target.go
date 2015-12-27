@@ -16,6 +16,12 @@ limitations under the License.
 
 package scsi
 
+import (
+	"fmt"
+
+	"github.com/golang/glog"
+)
+
 type SCSITargetState int
 
 var (
@@ -32,9 +38,52 @@ const (
 	PR_EA_FN   = (1 << 0)
 )
 
+type ITNexus struct {
+	ID       uint64
+	Ctime    uint64
+	Commands []SCSICommand
+	Target   *SCSITarget
+	Host     int
+	Info     string
+}
+
+type ITNexusLuInfo struct {
+	Lu      *SCSILu
+	ID      uint64
+	Prevent int
+}
+
 type SCSITarget struct {
-	Name  string
-	TID   int
-	LID   int
-	State SCSITargetState
+	Name    string
+	TID     int
+	LID     int
+	State   SCSITargetState
+	Devices []SCSILu
+	ITNexus []ITNexus
+}
+
+func deviceReserve(cmd *SCSICommand) error {
+	var lu *SCSILu
+	for _, dev := range cmd.Target.Devices {
+		if dev.Lun == cmd.Device.Lun {
+			lu = &dev
+			break
+		}
+	}
+	if lu == nil {
+		glog.Errorf("invalid target and lun %d %s", cmd.Target.TID, cmd.Device.Lun)
+		return nil
+	}
+
+	if lu.ReserveID != 0 && lu.ReserveID != cmd.CommandITNID {
+		glog.Errorf("already reserved %d, %d", lu.ReserveID, cmd.CommandITNID)
+		return fmt.Errorf("already reserved")
+	}
+	lu.ReserveID = cmd.CommandITNID
+	return nil
+}
+
+func deviceRelease(tid int, itn, lun uint64, force bool) error {
+	// TODO
+	return nil
 }

@@ -16,22 +16,43 @@ limitations under the License.
 
 package scsi
 
-type SCSIError byte
+import "errors"
+
+type SCSIError struct {
+	errno byte
+	Err   error
+}
 
 var (
-	NO_SENSE        SCSIError = 0x00
-	RECOVERED_ERROR SCSIError = 0x01
-	NOT_READY       SCSIError = 0x02
-	MEDIUM_ERROR    SCSIError = 0x03
-	HARDWARE_ERROR  SCSIError = 0x04
-	ILLEGAL_REQUEST SCSIError = 0x05
-	UNIT_ATTENTION  SCSIError = 0x06
-	DATA_PROTECT    SCSIError = 0x07
-	BLANK_CHECK     SCSIError = 0x08
-	COPY_ABORTED    SCSIError = 0x0a
-	ABORTED_COMMAND SCSIError = 0x0b
-	VOLUME_OVERFLOW SCSIError = 0x0d
-	MISCOMPARE      SCSIError = 0x0e
+	NO_SENSE        byte = 0x00
+	RECOVERED_ERROR byte = 0x01
+	NOT_READY       byte = 0x02
+	MEDIUM_ERROR    byte = 0x03
+	HARDWARE_ERROR  byte = 0x04
+	ILLEGAL_REQUEST byte = 0x05
+	UNIT_ATTENTION  byte = 0x06
+	DATA_PROTECT    byte = 0x07
+	BLANK_CHECK     byte = 0x08
+	COPY_ABORTED    byte = 0x0a
+	ABORTED_COMMAND byte = 0x0b
+	VOLUME_OVERFLOW byte = 0x0d
+	MISCOMPARE      byte = 0x0e
+)
+
+var (
+	NoSenseError        = SCSIError{NO_SENSE, errors.New("no sense")}
+	RecoveredError      = SCSIError{RECOVERED_ERROR, errors.New("recovered error")}
+	NotReadyError       = SCSIError{NOT_READY, errors.New("not ready")}
+	MediumError         = SCSIError{MEDIUM_ERROR, errors.New("medium error")}
+	HardwareError       = SCSIError{HARDWARE_ERROR, errors.New("hardware error")}
+	IllegalRequestError = SCSIError{ILLEGAL_REQUEST, errors.New("illegal request")}
+	UnitAttentionError  = SCSIError{UNIT_ATTENTION, errors.New("unit attention")}
+	DataProtectError    = SCSIError{DATA_PROTECT, errors.New("data protect")}
+	BlankCheckError     = SCSIError{BLANK_CHECK, errors.New("blank check")}
+	CopyAbortedError    = SCSIError{COPY_ABORTED, errors.New("copy aborted")}
+	AbortedCommandError = SCSIError{ABORTED_COMMAND, errors.New("aborted command")}
+	VolumeOverflowError = SCSIError{VOLUME_OVERFLOW, errors.New("volume overflow")}
+	MiscompareError     = SCSIError{MISCOMPARE, errors.New("miscompare")}
 )
 
 type SCSISubError uint16

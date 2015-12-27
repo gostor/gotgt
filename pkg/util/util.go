@@ -16,6 +16,20 @@ limitations under the License.
 
 package util
 
+import "encoding/binary"
+
+func GetUnalignedUint16(u8 []uint8) uint16 {
+	return binary.BigEndian.Uint16(u8)
+}
+
+func GetUnalignedUint32(u8 []uint8) uint32 {
+	return binary.BigEndian.Uint32(u8)
+}
+
+func GetUnalignedUint64(u8 []uint8) uint64 {
+	return binary.BigEndian.Uint64(u8)
+}
+
 // ParseKVText parses iSCSI key value data.
 func ParseKVText(txt []byte) map[string]string {
 	m := make(map[string]string)
