@@ -20,50 +20,24 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/port"
 )
 
-type SCSITargetState int
+func NewTarget(tid int, driverName, name string) (*api.SCSITarget, error) {
+	// verify the target ID
 
-var (
-	TargetOnline SCSITargetState = 1
-	TargetReady  SCSITargetState = 2
-)
+	// verify the target's Name
 
-const (
-	PR_SPECIAL = (1 << 5)
-	PR_WE_FA   = (1 << 4)
-	PR_EA_FA   = (1 << 3)
-	PR_RR_FR   = (1 << 2)
-	PR_WE_FN   = (1 << 1)
-	PR_EA_FN   = (1 << 0)
-)
-
-type ITNexus struct {
-	ID       uint64
-	Ctime    uint64
-	Commands []SCSICommand
-	Target   *SCSITarget
-	Host     int
-	Info     string
+	// verify the low level driver
+	var target = &api.SCSITarget{Name: name, TID: tid}
+	var tgt = port.NewTargetDriver(driverName, target)
+	target.SCSITargetDriver = tgt
+	return target, nil
 }
 
-type ITNexusLuInfo struct {
-	Lu      *SCSILu
-	ID      uint64
-	Prevent int
-}
-
-type SCSITarget struct {
-	Name    string
-	TID     int
-	LID     int
-	State   SCSITargetState
-	Devices []SCSILu
-	ITNexus []ITNexus
-}
-
-func deviceReserve(cmd *SCSICommand) error {
-	var lu *SCSILu
+func deviceReserve(cmd *api.SCSICommand) error {
+	var lu *api.SCSILu
 	for _, dev := range cmd.Target.Devices {
 		if dev.Lun == cmd.Device.Lun {
 			lu = &dev

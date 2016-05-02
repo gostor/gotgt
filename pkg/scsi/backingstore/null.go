@@ -16,7 +16,11 @@ limitations under the License.
 
 package backingstore
 
-import "github.com/gostor/gotgt/pkg/scsi"
+import (
+	"github.com/gostor/gotgt/pkg/scsi"
+
+	"github.com/golang/glog"
+)
 
 func init() {
 	scsi.RegisterBackingStore("null", new)
@@ -35,6 +39,7 @@ func new() (scsi.BackingStore, error) {
 }
 
 func (bs *NullBackingStore) Open(dev *SCSILu, path string, fd *int, size *uint64) error {
+	glog.V(1).Infof("NULL backing store open, size: %d", size)
 	return nil
 }
 
@@ -51,5 +56,6 @@ func (bs *NullBackingStore) Exit(dev *SCSILu) error {
 }
 
 func (bs *NullBackingStore) CommandSubmit(cmd *SCSICommand) error {
+	cmd.Result = SAM_STAT_GOOD
 	return nil
 }

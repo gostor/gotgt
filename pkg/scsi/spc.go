@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 )
 
@@ -108,16 +109,16 @@ const (
 	DESG_SCSI
 )
 
-func SPCIllegalOp(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCLuOffline(lu *SCSILu) error {
+func SPCLuOffline(lu *api.SCSILu) error {
 	lu.Attrs.Online = true
 	return nil
 }
 
-func SPCLuOnline(lu *SCSILu) error {
+func SPCLuOnline(lu *api.SCSILu) error {
 	if luPreventRemoval(lu) {
 		return fmt.Errorf("lu(%s) prevent removal", lu.Lun)
 	}
@@ -126,11 +127,11 @@ func SPCLuOnline(lu *SCSILu) error {
 	return nil
 }
 
-func SPCInquiry(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCReportLuns(host int, cmd *SCSICommand) SAMStat {
+func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		remainLength     uint32
 		actualLength     uint32 = 8
@@ -171,26 +172,26 @@ func SPCReportLuns(host int, cmd *SCSICommand) SAMStat {
 			remainLength -= 8
 		}
 	}
-	return SAMStatGood
+	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
-	return SAMStatCheckCondition
+	return api.SAMStatCheckCondition
 }
 
-func SPCStartStop(host int, cmd *SCSICommand) SAMStat {
+func SPCStartStop(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		pwrcnd, loej, start byte
 	)
 	if err := deviceReserve(cmd); err != nil {
-		return SAMStatReservationConflict
+		return api.SAMStatReservationConflict
 	}
 
 	cmd.InSDBBuffer.Resid = 0
 	scb := cmd.SCB.Bytes()
 	pwrcnd = scb[4] & 0xf0
 	if pwrcnd != 0 {
-		return SAMStatGood
+		return api.SAMStatGood
 	}
 
 	loej = scb[4] & 0x02
@@ -205,7 +206,7 @@ func SPCStartStop(host int, cmd *SCSICommand) SAMStat {
 				// !online == media is not present
 				BuildSenseData(cmd, NOT_READY, ASC_MEDIUM_REMOVAL_PREVENTED)
 			}
-			return SAMStatCheckCondition
+			return api.SAMStatCheckCondition
 		}
 		SPCLuOffline(cmd.Device)
 	}
@@ -213,15 +214,15 @@ func SPCStartStop(host int, cmd *SCSICommand) SAMStat {
 		SPCLuOnline(cmd.Device)
 	}
 
-	return SAMStatGood
+	return api.SAMStatGood
 }
 
-func SPCTestUnit(host int, cmd *SCSICommand) SAMStat {
+func SPCTestUnit(host int, cmd *api.SCSICommand) api.SAMStat {
 	if err := deviceReserve(cmd); err != nil {
-		return SAMStatReservationConflict
+		return api.SAMStatReservationConflict
 	}
 	if cmd.Device.Attrs.Online {
-		return SAMStatGood
+		return api.SAMStatGood
 	}
 	if cmd.Device.Attrs.Removable {
 		BuildSenseData(cmd, NOT_READY, ASC_MEDIUM_NOT_PRESENT)
@@ -229,46 +230,46 @@ func SPCTestUnit(host int, cmd *SCSICommand) SAMStat {
 		BuildSenseData(cmd, NOT_READY, ASC_BECOMING_READY)
 	}
 
-	return SAMStatCheckCondition
+	return api.SAMStatCheckCondition
 }
 
-func SPCPreventAllowMediaRemoval(host int, cmd *SCSICommand) SAMStat {
+func SPCPreventAllowMediaRemoval(host int, cmd *api.SCSICommand) api.SAMStat {
 	if err := deviceReserve(cmd); err != nil {
-		return SAMStatReservationConflict
+		return api.SAMStatReservationConflict
 	}
 	// PREVENT_MASK = 0x03
 	cmd.ITNexusLuInfo.Prevent = int(cmd.SCB.Bytes()[4] & 0x03)
-	return SAMStatGood
+	return api.SAMStatGood
 }
 
 // SPCModeSense Implement SCSI op MODE SENSE(6) and MODE SENSE(10)
 //  Reference : SPC4r11
 //  6.11 - MODE SENSE(6)
 //  6.12 - MODE SENSE(10)
-func SPCModeSense(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCSendDiagnostics(host int, cmd *SCSICommand) SAMStat {
+func SPCSendDiagnostics(host int, cmd *api.SCSICommand) api.SAMStat {
 	// we only support SELF-TEST==1
 	if cmd.SCB.Bytes()[1]&0x04 == 0 {
 		goto sense
 	}
 
-	return SAMStatGood
+	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
-	return SAMStatCheckCondition
+	return api.SAMStatCheckCondition
 }
 
 // This is useful for the various commands using the SERVICE ACTION format.
-func SPCServiceAction(host int, cmd *SCSICommand) SAMStat {
+func SPCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
 	// TODO
-	return SAMStatGood
+	return api.SAMStatGood
 }
 
-func SPCPRReadKeys(host int, cmd *SCSICommand) SAMStat {
+func SPCPRReadKeys(host int, cmd *api.SCSICommand) api.SAMStat {
 	allocationLength := util.GetUnalignedUint32(cmd.SCB.Bytes()[7:9])
 	if allocationLength < 8 {
 		goto sense
@@ -280,14 +281,14 @@ func SPCPRReadKeys(host int, cmd *SCSICommand) SAMStat {
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
-	return SAMStatCheckCondition
+	return api.SAMStatCheckCondition
 }
 
-func SPCPRReadReservation(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRReadReservation(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRReportCapabilities(host int, cmd *SCSICommand) SAMStat {
+func SPCPRReportCapabilities(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		buf          []byte        = make([]byte, 8)
 		availLength  uint32        = 8
@@ -324,38 +325,38 @@ func SPCPRReportCapabilities(host int, cmd *SCSICommand) SAMStat {
 		actualLength = availLength
 	}
 	cmd.InSDBBuffer.Resid = int32(actualLength)
-	return SAMStatGood
+	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
-	return SAMStatCheckCondition
+	return api.SAMStatCheckCondition
 }
 
-func SPCPRRegister(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRRegister(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRReserve(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRReserve(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRRelease(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRRelease(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRClear(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRClear(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRPreempt(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRPreempt(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCPRRegisterAndMove(host int, cmd *SCSICommand) SAMStat {
-	return SAMStatGood
+func SPCPRRegisterAndMove(host int, cmd *api.SCSICommand) api.SAMStat {
+	return api.SAMStatGood
 }
 
-func SPCRequestSense(host int, cmd *SCSICommand) SAMStat {
+func SPCRequestSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		allocationLength uint32
 		actualLength     uint32
@@ -378,5 +379,5 @@ func SPCRequestSense(host int, cmd *SCSICommand) SAMStat {
 	cmd.SenseBuffer = &bytes.Buffer{}
 	cmd.SenseLength = 0
 
-	return SAMStatGood
+	return api.SAMStatGood
 }
