@@ -119,6 +119,14 @@ func (tgt *ISCSITarget) ProcessCommand(buf []byte) ([]byte, error) {
 			}),
 		}
 		break
+	case OpLogoutReq:
+		resp = &ISCSICommand{
+			OpCode:   OpLogoutResp,
+			StatSN:   m.ExpStatSN,
+			TaskTag:  m.TaskTag,
+			ExpCmdSN: m.CmdSN,
+			MaxCmdSN: m.CmdSN,
+		}
 	case OpSCSICmd:
 		resp = &ISCSICommand{
 			OpCode:   OpSCSIResp,
