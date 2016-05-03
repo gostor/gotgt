@@ -1,26 +1,8 @@
-/*
-Copyright 2015 The GoStor Authors All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-// Package packet implements the iSCSI PDU packet format as specified in
-// rfc7143 section 11.
 package iscsit
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -70,15 +52,7 @@ var opCodeMap = map[OpCode]string{
 	OpReject:       "Reject",
 }
 
-func (c OpCode) String() string {
-	s := opCodeMap[c]
-	if s == "" {
-		s = fmt.Sprintf("Unknown Code: %x", int(c))
-	}
-	return s
-}
-
-type Message struct {
+type ISCSICommand struct {
 	OpCode             OpCode
 	RawHeader          []byte
 	DataLen            int
@@ -109,8 +83,8 @@ type Message struct {
 	// SCSI commands
 	ExpectedDataLen uint32
 	CDB             []byte
-	Status          Status
-	SCSIResponse    Response
+	Status          byte
+	SCSIResponse    byte
 
 	// Data-In
 	HasStatus    bool
@@ -118,23 +92,23 @@ type Message struct {
 	BufferOffset uint32
 }
 
-func (m *Message) Bytes() []byte {
-	switch m.OpCode {
+func (cmd *ISCSICommand) Bytes() []byte {
+	switch cmd.OpCode {
 	case OpLoginResp:
-		return m.loginRespBytes()
+		return cmd.loginRespBytes()
 	case OpLogoutResp:
-		return m.logoutRespBytes()
+		return cmd.logoutRespBytes()
 	case OpSCSIResp:
-		return m.scsiCmdRespBytes()
+		return cmd.scsiCmdRespBytes()
 	case OpSCSIIn:
-		return m.dataInBytes()
+		return cmd.dataInBytes()
 	}
 	return nil
 }
 
-func (m *Message) String() string {
+func (m *ISCSICommand) String() string {
 	var s []string
-	s = append(s, fmt.Sprintf("Op: %v", m.OpCode))
+	s = append(s, fmt.Sprintf("Op: %v", opCodeMap[m.OpCode]))
 	s = append(s, fmt.Sprintf("Final = %v", m.Final))
 	s = append(s, fmt.Sprintf("Immediate = %v", m.Immediate))
 	s = append(s, fmt.Sprintf("Data Segment Length = %d", m.DataLen))
@@ -171,37 +145,6 @@ func (m *Message) String() string {
 	return strings.Join(s, "\n")
 }
 
-// Response composes a reply to the given message with the appropriate bits set.
-func (m *Message) Response(r *Message) {
-	r.TaskTag = m.TaskTag
-	r.ConnID = m.ConnID
-	r.ISID = m.ISID
-}
-
-func Next(r io.Reader) (*Message, error) {
-	buf := make([]byte, 48) // TODO: sync.Pool
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
-	}
-	m, err := parseHeader(buf)
-	if err != nil {
-		return nil, err
-	}
-	m.RawHeader = buf
-	if m.DataLen > 0 {
-		dl := m.DataLen
-		for dl%4 > 0 {
-			dl++
-		}
-		data := make([]byte, dl)
-		if _, err := io.ReadFull(r, data); err != nil {
-			return nil, err
-		}
-		m.RawData = data[:m.DataLen]
-	}
-	return m, nil
-}
-
 // parseUint parses the given slice as a network-byte-ordered integer.  If
 // there are more than 8 bytes in data, it overflows.
 func ParseUint(data []byte) uint64 {
@@ -220,13 +163,12 @@ func MarshalUint64(i uint64) []byte {
 	}
 	return data
 }
-
-func parseHeader(data []byte) (*Message, error) {
+func parseHeader(data []byte) (*ISCSICommand, error) {
 	if len(data) != 48 {
 		return nil, fmt.Errorf("garbled header")
 	}
 	// TODO: sync.Pool
-	m := &Message{}
+	m := &ISCSICommand{}
 	m.Immediate = 0x40&data[0] == 0x40
 	m.OpCode = OpCode(data[0] & 0x3f)
 	m.Final = 0x80&data[1] == 0x80
@@ -273,4 +215,198 @@ func parseHeader(data []byte) (*Message, error) {
 		m.StatusDetail = uint8(data[37])
 	}
 	return m, nil
+}
+
+func (m *ISCSICommand) scsiCmdRespBytes() []byte {
+	// rfc7143 11.4
+	buf := &bytes.Buffer{}
+	buf.WriteByte(byte(OpSCSIResp))
+	buf.WriteByte(0x80) // 11.4.1 = wtf
+	buf.WriteByte(byte(m.SCSIResponse))
+	buf.WriteByte(byte(m.Status))
+
+	// Skip through to byte 16
+	for i := 0; i < 3*4; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(MarshalUint64(uint64(m.TaskTag))[4:])
+	for i := 0; i < 4; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(MarshalUint64(uint64(m.StatSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.ExpCmdSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.MaxCmdSN))[4:])
+	for i := 0; i < 3*4; i++ {
+		buf.WriteByte(0x00)
+	}
+
+	return buf.Bytes()
+}
+
+func (m *ISCSICommand) dataInBytes() []byte {
+	// rfc7143 11.7
+	buf := &bytes.Buffer{}
+	buf.WriteByte(byte(OpSCSIIn))
+	var b byte
+	b = 0x80
+	if m.HasStatus {
+		b |= 0x01
+	}
+	buf.WriteByte(b)
+	buf.WriteByte(0x00)
+	if m.HasStatus {
+		b = byte(m.Status)
+	}
+	buf.WriteByte(b)
+
+	buf.WriteByte(0x00)                                  // 4
+	buf.Write(MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
+	buf.WriteByte(0x00)
+	buf.WriteByte(byte(m.LUN))
+	// Skip through to byte 16
+	for i := 0; i < 6; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(MarshalUint64(uint64(m.TaskTag))[4:])
+	for i := 0; i < 4; i++ {
+		// 11.7.4
+		buf.WriteByte(0xff)
+	}
+	buf.Write(MarshalUint64(uint64(m.StatSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.ExpCmdSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.MaxCmdSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.DataSN))[4:])
+	buf.Write(MarshalUint64(uint64(m.BufferOffset))[4:])
+	for i := 0; i < 4; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(m.RawData)
+	dl := len(m.RawData)
+	for dl%4 > 0 {
+		dl++
+		buf.WriteByte(0x00)
+	}
+
+	return buf.Bytes()
+}
+
+type InquiryData struct {
+	PeripheralQualifier int
+	PeripheralType      int
+	Removable           bool
+	Version             int
+	SupportsACA         bool
+	Hierarchical        bool
+	SupportsSCC         bool
+	HasACC              bool
+	TargetGroupSupport  int
+	ThirdPartyCopy      bool
+	Protect             bool
+	EnclosureServices   bool
+	Multiport           bool
+	MediaChanger        bool
+	Vendor              [8]byte
+	Product             [16]byte
+	RevisionLevel       [4]byte
+	SerialNumber        uint64
+}
+
+func (id *InquiryData) bytes() []byte {
+	buf := &bytes.Buffer{}
+	var b byte
+	b = (uint8(id.PeripheralQualifier) << 5) & 0xe0
+	b |= uint8(id.PeripheralType) & 0x1f
+	buf.WriteByte(b)
+	b = 0
+	if id.Removable {
+		b = 0x80
+	}
+	buf.WriteByte(b)
+	buf.WriteByte(byte(id.Version))
+	b = 0x02
+	if id.SupportsACA {
+		b |= 0x20
+	}
+	if id.Hierarchical {
+		b |= 0x10
+	}
+	buf.WriteByte(b)
+	buf.WriteByte(0x00)
+	// byte 5
+	b = 0
+	if id.SupportsSCC {
+		b |= 0x80
+	}
+	if id.HasACC {
+		b |= 0x40
+	}
+	b |= byte(id.TargetGroupSupport) << 4 & 0x30
+	if id.ThirdPartyCopy {
+		b |= 0x08
+	}
+	if id.Protect {
+		b |= 0x01
+	}
+	buf.WriteByte(b)
+	// byte 6
+	b = 0
+	if id.EnclosureServices {
+		b |= 0x40
+	}
+	if id.Multiport {
+		b |= 0x10
+	}
+	if id.MediaChanger {
+		b |= 0x08
+	}
+	buf.WriteByte(b)
+	buf.WriteByte(0x02)
+	buf.Write(id.Vendor[:])
+	buf.Write(id.Product[:])
+	buf.Write(id.RevisionLevel[:])
+	buf.Write(MarshalUint64(id.SerialNumber))
+	for i := 0; i < 12; i++ {
+		buf.WriteByte(0x00)
+	}
+	data := buf.Bytes()
+	data[4] = byte(len(data) - 4)
+	return data
+}
+
+type Capacity struct {
+	LBA                  uint64
+	Blocksize            uint32
+	ProtectionType       uint8
+	PIExponent           uint8
+	LogicalExponent      uint8
+	ThinProvisioned      bool
+	ThinProvReturnsZeros bool
+	LowestLBA            uint16
+}
+
+func (c *Capacity) bytes() []byte {
+	// table 111
+	// http://www.seagate.com/staticfiles/support/disc/manuals/Interface%20manuals/100293068c.pdf
+	buf := &bytes.Buffer{}
+	buf.Write(MarshalUint64(c.LBA))
+	buf.Write(MarshalUint64(uint64(c.Blocksize))[4:])
+	var b byte
+	if c.ProtectionType > 0 {
+		b |= 0x01
+		b |= c.ProtectionType << 1
+		b &= 0x0f
+	}
+	buf.WriteByte(b)
+	b = c.PIExponent << 4
+	b |= c.LogicalExponent
+	buf.WriteByte(b)
+	lowLBA := MarshalUint64(uint64(c.LowestLBA))[6:]
+	lowLBA[0] &= 0x3f
+	if c.ThinProvisioned {
+		lowLBA[0] &= 0x80
+	}
+	if c.ThinProvReturnsZeros {
+		lowLBA[0] &= 0x40
+	}
+	return buf.Bytes()
 }

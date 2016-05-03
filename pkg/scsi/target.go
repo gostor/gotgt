@@ -16,25 +16,48 @@ limitations under the License.
 
 package scsi
 
-type SCSITargetState int
+import (
+	"fmt"
 
-var (
-	TargetOnline SCSITargetState = 1
-	TargetReady  SCSITargetState = 2
+	"github.com/golang/glog"
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/port"
 )
 
-const (
-	PR_SPECIAL = (1 << 5)
-	PR_WE_FA   = (1 << 4)
-	PR_EA_FA   = (1 << 3)
-	PR_RR_FR   = (1 << 2)
-	PR_WE_FN   = (1 << 1)
-	PR_EA_FN   = (1 << 0)
-)
+func NewTarget(tid int, driverName, name string) (*api.SCSITarget, error) {
+	// verify the target ID
 
-type SCSITarget struct {
-	Name  string
-	TID   int
-	LID   int
-	State SCSITargetState
+	// verify the target's Name
+
+	// verify the low level driver
+	var target = &api.SCSITarget{Name: name, TID: tid}
+	var tgt = port.NewTargetDriver(driverName, target)
+	target.SCSITargetDriver = tgt
+	return target, nil
+}
+
+func deviceReserve(cmd *api.SCSICommand) error {
+	var lu *api.SCSILu
+	for _, dev := range cmd.Target.Devices {
+		if dev.Lun == cmd.Device.Lun {
+			lu = &dev
+			break
+		}
+	}
+	if lu == nil {
+		glog.Errorf("invalid target and lun %d %s", cmd.Target.TID, cmd.Device.Lun)
+		return nil
+	}
+
+	if lu.ReserveID != 0 && lu.ReserveID != cmd.CommandITNID {
+		glog.Errorf("already reserved %d, %d", lu.ReserveID, cmd.CommandITNID)
+		return fmt.Errorf("already reserved")
+	}
+	lu.ReserveID = cmd.CommandITNID
+	return nil
+}
+
+func deviceRelease(tid int, itn, lun uint64, force bool) error {
+	// TODO
+	return nil
 }

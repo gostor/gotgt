@@ -16,7 +16,11 @@ limitations under the License.
 
 package scsi
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/gostor/gotgt/pkg/api"
+)
 
 type BaseBackingStore struct {
 	Name            string
@@ -25,11 +29,11 @@ type BaseBackingStore struct {
 }
 
 type BackingStore interface {
-	Open(dev *SCSILu, path string, fd *int, size *uint64) error
-	Close(dev *SCSILu) error
-	Init(dev *SCSILu, Opts string) error
-	Exit(dev *SCSILu) error
-	CommandSubmit(cmd *SCSICommand) error
+	Open(dev *api.SCSILu, path string, fd *int, size *uint64) error
+	Close(dev *api.SCSILu) error
+	Init(dev *api.SCSILu, Opts string) error
+	Exit(dev *api.SCSILu) error
+	CommandSubmit(cmd *api.SCSICommand) error
 }
 
 type BackingStoreFunc func() (BackingStore, error)
@@ -55,22 +59,22 @@ type fakeBackingStore struct {
 	BaseBackingStore
 }
 
-func (fake *fakeBackingStore) Open(dev *SCSILu, path string, fd *int, size *uint64) error {
+func (fake *fakeBackingStore) Open(dev *api.SCSILu, path string, fd *int, size *uint64) error {
 	return nil
 }
 
-func (fake *fakeBackingStore) Close(dev *SCSILu) error {
+func (fake *fakeBackingStore) Close(dev *api.SCSILu) error {
 	return nil
 }
 
-func (fake *fakeBackingStore) Init(dev *SCSILu, Opts string) error {
+func (fake *fakeBackingStore) Init(dev *api.SCSILu, Opts string) error {
 	return nil
 }
 
-func (fake *fakeBackingStore) Exit(dev *SCSILu) error {
+func (fake *fakeBackingStore) Exit(dev *api.SCSILu) error {
 	return nil
 }
 
-func (fake *fakeBackingStore) CommandSubmit(cmd *SCSICommand) error {
+func (fake *fakeBackingStore) CommandSubmit(cmd *api.SCSICommand) error {
 	return nil
 }

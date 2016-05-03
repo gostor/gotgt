@@ -42,6 +42,9 @@ type ISCSISession struct {
 	Rdma               int
 }
 
+type ISCSIHeader struct {
+}
+
 type ISCSIPdu struct {
 	Bhs      ISCSIHeader
 	AhsSize  uint
@@ -78,7 +81,7 @@ func NewISCSISession() (*ISCSISession, error) {
 	tsih += uint16(b[0]) << 8
 	tsih += uint16(b[1])
 
-	return &Session{
+	return &ISCSISession{
 		Tsih: tsih,
 	}, nil
 }

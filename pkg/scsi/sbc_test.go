@@ -14,24 +14,43 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// SCSI block command processing
 package scsi
 
-import "github.com/gostor/gotgt/pkg/api"
+import "testing"
 
-type SCSILuOps struct {
-	*api.SCSILu
-
-	DeviceProtocol SCSIDeviceProtocol
-	Storage        *BackingStore
-	Target         *api.SCSITarget
-	Attrs          api.SCSILuPhyAttribute
-
-	// function handler for command performing and finishing
-	PerformCommand CommandFunc
-	FinishCommand  func(*api.SCSITarget, *api.SCSICommand)
+func TestSBCModeSelect(t *testing.T) {
 }
 
-func luPreventRemoval(lu *api.SCSILu) bool {
-	// TODO
-	return false
+func TestSBCModeSense(t *testing.T) {
+}
+
+func TestSBCFormatUnit(t *testing.T) {
+}
+
+func TestSBCUnmap(t *testing.T) {
+}
+
+func TestSBCReadWrite(t *testing.T) {
+}
+
+func TestSBCReserve(t *testing.T) {
+}
+
+func TestSBCRelease(t *testing.T) {
+}
+
+func TestSBCReadCapacity(t *testing.T) {
+}
+
+func TestSBCVerify(t *testing.T) {
+}
+
+func TestSBCReadCapacity16(t *testing.T) {
+}
+
+func TestSBCGetLbaStatus(t *testing.T) {
+}
+
+func TestSBCSyncCache(t *testing.T) {
 }
