@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,4 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiserver
+package client
+
+import (
+	"net/url"
+
+	"github.com/gostor/gotgt/pkg/api"
+	"golang.org/x/net/context"
+)
+
+// TargetCreate creates a target in the SCSI Target.
+func (cli *Client) TargetRemove(ctx context.Context, options api.TargetRemoveOptions) error {
+	query := url.Values{}
+	if options.Force {
+		query.Set("force", "1")
+	}
+	resp, err := cli.delete(ctx, "/targets/"+options.Name, query, nil)
+	ensureReaderClosed(resp)
+	return err
+}
