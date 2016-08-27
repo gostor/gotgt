@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package scsi
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/gostor/gotgt/pkg/api"
 )
@@ -28,15 +29,7 @@ type BaseBackingStore struct {
 	OflagsSupported int
 }
 
-type BackingStore interface {
-	Open(dev *api.SCSILu, path string, fd *int, size *uint64) error
-	Close(dev *api.SCSILu) error
-	Init(dev *api.SCSILu, Opts string) error
-	Exit(dev *api.SCSILu) error
-	CommandSubmit(cmd *api.SCSICommand) error
-}
-
-type BackingStoreFunc func() (BackingStore, error)
+type BackingStoreFunc func() (api.BackingStore, error)
 
 var registeredPlugins = map[string](BackingStoreFunc){}
 
@@ -44,7 +37,7 @@ func RegisterBackingStore(name string, f BackingStoreFunc) {
 	registeredPlugins[name] = f
 }
 
-func NewBackingStore(name string) (BackingStore, error) {
+func NewBackingStore(name string) (api.BackingStore, error) {
 	if name == "" {
 		return nil, nil
 	}
@@ -59,8 +52,8 @@ type fakeBackingStore struct {
 	BaseBackingStore
 }
 
-func (fake *fakeBackingStore) Open(dev *api.SCSILu, path string, fd *int, size *uint64) error {
-	return nil
+func (fake *fakeBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
+	return nil, nil
 }
 
 func (fake *fakeBackingStore) Close(dev *api.SCSILu) error {

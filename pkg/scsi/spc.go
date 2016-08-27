@@ -21,7 +21,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"reflect"
 
+	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 )
@@ -128,6 +130,39 @@ func SPCLuOnline(lu *api.SCSILu) error {
 }
 
 func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
+	buf := &bytes.Buffer{}
+	var b byte = 0x75
+	if reflect.DeepEqual(util.MarshalUint64(cmd.Device.Lun)[0:7], cmd.Lun[0:7]) {
+		b = (uint8(0) & 0x7) << 5
+		b |= uint8(0) & 0x1f
+	}
+	buf.WriteByte(b)
+	b = 0
+	buf.WriteByte(b)
+	buf.WriteByte(byte(1))
+	b = 0x02
+	buf.WriteByte(b)
+	buf.WriteByte(0x00)
+	// byte 5
+	b = 0
+	b |= byte(1) << 4 & 0x30
+	buf.WriteByte(b)
+	// byte 6
+	b = 0
+	buf.WriteByte(b)
+	buf.WriteByte(0x02)
+	buf.Write([]byte{'1', '1', 'c', 'a', 'n', 's'})
+	buf.WriteByte(0x00)
+	buf.WriteByte(0x00)
+	buf.Write([]byte{'c', 'o', 'f', 'f', 'e', 'e'})
+	for i := 0; i < 10; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write([]byte{'1', '.', '0'})
+	buf.WriteByte(0x00)
+	data := buf.Bytes()
+	data[4] = byte(len(data) - 4)
+	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
 	return api.SAMStatGood
 }
 
@@ -137,25 +172,22 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 		actualLength     uint32 = 8
 		availLength      uint32 = 0
 		allocationLength uint32
-		data             *bytes.Buffer
+		buf              *bytes.Buffer = &bytes.Buffer{}
 		scb              *bytes.Buffer = cmd.SCB
 	)
 	// Get Allocation Length
 	allocationLength = util.GetUnalignedUint32(scb.Bytes()[6:10])
 	if allocationLength < 16 {
+		glog.Warningf("goto sense, allocationLength < 16")
 		goto sense
 	}
-	if cmd.InSDBBuffer.Length < allocationLength {
-		goto sense
-	}
-	data = cmd.InSDBBuffer.Buffer
 	remainLength = allocationLength - 8
 	availLength = 8 * uint32(len(cmd.Target.Devices))
-	binary.Write(data, binary.BigEndian, availLength)
+	buf.Write(util.MarshalUint32(availLength))
 	cmd.InSDBBuffer.Resid = int32(actualLength)
 	// Skip through to byte 8, Reserved
 	for i := 0; i < 4; i++ {
-		data.WriteByte(0x00)
+		buf.WriteByte(0x00)
 	}
 
 	for _, lu := range cmd.Target.Devices {
@@ -168,10 +200,11 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 			}
 			lun = (0x3fff & lun) << 16
 			lun = uint64(lun << 32)
-			binary.Write(data, binary.BigEndian, lun)
+			buf.Write(util.MarshalUint64(lun))
 			remainLength -= 8
 		}
 	}
+	cmd.InSDBBuffer.Buffer = buf
 	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
@@ -218,9 +251,11 @@ func SPCStartStop(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SPCTestUnit(host int, cmd *api.SCSICommand) api.SAMStat {
-	if err := deviceReserve(cmd); err != nil {
-		return api.SAMStatReservationConflict
-	}
+	/*
+		if err := deviceReserve(cmd); err != nil {
+			return api.SAMStatReservationConflict
+		}
+	*/
 	if cmd.Device.Attrs.Online {
 		return api.SAMStatGood
 	}
@@ -247,7 +282,33 @@ func SPCPreventAllowMediaRemoval(host int, cmd *api.SCSICommand) api.SAMStat {
 //  6.11 - MODE SENSE(6)
 //  6.12 - MODE SENSE(10)
 func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		scb            = cmd.SCB.Bytes()
+		mode6          = (scb[0] == 0x1a)
+		dbd            = scb[1] & 0x8 /* Disable Block Descriptors */
+		pcode          = scb[2] & 0x3f
+		pctrl          = (scb[2] & 0xc0) >> 6
+		subpcode       = scb[3]
+		blkDesctionLen = 0
+		key            = ILLEGAL_REQUEST
+		asc            = ASC_INVALID_FIELD_IN_CDB
+	)
+	if dbd == 0 {
+		blkDesctionLen = 8
+	}
+	if pctrl == 3 {
+		asc = ASC_SAVING_PARMS_UNSUP
+		goto sense
+	}
+	_ = dbd
+	_ = pcode
+	_ = subpcode
+	_ = mode6
+	_ = blkDesctionLen
 	return api.SAMStatGood
+sense:
+	BuildSenseData(cmd, key, asc)
+	return api.SAMStatCheckCondition
 }
 
 func SPCSendDiagnostics(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -263,10 +324,93 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+func getSCSICmdSize(opcode api.SCSICommandType) byte {
+	var scsi_command_size = []byte{6, 10, 10, 12, 16, 12, 10, 10}
+
+	return scsi_command_size[(byte(opcode)>>5)&7]
+}
+
+func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
+	var (
+		data = []byte{0x00, 0x00, 0x00, 0x00}
+	)
+	for _, i := range []api.SCSICommandType{api.TEST_UNIT_READY, api.WRITE_6, api.INQUIRY, api.READ_CAPACITY, api.WRITE_10, api.WRITE_16, api.REPORT_LUNS, api.WRITE_12} {
+		data = append(data, byte(i))
+		// reserved
+		data = append(data, 0x00)
+		// service action
+		data = append(data, 0x00)
+		data = append(data, 0x00)
+		// reserved
+		data = append(data, 0x00)
+		// flags : no service action, possibly timeout desc
+		if rctd != 0 {
+			data = append(data, 0x02)
+		} else {
+			data = append(data, 0x00)
+		}
+		// cdb length
+		length := getSCSICmdSize(i)
+		data = append(data, (length>>8)&0xff)
+		data = append(data, length&0xff)
+		// timeout descriptor
+		if rctd != 0 {
+			// length == 0x0a
+			data[1] = 0x0a
+			for n := 0; n < 12; n++ {
+				data = append(data, 0x00)
+			}
+		}
+	}
+	buf := util.MarshalUint32(uint32(len(data) - 4))
+	buf = append(buf, data[4:]...)
+	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(buf)
+	return nil
+}
+
+func reportOpcodeOne(cmd *api.SCSICommand, rctd int, opcode byte, rsa uint16, serviceAction bool) error {
+	return nil
+}
+
 // This is useful for the various commands using the SERVICE ACTION format.
 func SPCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
 	// TODO
+	scb := cmd.SCB.Bytes()
+	reporting_options := scb[2] & 0x07
+	opcode := scb[3]
+	rctd := int(scb[2] & 0x80)
+	rsa := util.GetUnalignedUint16(scb[4:])
+	switch reporting_options {
+	case 0x00: /* report all */
+		glog.V(3).Infof("Service Action: report all")
+		err := reportOpcodesAll(cmd, rctd)
+		if err != nil {
+			glog.Error(err)
+			goto sense
+		}
+	case 0x01: /* report one no service action*/
+		glog.V(3).Infof("Service Action: report one no service action")
+		err := reportOpcodeOne(cmd, rctd, opcode, rsa, false)
+		if err != nil {
+			glog.Error(err)
+			goto sense
+		}
+	case 0x02: /* report one service action */
+		glog.V(3).Infof("Service Action: report one service action")
+		err := reportOpcodeOne(cmd, rctd, opcode, rsa, true)
+		if err != nil {
+			glog.Error(err)
+			goto sense
+		}
+	default:
+		goto sense
+	}
 	return api.SAMStatGood
+
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRReadKeys(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -360,6 +504,7 @@ func SPCRequestSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		allocationLength uint32
 		actualLength     uint32
+		data             = &bytes.Buffer{}
 	)
 
 	allocationLength = util.GetUnalignedUint32(cmd.SCB.Bytes()[4:8])
@@ -372,8 +517,11 @@ func SPCRequestSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	} else {
 		actualLength = allocationLength
 	}
-	binary.Write(cmd.InSDBBuffer.Buffer, binary.BigEndian, cmd.SenseBuffer.Bytes()[0:actualLength])
+	if cmd.SenseBuffer != nil {
+		data.Write(cmd.SenseBuffer.Bytes()[0:actualLength])
+	}
 	cmd.InSDBBuffer.Resid = int32(actualLength)
+	cmd.InSDBBuffer.Buffer = data
 
 	// reset sense buffer in cmnd
 	cmd.SenseBuffer = &bytes.Buffer{}

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,40 +16,188 @@ limitations under the License.
 
 package backingstore
 
-import "github.com/gostor/gotgt/pkg/scsi"
+import (
+	"bytes"
+	"fmt"
+	"os"
+
+	"github.com/golang/glog"
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/scsi"
+	"github.com/gostor/gotgt/pkg/util"
+)
 
 func init() {
 	scsi.RegisterBackingStore("file", new)
 }
 
 type FileBackingStore struct {
-	BaseBackingStore
+	scsi.BaseBackingStore
 }
 
-func new() (scsi.BackingStore, error) {
-	return NullBackingStore{
-		Name:            "file",
-		DataSize:        0,
-		OflagsSupported: 0,
+func new() (api.BackingStore, error) {
+	return &FileBackingStore{
+		BaseBackingStore: scsi.BaseBackingStore{
+			Name:            "file",
+			DataSize:        0,
+			OflagsSupported: 0,
+		},
 	}, nil
 }
 
-func (bs *FileBackingStore) Open(dev *SCSILu, path string, fd *int, size *uint64) error {
+func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (bs *FileBackingStore) Close(dev *api.SCSILu) error {
+	return dev.File.Close()
+}
+
+func (bs *FileBackingStore) Init(dev *api.SCSILu, Opts string) error {
 	return nil
 }
 
-func (bs *FileBackingStore) Close(dev *SCSILu) error {
+func (bs *FileBackingStore) Exit(dev *api.SCSILu) error {
 	return nil
 }
 
-func (bs *FileBackingStore) Init(dev *SCSILu, Opts string) error {
-	return nil
-}
+func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
+	var (
+		scb             = cmd.SCB.Bytes()
+		offset          = cmd.Offset
+		opcode          = api.SCSICommandType(scb[0])
+		lu              = cmd.Device
+		key             = scsi.ILLEGAL_REQUEST
+		asc             = scsi.ASC_INVALID_FIELD_IN_CDB
+		wbuf     []byte = []byte{}
+		rbuf     []byte = []byte{}
+		length   int
+		doVerify bool = false
+		doWrite  bool = false
+	)
+	switch opcode {
+	case api.ORWRITE_16:
+		tmpbuf := []byte{}
+		length, err = lu.File.ReadAt(tmpbuf, int64(offset))
+		if length != len(tmpbuf) {
+			key = scsi.MEDIUM_ERROR
+			asc = scsi.ASC_READ_ERROR
+			break
+		}
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(tmpbuf)
 
-func (bs *FileBackingStore) Exit(dev *SCSILu) error {
-	return nil
-}
+		wbuf = cmd.OutSDBBuffer.Buffer.Bytes()
+		doWrite = true
+		goto write
+	case api.COMPARE_AND_WRITE:
+		// TODO
+		doWrite = true
+		goto write
+	case api.SYNCHRONIZE_CACHE, api.SYNCHRONIZE_CACHE_16:
+		break
+	case api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
+		doVerify = true
+	case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16:
+		wbuf = cmd.OutSDBBuffer.Buffer.Bytes()
+		doWrite = true
+		goto write
+	case api.WRITE_SAME, api.WRITE_SAME_16:
+		// TODO
+		break
+	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
+		length, err = lu.File.ReadAt(rbuf, int64(offset))
+		if err != nil {
+			key = scsi.MEDIUM_ERROR
+			asc = scsi.ASC_READ_ERROR
+			break
+		}
+		for i := 0; i < int(cmd.TL)-length; i++ {
+			rbuf = append(rbuf, 0)
+		}
 
-func (bs *FileBackingStore) CommandSubmit(cmd *SCSICommand) error {
+		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
+			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
+		}
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(rbuf)
+	case api.PRE_FETCH_10, api.PRE_FETCH_16:
+		err = util.Fadvise(lu.File, int64(offset), int64(cmd.TL), util.POSIX_FADV_WILLNEED)
+		if err != nil {
+			key = scsi.MEDIUM_ERROR
+			asc = scsi.ASC_READ_ERROR
+		}
+	case api.VERIFY_10, api.VERIFY_12, api.VERIFY_16:
+		doVerify = true
+		goto verify
+	case api.UNMAP:
+		// TODO
+	default:
+		break
+	}
+write:
+	if doWrite {
+		// hack: wbuf = []byte("hello world!")
+		length, err = lu.File.WriteAt(wbuf, int64(offset))
+		if err != nil || length != len(wbuf) {
+			glog.Error(err)
+			key = scsi.MEDIUM_ERROR
+			asc = scsi.ASC_READ_ERROR
+			goto sense
+		}
+		glog.V(2).Infof("write data at %d for length %d", offset, length)
+		var pg *api.ModePage
+		for _, p := range lu.ModePages {
+			if p.Pcode == 0x08 && p.SubPcode == 0 {
+				pg = &p
+				break
+			}
+		}
+		if pg == nil {
+			key = scsi.ILLEGAL_REQUEST
+			asc = scsi.ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
+		if ((opcode != api.WRITE_6) && (scb[1]&0x8 != 0)) || (pg.Data[0]&0x04 == 0) {
+			if err = util.Fdatasync(lu.File); err != nil {
+				key = scsi.MEDIUM_ERROR
+				asc = scsi.ASC_READ_ERROR
+				goto sense
+			}
+		}
+
+		if (opcode != api.WRITE_6) && (scb[1]&0x10 != 0) {
+			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
+		}
+	}
+verify:
+	if doVerify {
+		length, err = lu.File.ReadAt(rbuf, int64(offset))
+		if length != len(rbuf) {
+			key = scsi.MEDIUM_ERROR
+			asc = scsi.ASC_READ_ERROR
+			goto sense
+		}
+		if !bytes.Equal(cmd.OutSDBBuffer.Buffer.Bytes(), rbuf) {
+			err = fmt.Errorf("verify fail between out buffer and read buffer")
+			key = scsi.MISCOMPARE
+			asc = scsi.ASC_MISCOMPARE_DURING_VERIFY_OPERATION
+			goto sense
+		}
+		if scb[1]&0x10 != 0 {
+			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
+		}
+	}
+	glog.Infof("io done %s", string(scb))
+sense:
+	if err != nil {
+		glog.Error(err)
+		return err
+	}
+	_ = key
+	_ = asc
+
 	return nil
 }

@@ -18,9 +18,13 @@ limitations under the License.
 package scsi
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
 
+	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/util"
 )
 
 const (
@@ -36,30 +40,75 @@ type SBCSCSIDeviceProtocol struct {
 	BaseSCSIDeviceProtocol
 }
 
-func (sbc *SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
-	return nil
+func (sbc SBCSCSIDeviceProtocol) PerformCommand(opcode int) interface{} {
+	return sbc.SCSIDeviceOps[opcode]
 }
-func (sbc *SBCSCSIDeviceProtocol) ExitLu(lu *api.SCSILu) error {
-	return nil
-}
-func (sbc *SBCSCSIDeviceProtocol) ConfigLu(lu *api.SCSILu) error {
-	return nil
-}
-func (sbc *SBCSCSIDeviceProtocol) OnlineLu(lu *api.SCSILu) error {
-	return nil
-}
-func (sbc *SBCSCSIDeviceProtocol) OfflineLu(lu *api.SCSILu) error {
+
+func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
+	var tgt = lu.Target
+	// init LU's phy attribute
+	lu.Attrs.DeviceType = api.TYPE_DISK
+	lu.Attrs.Qualifier = false
+	lu.Attrs.Thinprovisioning = false
+	lu.Attrs.Removable = false
+	lu.Attrs.Readonly = false
+	lu.Attrs.SWP = false
+	lu.Attrs.SenseFormat = false
+	lu.Attrs.VendorID = "GOSTOR"
+	lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR    %x%d", tgt.TID, lu.Lun)
+	lu.Attrs.SCSISN = fmt.Sprintf("beaf%d%d", tgt.TID, lu.Lun)
+	lu.Attrs.ProductID = "VIRTUAL-DISK"
+	lu.Attrs.VersionDesction = []uint16{
+		0x04C0, // SBC-3 no version claimed
+		0x0960, // iSCSI
+		0x0300, // SPC-3
+	}
+	if lu.BlockShift == 0 {
+		lu.BlockShift = api.DefaultBlockShift
+	}
+	pages := []api.ModePage{}
+	// Vendor uniq - However most apps seem to call for mode page 0
+	pages = append(pages, api.ModePage{0, 0, []byte{}})
+	// Disconnect page
+	pages = append(pages, api.ModePage{2, 0, []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	// Caching Page
+	pages = append(pages, api.ModePage{8, 0, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0}})
+
+	// Control page
+	pages = append(pages, api.ModePage{0x0a, 0, []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0}})
+
+	// Control Extensions mode page:  TCMOS:1
+	pages = append(pages, api.ModePage{0x0a, 1, []byte{0x04, 0x00, 0x00}})
+	// Informational Exceptions Control page
+	pages = append(pages, api.ModePage{0x1c, 0, []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	lu.ModePages = pages
 	return nil
 }
 
-func NewSBCDevice() SBCSCSIDeviceProtocol {
+func (sbc SBCSCSIDeviceProtocol) ConfigLu(lu *api.SCSILu) error {
+	return nil
+}
+
+func (sbc SBCSCSIDeviceProtocol) OnlineLu(lu *api.SCSILu) error {
+	return nil
+}
+
+func (sbc SBCSCSIDeviceProtocol) OfflineLu(lu *api.SCSILu) error {
+	return nil
+}
+
+func (sbc SBCSCSIDeviceProtocol) ExitLu(lu *api.SCSILu) error {
+	return nil
+}
+
+func NewSBCDevice() api.SCSIDeviceProtocol {
 	var sbc = SBCSCSIDeviceProtocol{
 		BaseSCSIDeviceProtocol{
 			Type:          api.TYPE_DISK,
-			SCSIDeviceOps: make([]SCSIDeviceOperation, 256),
+			SCSIDeviceOps: []SCSIDeviceOperation{},
 		},
 	}
-	for i := 0; i <= 256; i++ {
+	for i := 0; i < 256; i++ {
 		sbc.SCSIDeviceOps = append(sbc.SCSIDeviceOps, NewSCSIDeviceOperation(SPCIllegalOp, nil, 0))
 	}
 	sbc.SCSIDeviceOps[api.TEST_UNIT_READY] = NewSCSIDeviceOperation(SPCTestUnit, nil, 0)
@@ -103,9 +152,10 @@ func NewSBCDevice() SBCSCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.PRE_FETCH_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.SYNCHRONIZE_CACHE_16] = NewSCSIDeviceOperation(SBCSyncCache, nil, PR_EA_FA|PR_EA_FN|PR_WE_FA|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.WRITE_SAME_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, 0)
-	sbc.SCSIDeviceOps[api.SERVICE_ACTION_IN] = NewSCSIDeviceOperation(SPCServiceAction, nil, 0)
+	sbc.SCSIDeviceOps[api.SERVICE_ACTION_IN] = NewSCSIDeviceOperation(SBCServiceAction, nil, 0)
 
 	sbc.SCSIDeviceOps[api.REPORT_LUNS] = NewSCSIDeviceOperation(SPCReportLuns, nil, 0)
+	sbc.SCSIDeviceOps[api.MAINT_PROTOCOL_IN] = NewSCSIDeviceOperation(SPCServiceAction, nil, 0)
 	sbc.SCSIDeviceOps[api.EXCHANGE_MEDIUM] = NewSCSIDeviceOperation(SPCServiceAction, nil, 0)
 	sbc.SCSIDeviceOps[api.READ_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.WRITE_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_WE_FA|PR_EA_FA|PR_WE_FA|PR_WE_FN)
@@ -132,15 +182,18 @@ func SBCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		deviceSpecific |= 0x80
 	}
 
-	data := cmd.InSDBBuffer.Buffer
-	data.Next(2)
+	buf := cmd.InSDBBuffer.Buffer
+	data := []byte{0x00, 0x00, 0x00, 0x00}
+	if buf != nil {
+		data = buf.Bytes()
+	}
 
 	if cmd.SCB.Bytes()[0] == 0x1a {
-		data.WriteByte(deviceSpecific)
+		data[2] = deviceSpecific
 	} else {
-		data.Next(1)
-		data.WriteByte(deviceSpecific)
+		data[3] = deviceSpecific
 	}
+	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
 
 	return api.SAMStatGood
 }
@@ -196,7 +249,135 @@ func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
-	return api.SAMStatGood
+	var (
+		key    = ILLEGAL_REQUEST
+		asc    = ASC_INVALID_FIELD_IN_CDB
+		dev    = cmd.Device
+		scb    = cmd.SCB.Bytes()
+		opcode = api.SCSICommandType(scb[0])
+		lba    uint64
+		tl     uint32
+		err    error
+	)
+	if dev.Attrs.Removable && !dev.Attrs.Online {
+		key = NOT_READY
+		asc = ASC_MEDIUM_NOT_PRESENT
+		glog.Warningf("sense")
+		goto sense
+	}
+
+	switch opcode {
+	case api.READ_10, api.READ_12, api.READ_16, api.WRITE_10, api.WRITE_12, api.WRITE_16, api.ORWRITE_16,
+		api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16, api.COMPARE_AND_WRITE:
+		// We only support protection information type 0
+		/*
+			if scb[1]&0xe0 != 0 {
+				key = ILLEGAL_REQUEST
+				asc = ASC_INVALID_FIELD_IN_CDB
+				glog.Warningf("sense")
+				goto sense
+			}
+		*/
+		if cmd.OutSDBBuffer.Buffer == nil {
+			cmd.OutSDBBuffer.Buffer = &bytes.Buffer{}
+		}
+	case api.WRITE_SAME, api.WRITE_SAME_16:
+		// We dont support resource-provisioning so ANCHOR bit == 1 is an error.
+		if scb[1]&0x10 != 0 {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
+		// We only support unmap for thin provisioned LUNS
+		if (scb[1]&0x08 != 0) && !dev.Attrs.Thinprovisioning {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
+		// We only support protection information type 0
+		if scb[1]&0xe0 != 0 {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
+		// LBDATA and PBDATA can not both be set
+		if (scb[1] & 0x06) == 0x06 {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
+	}
+
+	if dev.Attrs.Readonly || dev.Attrs.SWP {
+		switch opcode {
+		case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16, api.ORWRITE_16,
+			api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16, api.WRITE_SAME, api.WRITE_SAME_16,
+			api.PRE_FETCH_10, api.PRE_FETCH_16, api.COMPARE_AND_WRITE:
+			key = DATA_PROTECT
+			asc = ASC_WRITE_PROTECT
+			glog.Warningf("sense")
+			goto sense
+		}
+	}
+
+	lba = getSCSIReadWriteOffset(scb)
+	tl = getSCSIReadWriteCount(scb)
+
+	// Verify that we are not doing i/o beyond the end-of-lun
+	if tl != 0 {
+		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			glog.Warningf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
+			goto sense
+		}
+	} else {
+		if lba >= dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			glog.Warningf("sense")
+			goto sense
+		}
+	}
+
+	cmd.Offset = lba << dev.BlockShift
+	cmd.TL = tl << dev.BlockShift
+
+	// Handle residuals
+	switch opcode {
+	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
+		/*
+			if (cmd->tl != scsi_get_in_length(cmd))
+				scsi_set_in_resid_by_actual(cmd, cmd->tl);
+		*/
+	case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16, api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
+		/*
+			if (cmd->tl != scsi_get_out_length(cmd)) {
+				scsi_set_out_resid_by_actual(cmd, cmd->tl);
+
+				/* We need to clamp the size of the in-buffer
+				 * so that we dont try to write > cmd->tl in the
+				 * backend store.
+				 *
+				if (cmd->tl < scsi_get_out_length(cmd)) {
+					scsi_set_out_length(cmd, cmd->tl);
+				}
+			}
+		*/
+	}
+
+	err = dev.Storage.CommandSubmit(cmd)
+	if err != nil {
+		glog.Error(err)
+		key = HARDWARE_ERROR
+		asc = ASC_INTERNAL_TGT_FAILURE
+	} else {
+		return api.SAMStatGood
+	}
+
+sense:
+	BuildSenseData(cmd, key, asc)
+	return api.SAMStatCheckCondition
 }
 
 func SBCReserve(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -224,7 +405,7 @@ func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 		scb    = cmd.SCB.Bytes()
 		key    = ILLEGAL_REQUEST
 		asc    = ASC_LUN_NOT_SUPPORTED
-		data   = cmd.InSDBBuffer.Buffer
+		data   = &bytes.Buffer{}
 		bshift = cmd.Device.BlockShift
 		size   = cmd.Device.Size >> bshift
 	)
@@ -240,9 +421,11 @@ func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	if cmd.InSDBBuffer.Length < 8 {
-		goto overflow
-	}
+	/*
+		if cmd.InSDBBuffer.Length < 8 {
+			goto overflow
+		}
+	*/
 
 	// data[0] = (size >> 32) ? __cpu_to_be32(0xffffffff) : __cpu_to_be32(size - 1);
 	if size>>32 != 0 {
@@ -253,8 +436,9 @@ func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	// data[1] = __cpu_to_be32(1U << bshift);
 	binary.Write(data, binary.BigEndian, uint32(1<<bshift))
-overflow:
+	//overflow:
 	cmd.InSDBBuffer.Resid = 8
+	cmd.InSDBBuffer.Buffer = data
 	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
@@ -293,6 +477,12 @@ sense:
 }
 
 func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
+	data := &bytes.Buffer{}
+	data.Write(util.MarshalUint64(1))
+	data.Write(util.MarshalUint32(1 << cmd.Device.BlockShift))
+	val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
+	data.Write(util.MarshalUint32(uint32(val)))
+	cmd.InSDBBuffer.Buffer = data
 	return api.SAMStatGood
 }
 
@@ -301,6 +491,13 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
+	opcode := api.SCSICommandType(cmd.SCB.Bytes()[1] & 0x1f)
+	switch opcode {
+	case api.READ_CAPACITY:
+		return SBCReadCapacity(host, cmd)
+	case api.SAI_READ_CAPACITY_16:
+		return SBCReadCapacity16(host, cmd)
+	}
 	return api.SAMStatGood
 }
 

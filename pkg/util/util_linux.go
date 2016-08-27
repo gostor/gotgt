@@ -1,3 +1,4 @@
+// +build linux
 /*
 Copyright 2016 The GoStor Authors All rights reserved.
 
@@ -14,11 +15,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package iscsit
+package util
 
-type AuthMethod int
-
-const (
-	AuthNone = iota
-	AuthChap
+import (
+	"os"
+	"syscall"
 )
+
+func Fdatasync(file *os.File) error {
+	return syscall.Fdatasync(int(file.Fd()))
+}

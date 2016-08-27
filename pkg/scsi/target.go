@@ -21,18 +21,28 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
-	"github.com/gostor/gotgt/pkg/port"
 )
 
-func NewTarget(tid int, driverName, name string) (*api.SCSITarget, error) {
+func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*api.SCSITarget, error) {
 	// verify the target ID
 
 	// verify the target's Name
 
 	// verify the low level driver
-	var target = &api.SCSITarget{Name: name, TID: tid}
-	var tgt = port.NewTargetDriver(driverName, target)
-	target.SCSITargetDriver = tgt
+	var target = &api.SCSITarget{
+		Name:    name,
+		TID:     tid,
+		Devices: []*api.SCSILu{},
+	}
+	lun, err := NewSCSILu(0, target)
+	if err != nil {
+		glog.Errorf("fail to create LU: %v", err)
+		return nil, err
+	}
+	s.mutex.Lock()
+	target.Devices = append(target.Devices, lun)
+	s.Targets = append(s.Targets, target)
+	s.mutex.Unlock()
 	return target, nil
 }
 
@@ -40,7 +50,7 @@ func deviceReserve(cmd *api.SCSICommand) error {
 	var lu *api.SCSILu
 	for _, dev := range cmd.Target.Devices {
 		if dev.Lun == cmd.Device.Lun {
-			lu = &dev
+			lu = dev
 			break
 		}
 	}
