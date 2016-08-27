@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,16 @@ limitations under the License.
 
 package util
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"os"
+	"syscall"
+)
+
+type KeyValue struct {
+	Key   string
+	Value string
+}
 
 func GetUnalignedUint16(u8 []uint8) uint16 {
 	return binary.BigEndian.Uint16(u8)
@@ -52,13 +61,49 @@ func ParseKVText(txt []byte) map[string]string {
 	return m
 }
 
-func MarshalKVText(kv map[string]string) []byte {
+func MarshalKVText(kv []KeyValue) []byte {
 	var data []byte
-	for k, v := range kv {
-		data = append(data, []byte(k)...)
+	for _, v := range kv {
+		data = append(data, []byte(v.Key)...)
 		data = append(data, '=')
-		data = append(data, []byte(v)...)
+		data = append(data, []byte(v.Value)...)
 		data = append(data, 0)
 	}
 	return data
+}
+
+func MarshalUint32(i uint32) []byte {
+	var data []byte
+	for j := 0; j < 4; j++ {
+		b := byte(i >> uint(4*(3-j)) & 0xff)
+		data = append(data, b)
+	}
+	return data
+}
+
+func MarshalUint64(i uint64) []byte {
+	var data []byte
+	for j := 0; j < 8; j++ {
+		b := byte(i >> uint(8*(7-j)) & 0xff)
+		data = append(data, b)
+	}
+	return data
+}
+
+const (
+	POSIX_FADV_NORMAL = iota
+	POSIX_FADV_RANDOM
+	POSIX_FADV_SEQUENTIAL
+	POSIX_FADV_WILLNEED
+	POSIX_FADV_DONTNEED
+	POSIX_FADV_NOREUSE
+)
+
+func Fadvise(file *os.File, off, length int64, advice uint32) error {
+	// syscall.SYS_FADVISE64 = 221
+	_, _, err := syscall.Syscall6(221, file.Fd(), uintptr(off), uintptr(length), uintptr(advice), 0, 0)
+	if err != 0 {
+		return err
+	}
+	return nil
 }

@@ -1,10 +1,97 @@
 {
 	"ImportPath": "github.com/gostor/gotgt",
-	"GoVersion": "go1.4.1",
+	"GoVersion": "go1.6",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.10.0-19-gf3cfb45",
+			"Rev": "f3cfb454f4c209e6668c95216c4744b8fddb2356"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-systemd/activation",
+			"Comment": "v9",
+			"Rev": "6dc8b843c670f2027cc26b164935635840a40526"
+		},
+		{
+			"ImportPath": "github.com/docker/distribution/registry/api/errcode",
+			"Comment": "v2.1.1-2-g77c6d9d",
+			"Rev": "77c6d9deb9b26653b4a264bbb2fd634ac927df7f"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/archive",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/fileutils",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/idtools",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/ioutils",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/pools",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/promise",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/random",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/stringid",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/system",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/utils",
+			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
+		},
+		{
+			"ImportPath": "github.com/docker/go-connections/sockets",
+			"Comment": "v0.2.0-8-g990a1a1",
+			"Rev": "990a1a1a70b0da4c4cb70e117971a4f0babfbf1a"
+		},
+		{
 			"ImportPath": "github.com/golang/glog",
-			"Rev": "fca8c8854093a154ff1eb580aae10276ad6b1b5f"
+			"Rev": "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
+		},
+		{
+			"ImportPath": "github.com/gorilla/context",
+			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
+		},
+		{
+			"ImportPath": "github.com/gorilla/mux",
+			"Rev": "8096f47503459bcc74d1f4c487b7e6e42e5746b5"
+		},
+		{
+			"ImportPath": "github.com/spf13/cobra",
+			"Rev": "1238ba19d24b0b9ceee2094e1cb31947d45c3e86"
+		},
+		{
+			"ImportPath": "github.com/spf13/pflag",
+			"Rev": "367864438f1b1a3c7db4da06a2f55b144e6784e0"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "d9558e5c97f85372afee28cf2b6059d7d3818919"
+		},
+		{
+			"ImportPath": "golang.org/x/net/proxy",
+			"Rev": "d9558e5c97f85372afee28cf2b6059d7d3818919"
 		}
 	]
 }

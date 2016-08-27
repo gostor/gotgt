@@ -17,45 +17,47 @@ limitations under the License.
 package backingstore
 
 import (
-	"github.com/gostor/gotgt/pkg/scsi"
+	"os"
 
-	"github.com/golang/glog"
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/scsi"
 )
 
 func init() {
-	scsi.RegisterBackingStore("null", new)
+	scsi.RegisterBackingStore("null", newNull)
 }
 
 type NullBackingStore struct {
-	BaseBackingStore
+	scsi.BaseBackingStore
 }
 
-func new() (scsi.BackingStore, error) {
-	return NullBackingStore{
-		Name:            "null",
-		DataSize:        0,
-		OflagsSupported: 0,
+func newNull() (api.BackingStore, error) {
+	return &NullBackingStore{
+		BaseBackingStore: scsi.BaseBackingStore{
+			Name:            "null",
+			DataSize:        0,
+			OflagsSupported: 0,
+		},
 	}, nil
 }
 
-func (bs *NullBackingStore) Open(dev *SCSILu, path string, fd *int, size *uint64) error {
-	glog.V(1).Infof("NULL backing store open, size: %d", size)
+func (bs *NullBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
+	return nil, nil
+}
+
+func (bs *NullBackingStore) Close(dev *api.SCSILu) error {
 	return nil
 }
 
-func (bs *NullBackingStore) Close(dev *SCSILu) error {
+func (bs *NullBackingStore) Init(dev *api.SCSILu, Opts string) error {
 	return nil
 }
 
-func (bs *NullBackingStore) Init(dev *SCSILu, Opts string) error {
+func (bs *NullBackingStore) Exit(dev *api.SCSILu) error {
 	return nil
 }
 
-func (bs *NullBackingStore) Exit(dev *SCSILu) error {
-	return nil
-}
-
-func (bs *NullBackingStore) CommandSubmit(cmd *SCSICommand) error {
-	cmd.Result = SAM_STAT_GOOD
+func (bs *NullBackingStore) CommandSubmit(cmd *api.SCSICommand) error {
+	cmd.Result = api.SAM_STAT_GOOD
 	return nil
 }

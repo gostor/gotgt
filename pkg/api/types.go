@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"errors"
+	"os"
 )
 
 type SCSICommandType byte
@@ -147,7 +148,7 @@ type SCSICommand struct {
 	TL            uint32
 	SCB           *bytes.Buffer
 	SCBLength     int
-	Lun           []uint8
+	Lun           [8]uint8
 	Attribute     int
 	Tag           uint64
 	Result        byte
@@ -156,13 +157,14 @@ type SCSICommand struct {
 	ITNexus       *ITNexus
 	ITNexusLuInfo *ITNexusLuInfo
 }
+
 type ITNexus struct {
-	ID       uint64
-	Ctime    uint64
-	Commands []SCSICommand
-	Target   *SCSITarget
-	Host     int
-	Info     string
+	ID       uint64        `json:"id"`
+	Ctime    uint64        `json:"ctime"`
+	Commands []SCSICommand `json:"-"`
+	Target   *SCSITarget   `json:"-"`
+	Host     int           `json:"host"`
+	Info     string        `json:"info"`
 }
 
 type ITNexusLuInfo struct {
@@ -172,14 +174,14 @@ type ITNexusLuInfo struct {
 }
 
 type SCSITarget struct {
-	Name    string
-	TID     int
-	LID     int
-	State   SCSITargetState
-	Devices []SCSILu
-	ITNexus []ITNexus
+	Name    string          `json:"name"`
+	TID     int             `json:"tid"`
+	LID     int             `json:"lid"`
+	State   SCSITargetState `json:"state"`
+	Devices []*SCSILu       `json:"-"`
+	ITNexus []*ITNexus      `json:"itnexus"`
 
-	SCSITargetDriver interface{}
+	SCSITargetDriver interface{} `json:"-"`
 }
 
 type SCSITargetDriverState int
@@ -210,7 +212,7 @@ type SCSILuPhyAttribute struct {
 	ProductRev      string
 	VersionDesction []uint16
 	// Peripheral device type
-	DeviceType uint
+	DeviceType SCSIDeviceType
 	// Peripheral Qualifier
 	Qualifier bool
 	// Removable media
@@ -234,8 +236,8 @@ type SCSILuPhyAttribute struct {
 }
 
 var (
-	DefaultBlockShift      int = 9
-	DefaultSenseBufferSize int = 252
+	DefaultBlockShift      uint = 9
+	DefaultSenseBufferSize int  = 252
 )
 
 var (
@@ -294,8 +296,32 @@ var (
 	TYPE_PT SCSIDeviceType = 0xff
 )
 
+type CommandFunc func(host int, cmd *SCSICommand) SAMStat
+
+type BackingStore interface {
+	Open(dev *SCSILu, path string) (*os.File, error)
+	Close(dev *SCSILu) error
+	Init(dev *SCSILu, Opts string) error
+	Exit(dev *SCSILu) error
+	CommandSubmit(cmd *SCSICommand) error
+}
+
+type SCSIDeviceProtocol interface {
+	PerformCommand(opcode int) interface{}
+	InitLu(lu *SCSILu) error
+	ConfigLu(lu *SCSILu) error
+	OnlineLu(lu *SCSILu) error
+	OfflineLu(lu *SCSILu) error
+	ExitLu(lu *SCSILu) error
+}
+type ModePage struct {
+	Pcode    uint8  // Page code
+	SubPcode uint8  // Sub page code
+	Data     []byte // Rest of mode page info
+}
+
 type SCSILu struct {
-	FD         int
+	File       *os.File
 	Address    uint64
 	Size       uint64
 	Lun        uint64
@@ -304,4 +330,12 @@ type SCSILu struct {
 	BlockShift uint
 	ReserveID  uint64
 	Attrs      SCSILuPhyAttribute
+	ModePages  []ModePage
+
+	Target         *SCSITarget
+	Storage        BackingStore
+	DeviceProtocol SCSIDeviceProtocol
+
+	PerformCommand CommandFunc
+	FinishCommand  func(*SCSITarget, *SCSICommand)
 }

@@ -16,19 +16,51 @@ limitations under the License.
 
 package scsi
 
-import "github.com/gostor/gotgt/pkg/api"
+import (
+	"os"
 
-type SCSILuOps struct {
-	*api.SCSILu
+	"github.com/gostor/gotgt/pkg/api"
+)
 
-	DeviceProtocol SCSIDeviceProtocol
-	Storage        *BackingStore
-	Target         *api.SCSITarget
-	Attrs          api.SCSILuPhyAttribute
+func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
+	sbc := NewSBCDevice()
+	backing, err := NewBackingStore("file")
+	if err != nil {
+		return nil, err
+	}
+	var lu = &api.SCSILu{
+		Lun:            lun,
+		Target:         target,
+		PerformCommand: luPerformCommand,
+		DeviceProtocol: sbc,
+		Storage:        backing,
+		BlockShift:     0,
+		Size:           1024 * 1024 * 1024,
+	}
+	// hack this
+	if _, err = os.Stat("/tmp/data.txt"); err != nil && os.IsExist(err) {
+		os.Create("/tmp/data.txt")
+	}
+	f, err := backing.Open(lu, "/tmp/data.txt")
+	if err != nil {
+		return nil, err
+	}
+	lu.File = f
+	lu.DeviceProtocol.InitLu(lu)
+	lu.Attrs.Online = true
+	return lu, nil
+}
 
-	// function handler for command performing and finishing
-	PerformCommand CommandFunc
-	FinishCommand  func(*api.SCSITarget, *api.SCSICommand)
+func luPerformCommand(tid int, cmd *api.SCSICommand) api.SAMStat {
+	op := int(cmd.SCB.Bytes()[0])
+	fn := cmd.Device.DeviceProtocol.PerformCommand(op)
+	if fn != nil {
+		fnop := fn.(SCSIDeviceOperation)
+		// host := cmd.ITNexus.Host
+		host := 0
+		return fnop.CommandPerformFunc(host, cmd)
+	}
+	return api.SAMStatGood
 }
 
 func luPreventRemoval(lu *api.SCSILu) bool {

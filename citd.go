@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,70 +18,104 @@ limitations under the License.
 package main
 
 import (
-	"net"
+	"flag"
+	"fmt"
 	"os"
+	"os/signal"
 	"reflect"
+	"runtime"
+	"strings"
+	"syscall"
 
 	"github.com/golang/glog"
-	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/apiserver"
+	"github.com/gostor/gotgt/pkg/port"
+	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
+	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
 )
 
 func main() {
-	l, err := net.Listen("tcp", ":3260")
+
+	flHelp := flag.Bool("help", false, "Print help message for Hyperd daemon")
+	flHost := flag.String("host", "tcp://127.0.0.1:23457", "Host for SCSI target daemon")
+	flDriver := flag.String("driver", "iscsi", "SCSI low level driver")
+	flag.Usage = func() { *flHelp = true }
+	flag.Parse()
+	flag.Set("logtostderr", "true")
+	if *flHelp == true {
+		fmt.Println(`Usage:
+  xxxd [OPTIONS]
+
+Application Options:
+  --host=""                 Host for SCSI target daemon
+  --driver=iscsi            SCSI low level driver
+
+Help Options:
+  -h, --help                Show this help message
+`)
+		return
+	}
+
+	scsi := scsi.NewSCSITargetService()
+	t, err := port.NewTargetService(*flDriver, scsi)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	defer l.Close()
-	t, err := scsi.NewTarget(0, "iscsi", "test-iscsi-target")
-	if err != nil {
-		glog.Error(err)
-		os.Exit(1)
+	iscsit := reflect.ValueOf(t)
+	// create a new target
+	create := iscsit.MethodByName("NewTarget")
+	create.Call([]reflect.Value{reflect.ValueOf("test-iscsi-target")})
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	// run a service
+	run := iscsit.MethodByName("Run")
+	go run.Call([]reflect.Value{})
+
+	serverConfig := &apiserver.Config{
+		Addrs: []apiserver.Addr{},
 	}
-	conns := make(map[string]net.Conn)
-
-	for {
-		glog.Info("Listening ...")
-		conn, err := l.Accept()
-		checkError(err, "Accept")
-		glog.Info("Accepting ...")
-		conns[conn.RemoteAddr().String()] = conn
-		// start a new thread to do with this command
-		go Handler(conn, t)
+	//hosts := []string{"unix:///var/run/gotgt.sock"}
+	hosts := []string{}
+	if *flHost != "" {
+		hosts = append(hosts, *flHost)
 	}
-}
-
-func checkError(err error, info string) (res bool) {
-
-	if err != nil {
-		glog.Error(info + "  " + err.Error())
-		return false
-	}
-	return true
-}
-
-func Handler(conn net.Conn, tgt *api.SCSITarget) {
-
-	glog.Infof("connection is connected from %s...\n", conn.RemoteAddr().String())
-
-	buf := make([]byte, 1024)
-	for {
-		lenght, err := conn.Read(buf)
-		if checkError(err, "Connection") == false {
-			conn.Close()
-			break
+	for _, protoAddr := range hosts {
+		protoAddrParts := strings.SplitN(protoAddr, "://", 2)
+		if len(protoAddrParts) != 2 {
+			glog.Errorf("bad format %s, expected PROTO://ADDR", protoAddr)
+			return
 		}
-		if lenght > 0 {
-			buf[lenght] = 0
-		}
-		v := reflect.ValueOf(tgt.SCSITargetDriver)
-		iscsit := v.MethodByName("ProcessCommand")
-		in := make([]reflect.Value, 1)
-		in[0] = reflect.ValueOf(buf[0:lenght])
-		res := iscsit.Call(in)[0]
-		b := res.Bytes()
-		glog.Infof("%s\n", string(b))
-		conn.Write(b)
+		serverConfig.Addrs = append(serverConfig.Addrs, apiserver.Addr{Proto: protoAddrParts[0], Addr: protoAddrParts[1]})
 	}
+
+	s, err := apiserver.New(serverConfig)
+	if err != nil {
+		glog.Errorf(err.Error())
+		return
+	}
+	s.InitRouters()
+	// The serve API routine never exits unless an error occurs
+	// We need to start it as a goroutine and wait on it so
+	// daemon doesn't exit
+	serveAPIWait := make(chan error)
+	go s.Wait(serveAPIWait)
+
+	stopAll := make(chan os.Signal, 1)
+	signal.Notify(stopAll, syscall.SIGINT, syscall.SIGTERM)
+
+	// Daemon is fully initialized and handling API traffic
+	// Wait for serve API job to complete
+	select {
+	case errAPI := <-serveAPIWait:
+		// If we have an error here it is unique to API (as daemonErr would have
+		// exited the daemon process above)
+		if errAPI != nil {
+			glog.Warningf("Shutting down due to ServeAPI error: %v", errAPI)
+		}
+	case <-stopAll:
+		break
+	}
+	s.Close()
 }

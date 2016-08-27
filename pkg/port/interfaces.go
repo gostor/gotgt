@@ -1,9 +1,22 @@
+/*
+Copyright 2016 The GoStor Authors All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package port
 
-import (
-	"github.com/gostor/gotgt/pkg/api"
-	"github.com/gostor/gotgt/pkg/port/iscsit"
-)
+import "github.com/gostor/gotgt/pkg/api"
 
 type SCSITargetDriver interface {
 	Init() error
@@ -16,7 +29,6 @@ type SCSITargetDriver interface {
 	CreateLu(lu *api.SCSILu) error
 	GetLu(lun uint8) (uint64, error)
 
-	ProcessCommand(buf []byte) ([]byte, error)
 	CommandNotify(nid uint64, result int, cmd *api.SCSICommand) error
 }
 
@@ -56,15 +68,5 @@ func (fake *fakeSCSITargetDriver) GetLun(lun uint8) (uint64, error) {
 	return 0, nil
 }
 func (fake *fakeSCSITargetDriver) CommandNotify(nid uint64, result int, cmd *api.SCSICommand) error {
-	return nil
-}
-func (fake *fakeSCSITargetDriver) ProcessCommand(buf []byte) ([]byte, error) {
-	return []byte(""), nil
-}
-
-func NewTargetDriver(driver string, tgt *api.SCSITarget) SCSITargetDriver {
-	if driver == "iscsi" {
-		return iscsit.NewISCSITarget(tgt)
-	}
 	return nil
 }
