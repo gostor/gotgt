@@ -110,6 +110,8 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 		final   bool = false
 		cmd     *ISCSICommand
 	)
+	conn.readLock.Lock()
+	defer conn.readLock.Unlock()
 	if conn.state == CONN_STATE_SCSI {
 		hdigest = conn.sessionParam[ISCSI_PARAM_HDRDGST_EN].Value & DIGEST_CRC32C
 		ddigest = conn.sessionParam[ISCSI_PARAM_DATADGST_EN].Value & DIGEST_CRC32C
@@ -124,6 +126,7 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 				return
 			}
 			if length == 0 {
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
@@ -131,6 +134,7 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 			cmd, err = parseHeader(buf)
 			if err != nil {
 				glog.Error(err)
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
@@ -162,10 +166,12 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 				return
 			}
 			if length != dl {
+				glog.V(2).Infof("get length is %d, but expected %d", length, dl)
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
-			cmd.RawData = buf[:cmd.DataLen]
+			cmd.RawData = buf[:length]
 			conn.rxBuffer = append(conn.rxBuffer, buf...)
 			final = true
 			glog.Infof("got command: \n%s", cmd.String())
@@ -189,16 +195,19 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 			glog.Infof("OpLoginReq")
 			if err := s.iscsiExecLogin(conn); err != nil {
 				glog.Error(err)
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 			}
 		case OpLogoutReq:
 			glog.Infof("OpLogoutReq")
 			if err := iscsiExecLogout(conn); err != nil {
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 			}
 		case OpTextReq:
 			glog.Infof("OpTextReq")
 			if err := s.iscsiExecText(conn); err != nil {
+				glog.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 			}
 		default:
@@ -426,8 +435,10 @@ func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
 		}
 	}
 
+	glog.Infof("connection state: %d", conn.state)
 	switch conn.state {
 	case CONN_STATE_CLOSE, CONN_STATE_EXIT:
+		glog.Warningf("set connection to close")
 		conn.state = CONN_STATE_CLOSE
 	case CONN_STATE_SECURITY_LOGIN:
 		conn.state = CONN_STATE_LOGIN
@@ -509,6 +520,32 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 		conn.txIOState = IOSTATE_TX_BHS
 		iscsiExecTMFunction(conn)
 	case OpSCSIOut:
+		glog.Infof("scsi out operation")
+		scmd := &api.SCSICommand{}
+		conn.req.Write = true
+		conn.req.CDB = []byte{api.Write_10}
+		task := &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: scmd}
+		conn.rxTask = task
+		if err = s.iscsiExecTask(task); err != nil {
+			return
+		} else {
+			conn.rxTask = nil
+			conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
+			conn.txIOState = IOSTATE_TX_BHS
+			conn.statSN += 1
+			resp := &ISCSICommand{
+				Immediate:    true,
+				Final:        true,
+				StatSN:       req.ExpStatSN,
+				TaskTag:      req.TaskTag,
+				ExpCmdSN:     conn.session.ExpCmdSN,
+				MaxCmdSN:     conn.session.ExpCmdSN + 10,
+				Status:       scmd.Result,
+				SCSIResponse: 0x00,
+				HasStatus:    true,
+			}
+			conn.resp = resp
+		}
 	case OpNoopOut:
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
 		conn.txIOState = IOSTATE_TX_BHS
@@ -579,7 +616,7 @@ func (s *ISCSITargetService) iscsiTaskQueueHandler(task *iscsiTask) error {
 func (s *ISCSITargetService) iscsiExecTask(task *iscsiTask) error {
 	cmd := task.cmd
 	switch cmd.OpCode {
-	case OpSCSICmd:
+	case OpSCSICmd, OpSCSIOut:
 		if cmd.Read {
 			if cmd.Write {
 				task.scmd.Direction = api.SCSIDataBidirection

@@ -90,7 +90,7 @@ type ISCSICommand struct {
 	Status          byte
 	SCSIResponse    byte
 
-	// Data-In
+	// Data-In/Out
 	HasStatus    bool
 	DataSN       uint32
 	BufferOffset uint32
@@ -187,6 +187,11 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.CDB = data[32:48]
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
 	case OpSCSIResp:
+	case OpSCSIOut:
+		m.LUN = [8]uint8{data[9]}
+		m.ExpStatSN = uint32(ParseUint(data[28:32]))
+		m.DataSN = uint32(ParseUint(data[36:40]))
+		m.BufferOffset = uint32(ParseUint(data[40:44]))
 	case OpLoginReq, OpTextReq, OpNoopOut, OpLogoutReq:
 		m.Transit = m.Final
 		m.Cont = data[1]&0x40 == 0x40

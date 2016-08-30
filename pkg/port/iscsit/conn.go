@@ -18,6 +18,7 @@ package iscsit
 
 import (
 	"net"
+	"sync"
 
 	"github.com/gostor/gotgt/pkg/api"
 )
@@ -81,6 +82,8 @@ type iscsiConnection struct {
 	txTask *iscsiTask
 
 	authMethod AuthMethod
+
+	readLock *sync.RWMutex
 }
 
 type taskState int
@@ -101,6 +104,7 @@ type iscsiTask struct {
 func (c *iscsiConnection) init() {
 	c.state = CONN_STATE_FREE
 	c.refcount = 1
+	c.readLock = new(sync.RWMutex)
 	c.sessionParam = []ISCSISessionParam{}
 	for _, param := range sessionKeys {
 		c.sessionParam = append(c.sessionParam, ISCSISessionParam{Value: param.def})
