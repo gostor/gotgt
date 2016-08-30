@@ -110,6 +110,8 @@ func (cmd *ISCSICommand) Bytes() []byte {
 		return cmd.textRespBytes()
 	case OpNoopIn:
 		return cmd.noopInBytes()
+	case OpSCSITaskResp:
+		return cmd.scsiTMFRespBytes()
 	}
 	return nil
 }
@@ -176,7 +178,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 	m.DataLen = int(ParseUint(data[5:8]))
 	m.TaskTag = uint32(ParseUint(data[16:20]))
 	switch m.OpCode {
-	case OpSCSICmd:
+	case OpSCSICmd, OpSCSITaskReq:
 		m.LUN = [8]uint8{data[9]}
 		m.ExpectedDataLen = uint32(ParseUint(data[20:24]))
 		m.CmdSN = uint32(ParseUint(data[24:28]))
@@ -362,5 +364,31 @@ func (m *ISCSICommand) noopInBytes() []byte {
 		rd = append(rd, 0)
 	}
 	buf.Write(rd)
+	return buf.Bytes()
+}
+
+func (m *ISCSICommand) scsiTMFRespBytes() []byte {
+	// rfc7143 11.6
+	buf := &bytes.Buffer{}
+	buf.WriteByte(byte(OpSCSITaskResp))
+	buf.WriteByte(0x80)
+	buf.WriteByte(0x00)
+	buf.WriteByte(0x00)
+
+	// Skip through to byte 16
+	for i := 0; i < 3*4; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
+	for i := 0; i < 4; i++ {
+		buf.WriteByte(0x00)
+	}
+	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
+	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
+	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
+	for i := 0; i < 3*4; i++ {
+		buf.WriteByte(0x00)
+	}
+
 	return buf.Bytes()
 }

@@ -139,8 +139,8 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 				conn.rxIOState = IOSTATE_RX_INIT_AHS
 				break
 			}
-			glog.Infof("got command: \n%s", cmd.String())
-			glog.Infof("got buffer: %v", buf)
+			glog.V(2).Infof("got command: \n%s", cmd.String())
+			glog.V(2).Infof("got buffer: %v", buf)
 			final = true
 		case IOSTATE_RX_INIT_AHS:
 			conn.rxIOState = IOSTATE_RX_DATA
@@ -204,6 +204,7 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 		default:
 			iscsiExecReject(conn)
 		}
+		glog.V(1).Infof("connection state is %v", conn.state)
 		glog.Infof("%#v", conn.resp.String())
 		s.handler(DATAOUT, conn)
 	}
@@ -347,6 +348,20 @@ func iscsiExecNoopOut(conn *iscsiConnection) error {
 	return nil
 }
 
+func iscsiExecTMFunction(conn *iscsiConnection) error {
+	cmd := conn.req
+	conn.resp = &ISCSICommand{
+		OpCode:   OpSCSITaskResp,
+		Final:    true,
+		NSG:      FullFeaturePhase,
+		StatSN:   cmd.ExpStatSN,
+		TaskTag:  cmd.TaskTag,
+		ExpCmdSN: cmd.CmdSN + 1,
+		MaxCmdSN: cmd.CmdSN + 10,
+	}
+	return nil
+}
+
 func iscsiExecReject(conn *iscsiConnection) error {
 	conn.resp = &ISCSICommand{
 		OpCode: OpReject,
@@ -432,6 +447,7 @@ func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
 	case CONN_STATE_SCSI:
 		conn.txTask = nil
 	default:
+		glog.Infof("unexpected connection state: %d", conn.state)
 		conn.rxIOState = IOSTATE_RX_BHS
 		s.handler(DATAIN, conn)
 	}
@@ -487,6 +503,11 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			}
 			conn.resp = resp
 		}
+	case OpSCSITaskReq:
+		// task management function
+		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
+		conn.txIOState = IOSTATE_TX_BHS
+		iscsiExecTMFunction(conn)
 	case OpSCSIOut:
 	case OpNoopOut:
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
