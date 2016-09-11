@@ -89,8 +89,8 @@ type iscsiConnection struct {
 type taskState int
 
 const (
-	taskPending taskState = 1
-	taskSCSI    taskState = 2
+	taskPending taskState = 0
+	taskSCSI    taskState = 1
 )
 
 type iscsiTask struct {
@@ -99,6 +99,13 @@ type iscsiTask struct {
 	cmd   *ISCSICommand
 	scmd  *api.SCSICommand
 	state taskState
+
+	offset     int
+	r2tCount   int
+	unsolCount int
+	expR2TSN   int
+
+	r2tSN uint32
 }
 
 func (c *iscsiConnection) init() {

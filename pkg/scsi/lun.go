@@ -34,7 +34,7 @@ func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
 		PerformCommand: luPerformCommand,
 		DeviceProtocol: sbc,
 		Storage:        backing,
-		BlockShift:     0,
+		BlockShift:     api.DefaultBlockShift,
 		Size:           1024 * 1024 * 10,
 	}
 	// hack this
