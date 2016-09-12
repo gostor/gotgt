@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	systemdActivation "github.com/coreos/go-systemd/activation"
-	"github.com/docker/docker/utils"
 	"github.com/docker/go-connections/sockets"
 	"github.com/golang/glog"
 	"github.com/gorilla/mux"
@@ -173,7 +172,7 @@ func (s *Server) makeHTTPHandler(handler httputils.APIFunc) http.HandlerFunc {
 		}
 
 		if err := handlerFunc(ctx, w, r, vars); err != nil {
-			glog.Errorf("Handler for %s %s returned error: %s", r.Method, r.URL.Path, utils.GetErrorMessage(err))
+			glog.Errorf("Handler for %s %s returned error: %v", r.Method, r.URL.Path, err)
 			httputils.WriteError(w, err)
 		}
 	}

@@ -1,10 +1,16 @@
 {
 	"ImportPath": "github.com/gostor/gotgt",
 	"GoVersion": "go1.6",
+	"GodepVersion": "v63",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
+		{
+			"ImportPath": "github.com/Microsoft/go-winio",
+			"Comment": "v0.1.0",
+			"Rev": "8f9387ea7efabb228a981b9c381142be7667967f"
+		},
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
 			"Comment": "v0.10.0-19-gf3cfb45",
@@ -14,51 +20,6 @@
 			"ImportPath": "github.com/coreos/go-systemd/activation",
 			"Comment": "v9",
 			"Rev": "6dc8b843c670f2027cc26b164935635840a40526"
-		},
-		{
-			"ImportPath": "github.com/docker/distribution/registry/api/errcode",
-			"Comment": "v2.1.1-2-g77c6d9d",
-			"Rev": "77c6d9deb9b26653b4a264bbb2fd634ac927df7f"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/archive",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/fileutils",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/idtools",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/ioutils",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/pools",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/promise",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/random",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/stringid",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/pkg/system",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
-		},
-		{
-			"ImportPath": "github.com/docker/docker/utils",
-			"Rev": "325cacb1e0edb4286b042cdb22d8bba76b8743d4"
 		},
 		{
 			"ImportPath": "github.com/docker/go-connections/sockets",
@@ -76,6 +37,15 @@
 		{
 			"ImportPath": "github.com/gorilla/mux",
 			"Rev": "8096f47503459bcc74d1f4c487b7e6e42e5746b5"
+		},
+		{
+			"ImportPath": "github.com/inconshreveable/mousetrap",
+			"Rev": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
+		},
+		{
+			"ImportPath": "github.com/opencontainers/runc/libcontainer/user",
+			"Comment": "v0.0.6-22-g47e3f83",
+			"Rev": "47e3f834d73e76bc2a6a585b48d2a93325b34979"
 		},
 		{
 			"ImportPath": "github.com/spf13/cobra",
