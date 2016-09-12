@@ -34,14 +34,14 @@ func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
 		PerformCommand: luPerformCommand,
 		DeviceProtocol: sbc,
 		Storage:        backing,
-		BlockShift:     0,
-		Size:           1024 * 1024 * 1024,
+		BlockShift:     api.DefaultBlockShift,
+		Size:           1024 * 1024 * 10,
 	}
 	// hack this
-	if _, err = os.Stat("/tmp/data.txt"); err != nil && os.IsExist(err) {
-		os.Create("/tmp/data.txt")
+	if _, err = os.Stat("/var/tmp/disk.img"); err != nil && os.IsExist(err) {
+		panic(err)
 	}
-	f, err := backing.Open(lu, "/tmp/data.txt")
+	f, err := backing.Open(lu, "/var/tmp/disk.img")
 	if err != nil {
 		return nil, err
 	}

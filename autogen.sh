@@ -13,9 +13,9 @@ die()
 	exit 1
 }
 
-aclocal --version < /dev/null > /dev/null 2>&1 || die "You must have aclocal installed to generate the hyper."
-autoconf --version < /dev/null > /dev/null 2>&1 || die "You must have autoconf installed to generate the hyper."
-automake --version < /dev/null > /dev/null 2>&1 || die "You must have automake installed to generate the hyper."
+aclocal --version < /dev/null > /dev/null 2>&1 || die "You must have aclocal installed to generate the gotgt."
+autoconf --version < /dev/null > /dev/null 2>&1 || die "You must have autoconf installed to generate the gotgt."
+automake --version < /dev/null > /dev/null 2>&1 || die "You must have automake installed to generate the gotgt."
 
 echo
 echo "Generating build-system with:"

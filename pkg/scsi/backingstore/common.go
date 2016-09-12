@@ -19,6 +19,7 @@ package backingstore
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/golang/glog"
@@ -74,7 +75,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		key             = scsi.ILLEGAL_REQUEST
 		asc             = scsi.ASC_INVALID_FIELD_IN_CDB
 		wbuf     []byte = []byte{}
-		rbuf     []byte = []byte{}
+		rbuf            = make([]byte, cmd.TL)
 		length   int
 		doVerify bool = false
 		doWrite  bool = false
@@ -98,6 +99,9 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		doWrite = true
 		goto write
 	case api.SYNCHRONIZE_CACHE, api.SYNCHRONIZE_CACHE_16:
+		if err = util.Fdatasync(lu.File); err != nil {
+			panic(err)
+		}
 		break
 	case api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
 		doVerify = true
@@ -110,7 +114,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
 		length, err = lu.File.ReadAt(rbuf, int64(offset))
-		if err != nil {
+		if err != nil && err != io.EOF {
 			key = scsi.MEDIUM_ERROR
 			asc = scsi.ASC_READ_ERROR
 			break

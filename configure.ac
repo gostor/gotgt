@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([runv], [0.4.0], [hyper.sh])
+AC_INIT([gotgt], [0.1.0], [github.com/gostor])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 # Checks for programs.
