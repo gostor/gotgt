@@ -477,11 +477,17 @@ sense:
 }
 
 func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
-	data := &bytes.Buffer{}
-	data.Write(util.MarshalUint64(1))
-	data.Write(util.MarshalUint32(1 << cmd.Device.BlockShift))
+	var (
+		data   = &bytes.Buffer{}
+		bshift = cmd.Device.BlockShift
+		size   = cmd.Device.Size >> bshift
+	)
+	data.Write(util.MarshalUint64(uint64(size - 1)))
+	binary.Write(data, binary.BigEndian, uint32(1<<bshift))
 	val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
 	data.Write(util.MarshalUint32(uint32(val)))
+	binary.Write(data, binary.BigEndian, uint64(0))
+	binary.Write(data, binary.BigEndian, uint64(0))
 	cmd.InSDBBuffer.Buffer = data
 	return api.SAMStatGood
 }

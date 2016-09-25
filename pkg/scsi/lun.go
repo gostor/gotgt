@@ -48,6 +48,7 @@ func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
 	lu.File = f
 	lu.DeviceProtocol.InitLu(lu)
 	lu.Attrs.Online = true
+	lu.Attrs.Lbppbe = 3
 	return lu, nil
 }
 

@@ -185,7 +185,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 	m.TaskTag = uint32(ParseUint(data[16:20]))
 	switch m.OpCode {
 	case OpSCSICmd, OpSCSITaskReq:
-		m.LUN = [8]uint8{data[9]}
+		m.LUN = [8]byte{data[9]}
 		m.ExpectedDataLen = uint32(ParseUint(data[20:24]))
 		m.CmdSN = uint32(ParseUint(data[24:28]))
 		m.Read = data[1]&0x40 == 0x40
@@ -194,7 +194,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
 	case OpSCSIResp:
 	case OpSCSIOut:
-		m.LUN = [8]uint8{data[9]}
+		m.LUN = [8]byte{data[9]}
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
 		m.DataSN = uint32(ParseUint(data[36:40]))
 		m.BufferOffset = uint32(ParseUint(data[40:44]))
