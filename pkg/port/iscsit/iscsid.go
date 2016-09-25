@@ -343,8 +343,8 @@ func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
 			}
 			for _, t := range list {
 				result = append(result, util.KeyValue{"TargetName", t.Name})
-				result = append(result, util.KeyValue{"TargetAddress", "172.16.69.1:3260,1"})
-				//result = append(result, util.KeyValue{"TargetAddress", "127.0.0.1:3260,1"})
+				//result = append(result, util.KeyValue{"TargetAddress", "172.16.69.1:3260,1"})
+				result = append(result, util.KeyValue{"TargetAddress", "127.0.0.1:3260,1"})
 			}
 		}
 	}

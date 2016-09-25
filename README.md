@@ -1,6 +1,6 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-Cloud Integrated SCSI Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
+Simple Golang SCSI Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
 
 ## Build
 
@@ -9,6 +9,8 @@ $ mkdir $GOPATH/gotstor/
 $ cd $GOPATH/gostor/
 $ git clone https://github.com/gostor/gotgt gotgt
 $ cd gotgt
+$ ./autogen.sh
+$ ./configure
 $ make
 ```
 
