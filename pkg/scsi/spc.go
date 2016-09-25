@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -130,40 +131,84 @@ func SPCLuOnline(lu *api.SCSILu) error {
 }
 
 func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
-	buf := &bytes.Buffer{}
-	var b byte = 0x75
+	var (
+		buf          = &bytes.Buffer{}
+		data  []byte = []byte{}
+		b     byte   = 0x75
+		scb   []byte = cmd.SCB.Bytes()
+		pcode byte   = scb[2]
+		evpd  bool   = false
+	)
+	if scb[1]&0x01 > 0 {
+		evpd = true
+	}
 	if reflect.DeepEqual(util.MarshalUint64(cmd.Device.Lun)[0:7], cmd.Lun[0:7]) {
 		b = (uint8(0) & 0x7) << 5
 		b |= uint8(0) & 0x1f
 	}
-	buf.WriteByte(b)
-	b = 0
-	buf.WriteByte(b)
-	buf.WriteByte(byte(1))
-	b = 0x02
-	buf.WriteByte(b)
-	buf.WriteByte(0x00)
-	// byte 5
-	b = 0
-	b |= byte(1) << 4 & 0x30
-	buf.WriteByte(b)
-	// byte 6
-	b = 0
-	buf.WriteByte(b)
-	buf.WriteByte(0x02)
-	buf.Write([]byte{'1', '1', 'c', 'a', 'n', 's'})
-	buf.WriteByte(0x00)
-	buf.WriteByte(0x00)
-	buf.Write([]byte{'c', 'o', 'f', 'f', 'e', 'e'})
-	for i := 0; i < 10; i++ {
+	if cmd.Device.Lun != *(*uint64)(unsafe.Pointer(&cmd.Lun)) {
+		goto sense
+	}
+	if evpd {
+		if pcode == 0x0 {
+			buf.WriteByte(b)
+			b = 0
+			buf.WriteByte(b)
+			buf.WriteByte(b)
+			buf.WriteByte(b)
+			buf.WriteByte(b)
+			buf.WriteByte(b)
+		} else if pcode == 0xb0 {
+			buf.WriteByte(b)
+			buf.WriteByte(0xb0)
+			buf.WriteByte(0x00)
+			buf.WriteByte(0x3c)
+			buf.WriteByte(0x00)
+			buf.WriteByte(0x80)
+
+			for i := 0; i < 58; i++ {
+				buf.WriteByte(0x00)
+			}
+		} else {
+			buf.WriteByte(b)
+			buf.WriteByte(0xb0)
+			buf.WriteByte(0x00)
+			buf.WriteByte(0x00)
+			buf.WriteByte(0x00)
+		}
+	} else {
+		buf.WriteByte(b)
+		b = 0
+		buf.WriteByte(b)
+		buf.WriteByte(byte(1))
+		b = 0x02
+		buf.WriteByte(b)
+		buf.WriteByte(0x00)
+		// byte 5
+		b = 0
+		b |= byte(1) << 4 & 0x30
+		buf.WriteByte(b)
+		// byte 6
+		b = 0
+		buf.WriteByte(b)
+		buf.WriteByte(0x02)
+		buf.Write([]byte{'1', '1', 'c', 'a', 'n', 's'})
+		buf.WriteByte(0x00)
+		buf.WriteByte(0x00)
+		buf.Write([]byte{'c', 'o', 'f', 'f', 'e', 'e'})
+		for i := 0; i < 10; i++ {
+			buf.WriteByte(0x00)
+		}
+		buf.Write([]byte{'1', '.', '0'})
 		buf.WriteByte(0x00)
 	}
-	buf.Write([]byte{'1', '.', '0'})
-	buf.WriteByte(0x00)
-	data := buf.Bytes()
+	data = buf.Bytes()
 	data[4] = byte(len(data) - 4)
 	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
 	return api.SAMStatGood
+sense:
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {

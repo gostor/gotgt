@@ -243,6 +243,17 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 		RawData: util.MarshalKVText([]util.KeyValue{
 			{"HeaderDigest", "None"},
 			{"DataDigest", "None"},
+			{"ImmediateData", "Yes"},
+			{"InitialR2T", "Yes"},
+			{"MaxBurstLength", "262144"},
+			{"FirstBurstLength", "65536"},
+			{"DefaultTime2Wait", "2"},
+			{"DefaultTime2Retain", "0"},
+			{"MaxOutstandingR2T", "1"},
+			{"IFMarker", "No"},
+			{"OFMarker", "No"},
+			{"DataPDUInOrder", "Yes"},
+			{"DataSequenceInOrder", "Yes"},
 		}),
 	}
 	pairs := util.ParseKVText(cmd.RawData)
@@ -332,7 +343,7 @@ func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
 			}
 			for _, t := range list {
 				result = append(result, util.KeyValue{"TargetName", t.Name})
-				result = append(result, util.KeyValue{"TargetAddress", "172.16.69.169:3260,1"})
+				result = append(result, util.KeyValue{"TargetAddress", "172.16.69.1:3260,1"})
 				//result = append(result, util.KeyValue{"TargetAddress", "127.0.0.1:3260,1"})
 			}
 		}
@@ -495,6 +506,7 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			}
 			task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
 			if task.r2tCount > 0 {
+				conn.session.ExpCmdSN += 1
 				// prepare to receive more data
 				task.state = taskPending
 				conn.session.PendingTasks.Push(task)
@@ -703,6 +715,7 @@ func (s *ISCSITargetService) iscsiTaskQueueHandler(task *iscsiTask) error {
 		// add this connection into queue and set this task as pending task
 		task.state = taskPending
 		sess.PendingTasks.Push(task)
+		return fmt.Errorf("pending")
 	}
 
 	return nil
