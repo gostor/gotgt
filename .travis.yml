@@ -11,6 +11,9 @@ install:
 
 before_script:
     - go get github.com/kr/godep
+    - sudo apt-get update
+    - sudo apt-get install -y libcunit1 libcunit1-doc libcunit1-dev
+    - sudo apt-get install -y open-iscsi
 
 script:
    - cd ${TRAVIS_BUILD_DIR}
@@ -18,3 +21,29 @@ script:
    - ./configure 
    - make
    - hack/verify-gofmt.sh
+   - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=10240
+   - ./citd -v 4 1>/dev/null 2>&1 &
+   # libiscsi test
+   - mkdir ${HOME}/libiscsi
+   - git clone https://github.com/gostor/libiscsi ${HOME}/libiscsi
+   - cd ${HOME}/libiscsi
+   - export ISCSITEST=yes
+   - ./autogen.sh
+   - ./configure
+   - make
+   - ./test-tool/iscsi-test-cu -d --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/test-iscsi-target/0
+   - ./test-tool/iscsi-test-cu -d --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/test-iscsi-target/0
+   - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/test-iscsi-target
+   - ./utils/iscsi-inq iscsi://127.0.0.1:3260/test-iscsi-target/0
+   - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/test-iscsi-target/0
+   # iscsi initiator test
+   - sudo iscsiadm -m discovery -t sendtargets -p 127.0.0.1
+   - sudo iscsiadm -m node -L all
+   - sudo iscsiadm -m session
+   - sudo fdisk -l
+   - echo -e "n\np\n1\n\n\nt\nc\na\n1\nw" | sudo fdisk /dev/sdb
+   - sudo mkfs.ext3 /dev/sdb1
+   - sudo mkdir -p /var/tmp/test
+   - sudo mount /dev/sdb1 /var/tmp/test
+   - sudo ls -lh /var/tmp/test/
+
