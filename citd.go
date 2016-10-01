@@ -29,6 +29,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/apiserver"
+	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/port"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
@@ -57,6 +58,12 @@ Help Options:
 		return
 	}
 
+	config, err := config.Load(config.ConfigDir())
+	if err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+
 	scsi := scsi.NewSCSITargetService()
 	t, err := port.NewTargetService(*flDriver, scsi)
 	if err != nil {
@@ -65,9 +72,10 @@ Help Options:
 	}
 	iscsit := reflect.ValueOf(t)
 	// create a new target
-	create := iscsit.MethodByName("NewTarget")
-	create.Call([]reflect.Value{reflect.ValueOf("test-iscsi-target")})
-
+	for _, tgt := range config.Targets {
+		create := iscsit.MethodByName("NewTarget")
+		create.Call([]reflect.Value{reflect.ValueOf(tgt.Name), reflect.ValueOf(tgt.LUNs)})
+	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	// run a service
 	run := iscsit.MethodByName("Run")

@@ -23,7 +23,7 @@ import (
 	"github.com/gostor/gotgt/pkg/api"
 )
 
-func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*api.SCSITarget, error) {
+func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string, luns []string) (*api.SCSITarget, error) {
 	// verify the target ID
 
 	// verify the target's Name
@@ -34,13 +34,17 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 		TID:     tid,
 		Devices: []*api.SCSILu{},
 	}
-	lun, err := NewSCSILu(0, target)
-	if err != nil {
-		glog.Errorf("fail to create LU: %v", err)
-		return nil, err
+	var devices = []*api.SCSILu{}
+	for i, ln := range luns {
+		lun, err := NewSCSILu(uint64(i), target, ln)
+		if err != nil {
+			glog.Errorf("fail to create LU: %v", err)
+			return nil, err
+		}
+		devices = append(devices, lun)
 	}
 	s.mutex.Lock()
-	target.Devices = append(target.Devices, lun)
+	target.Devices = devices
 	s.Targets = append(s.Targets, target)
 	s.mutex.Unlock()
 	return target, nil

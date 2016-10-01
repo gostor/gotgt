@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -34,6 +35,7 @@ type ISCSITargetService struct {
 	SCSI    *scsi.SCSITargetService
 	Name    string
 	Targets map[string]*ISCSITarget
+	Portals map[string]struct{}
 }
 
 func init() {
@@ -44,15 +46,16 @@ func NewISCSITargetService(base *scsi.SCSITargetService) (port.SCSITargetService
 	return &ISCSITargetService{
 		Name:    "iscsi",
 		Targets: map[string]*ISCSITarget{},
+		Portals: map[string]struct{}{},
 		SCSI:    base,
 	}, nil
 }
 
-func (s *ISCSITargetService) NewTarget(target string) (port.SCSITargetDriver, error) {
+func (s *ISCSITargetService) NewTarget(target string, luns []string) (port.SCSITargetDriver, error) {
 	if _, ok := s.Targets[target]; ok {
 		return nil, fmt.Errorf("target name has been existed")
 	}
-	stgt, err := s.SCSI.NewSCSITarget(len(s.Targets), "iscsi", target)
+	stgt, err := s.SCSI.NewSCSITarget(len(s.Targets), "iscsi", target, luns)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +63,24 @@ func (s *ISCSITargetService) NewTarget(target string) (port.SCSITargetDriver, er
 	s.Targets[target] = tgt
 
 	return tgt, nil
+}
+
+func (s *ISCSITargetService) AddNewPortal(portals []string) error {
+	for _, p := range portals {
+		if !strings.Contains(p, ":") {
+			p = p + ":3260"
+		}
+		s.Portals[p] = struct{}{}
+	}
+	return nil
+}
+
+func (s *ISCSITargetService) HasPortal(portal string) bool {
+	if len(s.Portals) == 0 {
+		return true
+	}
+	_, ok := s.Portals[portal]
+	return ok
 }
 
 func (s *ISCSITargetService) Run() error {
@@ -75,6 +96,11 @@ func (s *ISCSITargetService) Run() error {
 		conn, err := l.Accept()
 		if err != nil {
 			glog.Error(err)
+			continue
+		}
+		if !s.HasPortal(conn.LocalAddr().String()) {
+			glog.Errorf("unexpected portal")
+			continue
 		}
 		glog.Info("Accepting ...")
 		iscsiConn := &iscsiConnection{conn: conn}
