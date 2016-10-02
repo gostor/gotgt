@@ -24,7 +24,8 @@ import (
 
 type SCSITargetService interface {
 	Run() error
-	NewTarget(string) (SCSITargetDriver, error)
+	NewTarget(string, []string) (SCSITargetDriver, error)
+	AddNewPortal([]string) error
 }
 
 type TargetServiceFunc func(*scsi.SCSITargetService) (SCSITargetService, error)

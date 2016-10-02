@@ -22,7 +22,7 @@ import (
 	"github.com/gostor/gotgt/pkg/api"
 )
 
-func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
+func NewSCSILu(lun uint64, target *api.SCSITarget, file string) (*api.SCSILu, error) {
 	sbc := NewSBCDevice()
 	backing, err := NewBackingStore("file")
 	if err != nil {
@@ -35,13 +35,14 @@ func NewSCSILu(lun uint64, target *api.SCSITarget) (*api.SCSILu, error) {
 		DeviceProtocol: sbc,
 		Storage:        backing,
 		BlockShift:     api.DefaultBlockShift,
-		Size:           1024 * 1024 * 10,
 	}
 	// hack this
-	if _, err = os.Stat("/var/tmp/disk.img"); err != nil && os.IsExist(err) {
-		panic(err)
+	if finfo, err := os.Stat(file); err != nil {
+		return nil, err
+	} else {
+		lu.Size = uint64(finfo.Size())
 	}
-	f, err := backing.Open(lu, "/var/tmp/disk.img")
+	f, err := backing.Open(lu, file)
 	if err != nil {
 		return nil, err
 	}
