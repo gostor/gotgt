@@ -423,6 +423,31 @@ func iscsiExecReject(conn *iscsiConnection) error {
 	return nil
 }
 
+func iscsiExecR2T(conn *iscsiConnection) error {
+	conn.session.ExpCmdSN += 1
+	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
+	conn.txIOState = IOSTATE_TX_BHS
+	conn.statSN += 1
+	task := conn.rxTask
+	resp := &ISCSICommand{
+		OpCode:        OpReady,
+		Immediate:     true,
+		Final:         true,
+		StatSN:        conn.req.ExpStatSN,
+		TaskTag:       conn.req.TaskTag,
+		ExpCmdSN:      conn.session.ExpCmdSN,
+		MaxCmdSN:      conn.session.ExpCmdSN + 10,
+		R2TSN:         task.r2tSN,
+		BufferOffset:  uint32(task.offset),
+		DesiredLength: uint32(task.r2tCount),
+	}
+	if val := sessionKeys[ISCSI_PARAM_MAX_BURST].def; task.r2tCount > int(val) {
+		resp.DesiredLength = uint32(val)
+	}
+	conn.resp = resp
+	return nil
+}
+
 func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
 	var (
 		hdigest uint = 0
@@ -532,30 +557,11 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			}
 			task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
 			if task.r2tCount > 0 {
-				conn.session.ExpCmdSN += 1
 				// prepare to receive more data
 				task.state = taskPending
 				conn.session.PendingTasks.Push(task)
-				//conn.rxTask = nil
-				conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
-				conn.txIOState = IOSTATE_TX_BHS
-				conn.statSN += 1
-				resp := &ISCSICommand{
-					OpCode:        OpReady,
-					Immediate:     true,
-					Final:         true,
-					StatSN:        req.ExpStatSN,
-					TaskTag:       req.TaskTag,
-					ExpCmdSN:      conn.session.ExpCmdSN,
-					MaxCmdSN:      conn.session.ExpCmdSN + 10,
-					R2TSN:         task.r2tSN,
-					BufferOffset:  uint32(task.offset),
-					DesiredLength: uint32(task.r2tCount),
-				}
-				if val := sessionKeys[ISCSI_PARAM_MAX_BURST].def; task.r2tCount > int(val) {
-					resp.DesiredLength = uint32(val)
-				}
-				conn.resp = resp
+				conn.rxTask = task
+				iscsiExecR2T(conn)
 				break
 			}
 		}
@@ -632,27 +638,9 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			return nil
 		} else if task.r2tCount > 0 {
 			// prepare to receive more data
-			conn.rxTask = nil
-			conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
-			conn.txIOState = IOSTATE_TX_BHS
-			conn.statSN += 1
 			task.r2tSN += 1
-			resp := &ISCSICommand{
-				OpCode:        OpReady,
-				Immediate:     true,
-				Final:         true,
-				StatSN:        req.ExpStatSN,
-				TaskTag:       req.TaskTag,
-				ExpCmdSN:      conn.session.ExpCmdSN,
-				MaxCmdSN:      conn.session.ExpCmdSN + 10,
-				R2TSN:         task.r2tSN,
-				BufferOffset:  uint32(task.offset),
-				DesiredLength: uint32(task.r2tCount),
-			}
-			if val := sessionKeys[ISCSI_PARAM_MAX_BURST].def; task.r2tCount > int(val) {
-				resp.DesiredLength = uint32(val)
-			}
-			conn.resp = resp
+			conn.rxTask = task
+			iscsiExecR2T(conn)
 			break
 		}
 		task.offset = 0
