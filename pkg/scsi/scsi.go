@@ -75,7 +75,11 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	}
 	scmd.ITNexus = itn
 
+	/*
+	 * TODO: scmd.Device = target.Devices[util.GetUnalignedUint64(scmd.Lun[:])]
+	 */
 	scmd.Device = target.Devices[0]
+	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d:", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
 	result := scmd.Device.PerformCommand(tid, scmd)
 	scmd.Result = result.Stat
 	if result.Err != nil {

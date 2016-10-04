@@ -17,8 +17,6 @@ limitations under the License.
 package backingstore
 
 import (
-	"os"
-
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
 )
@@ -41,8 +39,8 @@ func newNull() (api.BackingStore, error) {
 	}, nil
 }
 
-func (bs *NullBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
-	return nil, nil
+func (bs *NullBackingStore) Open(dev *api.SCSILu, path string) error {
+	return nil
 }
 
 func (bs *NullBackingStore) Close(dev *api.SCSILu) error {
@@ -55,6 +53,10 @@ func (bs *NullBackingStore) Init(dev *api.SCSILu, Opts string) error {
 
 func (bs *NullBackingStore) Exit(dev *api.SCSILu) error {
 	return nil
+}
+
+func (bs *NullBackingStore) Size(dev *api.SCSILu) uint64 {
+	return 0
 }
 
 func (bs *NullBackingStore) CommandSubmit(cmd *api.SCSICommand) error {

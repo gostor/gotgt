@@ -64,18 +64,26 @@ Help Options:
 		os.Exit(1)
 	}
 
-	scsi := scsi.NewSCSITargetService()
-	t, err := port.NewTargetService(*flDriver, scsi)
+	err = scsi.InitSCSILUMap(config)
+	if err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+
+	service := scsi.NewSCSITargetService()
+	t, err := port.NewTargetService(*flDriver, service)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
 	iscsit := reflect.ValueOf(t)
 	// create a new target
-	for _, tgt := range config.Targets {
+	for tgtname, tgt := range config.Targets {
 		create := iscsit.MethodByName("NewTarget")
-		create.Call([]reflect.Value{reflect.ValueOf(tgt.Name), reflect.ValueOf(tgt.LUNs)})
+		create.Call([]reflect.Value{reflect.ValueOf(tgtname),
+			reflect.ValueOf(tgt.Portals)})
 	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	// run a service
 	run := iscsit.MethodByName("Run")

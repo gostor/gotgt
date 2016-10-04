@@ -1,10 +1,11 @@
 sudo: required
 dist: trusty
+env:
+    - TARGET=iqn.2016-09.com.gotgt.gostor:example_tgt_0
 
 language: go
 go:
-    - 1.4
-    - 1.5
+    - 1.6
 
 install:
    - true
@@ -23,7 +24,7 @@ script:
    - hack/verify-gofmt.sh
    - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=10240
    - mkdir ${HOME}/.gotgt
-   - echo '{"targets":{"test-iscsi-target":{"name":"test-iscsi-target","luns":["/var/tmp/disk.img"]}}}' > ${HOME}/.gotgt/config.json
+   - echo '{"storages":[{"deviceID":1000,"path":"file:/var/tmp/disk.img","online":true}],"targets":{"iqn.2016-09.com.gotgt.gostor:example_tgt_0":{"portals":["127.0.0.1"],"luns":{"0":1000}}}}' > ${HOME}/.gotgt/config.json
    - ./citd -v 4 1>/dev/null 2>&1 &
    # libiscsi test
    - mkdir ${HOME}/libiscsi
@@ -33,11 +34,11 @@ script:
    - ./autogen.sh
    - ./configure
    - make
-   - ./test-tool/iscsi-test-cu -d --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/test-iscsi-target/0
-   - ./test-tool/iscsi-test-cu -d --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/test-iscsi-target/0
-   - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/test-iscsi-target
-   - ./utils/iscsi-inq iscsi://127.0.0.1:3260/test-iscsi-target/0
-   - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/test-iscsi-target/0
+   - ./test-tool/iscsi-test-cu -d --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/${TARGET}
+   - ./utils/iscsi-inq iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
    # iscsi initiator test
    - sudo iscsiadm -m discovery -t sendtargets -p 127.0.0.1
    - sudo iscsiadm -m node -L all

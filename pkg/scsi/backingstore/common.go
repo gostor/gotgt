@@ -34,6 +34,7 @@ func init() {
 
 type FileBackingStore struct {
 	scsi.BaseBackingStore
+	File *os.File
 }
 
 func new() (api.BackingStore, error) {
@@ -46,16 +47,22 @@ func new() (api.BackingStore, error) {
 	}, nil
 }
 
-func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return nil, err
+func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
+
+	if finfo, err := os.Stat(path); err != nil {
+		return err
+	} else {
+		bs.DataSize = uint64(finfo.Size())
 	}
-	return f, nil
+
+	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
+
+	bs.File = f
+	return err
 }
 
 func (bs *FileBackingStore) Close(dev *api.SCSILu) error {
-	return dev.File.Close()
+	return bs.File.Close()
 }
 
 func (bs *FileBackingStore) Init(dev *api.SCSILu, Opts string) error {
@@ -66,6 +73,9 @@ func (bs *FileBackingStore) Exit(dev *api.SCSILu) error {
 	return nil
 }
 
+func (bs *FileBackingStore) Size(dev *api.SCSILu) uint64 {
+	return bs.DataSize
+}
 func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 	var (
 		scb             = cmd.SCB.Bytes()
@@ -83,7 +93,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 	switch opcode {
 	case api.ORWRITE_16:
 		tmpbuf := []byte{}
-		length, err = lu.File.ReadAt(tmpbuf, int64(offset))
+		length, err = bs.File.ReadAt(tmpbuf, int64(offset))
 		if length != len(tmpbuf) {
 			key = scsi.MEDIUM_ERROR
 			asc = scsi.ASC_READ_ERROR
@@ -99,7 +109,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		doWrite = true
 		goto write
 	case api.SYNCHRONIZE_CACHE, api.SYNCHRONIZE_CACHE_16:
-		if err = util.Fdatasync(lu.File); err != nil {
+		if err = util.Fdatasync(bs.File); err != nil {
 			panic(err)
 		}
 		break
@@ -113,7 +123,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
-		length, err = lu.File.ReadAt(rbuf, int64(offset))
+		length, err = bs.File.ReadAt(rbuf, int64(offset))
 		if err != nil && err != io.EOF {
 			key = scsi.MEDIUM_ERROR
 			asc = scsi.ASC_READ_ERROR
@@ -124,11 +134,11 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 		}
 
 		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
-			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
+			util.Fadvise(bs.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
 		}
 		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(rbuf)
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
-		err = util.Fadvise(lu.File, int64(offset), int64(cmd.TL), util.POSIX_FADV_WILLNEED)
+		err = util.Fadvise(bs.File, int64(offset), int64(cmd.TL), util.POSIX_FADV_WILLNEED)
 		if err != nil {
 			key = scsi.MEDIUM_ERROR
 			asc = scsi.ASC_READ_ERROR
@@ -144,7 +154,7 @@ func (bs *FileBackingStore) CommandSubmit(cmd *api.SCSICommand) (err error) {
 write:
 	if doWrite {
 		// hack: wbuf = []byte("hello world!")
-		length, err = lu.File.WriteAt(wbuf, int64(offset))
+		length, err = bs.File.WriteAt(wbuf, int64(offset))
 		if err != nil || length != len(wbuf) {
 			glog.Error(err)
 			key = scsi.MEDIUM_ERROR
@@ -165,7 +175,7 @@ write:
 			goto sense
 		}
 		if ((opcode != api.WRITE_6) && (scb[1]&0x8 != 0)) || (pg.Data[0]&0x04 == 0) {
-			if err = util.Fdatasync(lu.File); err != nil {
+			if err = util.Fdatasync(bs.File); err != nil {
 				key = scsi.MEDIUM_ERROR
 				asc = scsi.ASC_READ_ERROR
 				goto sense
@@ -173,12 +183,12 @@ write:
 		}
 
 		if (opcode != api.WRITE_6) && (scb[1]&0x10 != 0) {
-			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
+			util.Fadvise(bs.File, int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
 		}
 	}
 verify:
 	if doVerify {
-		length, err = lu.File.ReadAt(rbuf, int64(offset))
+		length, err = bs.File.ReadAt(rbuf, int64(offset))
 		if length != len(rbuf) {
 			key = scsi.MEDIUM_ERROR
 			asc = scsi.ASC_READ_ERROR
@@ -191,7 +201,7 @@ verify:
 			goto sense
 		}
 		if scb[1]&0x10 != 0 {
-			util.Fadvise(lu.File, int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
+			util.Fadvise(bs.File, int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
 		}
 	}
 	glog.Infof("io done %s", string(scb))

@@ -22,7 +22,6 @@ import (
 	"net"
 	"os"
 	"runtime/debug"
-	"strings"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -35,7 +34,6 @@ type ISCSITargetService struct {
 	SCSI    *scsi.SCSITargetService
 	Name    string
 	Targets map[string]*ISCSITarget
-	Portals map[string]struct{}
 }
 
 func init() {
@@ -46,40 +44,44 @@ func NewISCSITargetService(base *scsi.SCSITargetService) (port.SCSITargetService
 	return &ISCSITargetService{
 		Name:    "iscsi",
 		Targets: map[string]*ISCSITarget{},
-		Portals: map[string]struct{}{},
 		SCSI:    base,
 	}, nil
 }
 
-func (s *ISCSITargetService) NewTarget(target string, luns []string) (port.SCSITargetDriver, error) {
+func (s *ISCSITargetService) NewTarget(target string, portals []string) (port.SCSITargetDriver, error) {
 	if _, ok := s.Targets[target]; ok {
 		return nil, fmt.Errorf("target name has been existed")
 	}
-	stgt, err := s.SCSI.NewSCSITarget(len(s.Targets), "iscsi", target, luns)
+	stgt, err := s.SCSI.NewSCSITarget(len(s.Targets), "iscsi", target)
 	if err != nil {
 		return nil, err
 	}
 	tgt := newISCSITarget(stgt)
 	s.Targets[target] = tgt
-
+	for _, portal := range portals {
+		s.AddNewPortal(target, portal)
+	}
 	return tgt, nil
 }
 
-func (s *ISCSITargetService) AddNewPortal(portals []string) error {
-	for _, p := range portals {
-		if !strings.Contains(p, ":") {
-			p = p + ":3260"
-		}
-		s.Portals[p] = struct{}{}
+func (s *ISCSITargetService) AddNewPortal(tgtName string, portal string) error {
+	target := s.Targets[tgtName]
+	tgtPortals := target.Portals
+	_, ok := tgtPortals[portal]
+	if !ok {
+		tgtPortals[portal] = struct{}{}
 	}
 	return nil
 }
 
-func (s *ISCSITargetService) HasPortal(portal string) bool {
-	if len(s.Portals) == 0 {
+func (s *ISCSITargetService) HasPortal(tgtName string, portal string) bool {
+	target := s.Targets[tgtName]
+	tgtPortals := target.Portals
+
+	if len(tgtPortals) == 0 {
 		return true
 	}
-	_, ok := s.Portals[portal]
+	_, ok := tgtPortals[portal]
 	return ok
 }
 
@@ -98,10 +100,7 @@ func (s *ISCSITargetService) Run() error {
 			glog.Error(err)
 			continue
 		}
-		if !s.HasPortal(conn.LocalAddr().String()) {
-			glog.Errorf("unexpected portal")
-			continue
-		}
+		glog.Info(conn.LocalAddr().String())
 		glog.Info("Accepting ...")
 		iscsiConn := &iscsiConnection{conn: conn}
 		iscsiConn.init()
@@ -363,14 +362,18 @@ func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
 	keys := util.ParseKVText(cmd.RawData)
 	if st, ok := keys["SendTargets"]; ok {
 		if st == "All" {
-			list, err := s.SCSI.GetTargetList()
-			if err != nil {
-				return err
+
+			for name, tgt := range s.Targets {
+				glog.V(2).Infof("iscsi target:", name)
+				glog.V(2).Infof("iscsi target portals:", tgt.Portals)
+
 			}
-			for _, t := range list {
-				result = append(result, util.KeyValue{"TargetName", t.Name})
-				//result = append(result, util.KeyValue{"TargetAddress", "172.16.69.1:3260,1"})
-				result = append(result, util.KeyValue{"TargetAddress", "127.0.0.1:3260,1"})
+
+			for name, tgt := range s.Targets {
+				result = append(result, util.KeyValue{"TargetName", name})
+				for portal := range tgt.Portals {
+					result = append(result, util.KeyValue{"TargetAddress", portal + ",1"})
+				}
 			}
 		}
 	}

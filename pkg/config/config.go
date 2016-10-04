@@ -25,6 +25,58 @@ import (
 	"github.com/gostor/gotgt/pkg/homedir"
 )
 
+/*
+Format of configuration file
+
+{
+    "storages": [
+        {
+            "deviceID": integer, uniqu device id,
+            "path": string, <protocal>:<absolute/file/path>",
+            "online": bool, online/offline
+        },
+    ],
+    "targets": {
+        <target name >: {
+            "portals": [
+                <IP Addresswith Port(assumed port as 3260 without port information>
+            ],
+            "luns": {
+                <lu number for the target>: <mappingd with the device ID>
+            }
+        }
+    }
+}
+
+Example of the configuration file
+
+{
+    "storages": [
+        {
+            "deviceID": 1000,
+            "path": "file:/tmp/image",
+            "online": true
+        },
+        {
+            "deviceID": 2000,
+            "path": "ceph:/rbd/image",
+            "online": true
+        }
+    ],
+    "targets": {
+        "iqn.2016-09.com.gotgt.gostor:example_tgt_0": {
+            "portals": [
+                "192.168.1.1"
+            ],
+            "luns": {
+                "1": 1000
+                "2": 2000
+            }
+        }
+    }
+}
+*/
+
 const (
 	// ConfigFileName is the name of config file
 	ConfigFileName = "config.json"
@@ -32,17 +84,23 @@ const (
 
 var (
 	configDir = os.Getenv("GOSTOR_CONFIG")
+	config    *Config
 )
 
+type BackendStorage struct {
+	DeviceID uint64 `json:"deviceID"`
+	Path     string `json:"path"`
+	Online   bool   `json:"online"`
+}
+
 type Target struct {
-	Name    string   `json:"name"`
-	Portals []string `json:"portals"`
-	LUNs    []string `json:"luns"`
+	Portals []string          `json:"portals"`
+	LUNs    map[string]uint64 `json:"luns"`
 }
 
 type Config struct {
-	Storage string            `json:"storage"`
-	Targets map[string]Target `json:"targets"`
+	Storages []BackendStorage  `json:"storages"`
+	Targets  map[string]Target `json:"targets"`
 }
 
 func init() {
@@ -54,6 +112,10 @@ func init() {
 // ConfigDir returns the directory the configuration file is stored in
 func ConfigDir() string {
 	return configDir
+
+}
+func GetConfig() *Config {
+	return config
 }
 
 // Load reads the configuration files in the given directory and return values.
@@ -63,8 +125,7 @@ func Load(configDir string) (*Config, error) {
 	}
 
 	filename := filepath.Join(configDir, ConfigFileName)
-	config := &Config{
-		Storage: "file",
+	config = &Config{
 		Targets: make(map[string]Target),
 	}
 
