@@ -18,7 +18,6 @@ package api
 import (
 	"bytes"
 	"errors"
-	"os"
 )
 
 type SCSICommandType byte
@@ -193,7 +192,7 @@ type SCSITarget struct {
 	TID     int             `json:"tid"`
 	LID     int             `json:"lid"`
 	State   SCSITargetState `json:"state"`
-	Devices []*SCSILu       `json:"-"`
+	Devices LUNMap          `json:"-"`
 	ITNexus []*ITNexus      `json:"itnexus"`
 
 	SCSITargetDriver interface{} `json:"-"`
@@ -314,10 +313,11 @@ var (
 type CommandFunc func(host int, cmd *SCSICommand) SAMStat
 
 type BackingStore interface {
-	Open(dev *SCSILu, path string) (*os.File, error)
+	Open(dev *SCSILu, path string) error
 	Close(dev *SCSILu) error
 	Init(dev *SCSILu, Opts string) error
 	Exit(dev *SCSILu) error
+	Size(dev *SCSILu) uint64
 	CommandSubmit(cmd *SCSICommand) error
 }
 
@@ -336,21 +336,20 @@ type ModePage struct {
 }
 
 type SCSILu struct {
-	File       *os.File
-	Address    uint64
-	Size       uint64
-	Lun        uint64
-	Path       string
-	BsoFlags   int
-	BlockShift uint
-	ReserveID  uint64
-	Attrs      SCSILuPhyAttribute
-	ModePages  []ModePage
-
-	Target         *SCSITarget
+	Address        uint64
+	Size           uint64
+	Lun            uint64
+	Path           string
+	BsoFlags       int
+	BlockShift     uint
+	ReserveID      uint64
+	Attrs          SCSILuPhyAttribute
+	ModePages      []ModePage
 	Storage        BackingStore
 	DeviceProtocol SCSIDeviceProtocol
 
 	PerformCommand CommandFunc
 	FinishCommand  func(*SCSITarget, *SCSICommand)
 }
+
+type LUNMap map[uint64]*SCSILu

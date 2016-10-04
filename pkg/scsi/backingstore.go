@@ -18,14 +18,13 @@ package scsi
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/gostor/gotgt/pkg/api"
 )
 
 type BaseBackingStore struct {
 	Name            string
-	DataSize        int
+	DataSize        uint64
 	OflagsSupported int
 }
 
@@ -52,8 +51,8 @@ type fakeBackingStore struct {
 	BaseBackingStore
 }
 
-func (fake *fakeBackingStore) Open(dev *api.SCSILu, path string) (*os.File, error) {
-	return nil, nil
+func (fake *fakeBackingStore) Open(dev *api.SCSILu, path string) error {
+	return nil
 }
 
 func (fake *fakeBackingStore) Close(dev *api.SCSILu) error {

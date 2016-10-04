@@ -45,7 +45,6 @@ func (sbc SBCSCSIDeviceProtocol) PerformCommand(opcode int) interface{} {
 }
 
 func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
-	var tgt = lu.Target
 	// init LU's phy attribute
 	lu.Attrs.DeviceType = api.TYPE_DISK
 	lu.Attrs.Qualifier = false
@@ -55,8 +54,12 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.SWP = false
 	lu.Attrs.SenseFormat = false
 	lu.Attrs.VendorID = "GOSTOR"
-	lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR    %x%d", tgt.TID, lu.Lun)
-	lu.Attrs.SCSISN = fmt.Sprintf("beaf%d%d", tgt.TID, lu.Lun)
+	/*
+		lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR    %x%d", tgt.TID, lu.Lun)
+		lu.Attrs.SCSISN = fmt.Sprintf("beaf%d%d", tgt.TID, lu.Lun)
+	*/
+	lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR%d", lu.Lun)
+	lu.Attrs.SCSISN = fmt.Sprintf("beaf%d", lu.Lun)
 	lu.Attrs.ProductID = "VIRTUAL-DISK"
 	lu.Attrs.VersionDesction = []uint16{
 		0x04C0, // SBC-3 no version claimed

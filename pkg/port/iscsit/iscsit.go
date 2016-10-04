@@ -67,7 +67,7 @@ type ISCSIRedirectInfo struct {
 type ISCSITarget struct {
 	api.SCSITarget
 	api.SCSITargetDriverCommon
-
+	Portals      map[string]struct{}
 	Sessions     []*ISCSISession
 	SessionParam []ISCSISessionParam
 	Alias        string
@@ -81,6 +81,7 @@ type ISCSITarget struct {
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {
 	return &ISCSITarget{
 		SCSITarget: *target,
+		Portals:    make(map[string]struct{}),
 	}
 }
 

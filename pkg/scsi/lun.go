@@ -17,36 +17,44 @@ limitations under the License.
 package scsi
 
 import (
-	"os"
+	"errors"
+	"strings"
 
 	"github.com/gostor/gotgt/pkg/api"
 )
 
-func NewSCSILu(lun uint64, target *api.SCSITarget, file string) (*api.SCSILu, error) {
+/*
+ * path format <protocol>:/absolute/file/path
+ */
+
+func NewSCSILu(device_uuid uint64, path string) (*api.SCSILu, error) {
+
+	pathinfo := strings.SplitN(path, ":", 2)
+	if len(pathinfo) < 2 {
+		return nil, errors.New("invalid device path string")
+	}
+	backendType := pathinfo[0]
+	backendPath := pathinfo[1]
+
 	sbc := NewSBCDevice()
-	backing, err := NewBackingStore("file")
+	backing, err := NewBackingStore(backendType)
 	if err != nil {
 		return nil, err
 	}
+
 	var lu = &api.SCSILu{
-		Lun:            lun,
-		Target:         target,
+		Lun:            0,
 		PerformCommand: luPerformCommand,
 		DeviceProtocol: sbc,
 		Storage:        backing,
 		BlockShift:     api.DefaultBlockShift,
 	}
-	// hack this
-	if finfo, err := os.Stat(file); err != nil {
-		return nil, err
-	} else {
-		lu.Size = uint64(finfo.Size())
-	}
-	f, err := backing.Open(lu, file)
+
+	err = backing.Open(lu, backendPath)
 	if err != nil {
 		return nil, err
 	}
-	lu.File = f
+	lu.Size = backing.Size(lu)
 	lu.DeviceProtocol.InitLu(lu)
 	lu.Attrs.Online = true
 	lu.Attrs.Lbppbe = 3
