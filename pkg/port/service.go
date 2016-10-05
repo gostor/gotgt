@@ -36,13 +36,13 @@ func RegisterTargetService(name string, f TargetServiceFunc) {
 	registeredPlugins[name] = f
 }
 
-func NewTargetService(name string, s *scsi.SCSITargetService) (SCSITargetService, error) {
-	if name == "" {
+func NewTargetService(targetDriverName string, s *scsi.SCSITargetService) (SCSITargetService, error) {
+	if targetDriverName == "" {
 		return nil, nil
 	}
-	f, ok := registeredPlugins[name]
+	targetInitFunc, ok := registeredPlugins[targetDriverName]
 	if !ok {
-		return nil, fmt.Errorf("SCSI target driver %s is not found.", name)
+		return nil, fmt.Errorf("SCSI target driver %s is not found.", targetDriverName)
 	}
-	return f(s)
+	return targetInitFunc(s)
 }

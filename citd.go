@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"strings"
 	"syscall"
@@ -70,29 +69,25 @@ Help Options:
 		os.Exit(1)
 	}
 
-	service := scsi.NewSCSITargetService()
-	t, err := port.NewTargetService(*flDriver, service)
+	scsiTarget := scsi.NewSCSITargetService()
+	targetDriver, err := port.NewTargetService(*flDriver, scsiTarget)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	iscsit := reflect.ValueOf(t)
-	// create a new target
+
 	for tgtname, tgt := range config.Targets {
-		create := iscsit.MethodByName("NewTarget")
-		create.Call([]reflect.Value{reflect.ValueOf(tgtname),
-			reflect.ValueOf(tgt.Portals)})
+		targetDriver.NewTarget(tgtname, tgt.Portals)
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	// run a service
-	run := iscsit.MethodByName("Run")
-	go run.Call([]reflect.Value{})
+	go targetDriver.Run()
 
 	serverConfig := &apiserver.Config{
 		Addrs: []apiserver.Addr{},
 	}
-	//hosts := []string{"unix:///var/run/gotgt.sock"}
+
 	hosts := []string{}
 	if *flHost != "" {
 		hosts = append(hosts, *flHost)
