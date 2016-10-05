@@ -16,26 +16,33 @@ $ make
 
 ## Test
 
-You can test this with [libiscsi](https://github.com/gostor/libiscsi).
+You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](https://github.com/gostor/libiscsi).
 
-### build the test tool of libiscsi
+## Roadmap
+* Auth (p3)
+* Login Process (p2)
+* ACL (Access control) (p3)
+* SCSI Task Management (p3)
+* iSCSI Task Management (p3)
+* Dummy LUN0 (orzhang, p1)
+* SCSI Command Queue (p2)
+* More SCSI commands
+	* SPC3/SAM2
+	* Page83(Inquiry) (orzhang, p1)
+	* Page0 (Inquiry) (orzhang, p1)
+	* Define Device UUID
+	* More SCSI flags (carmark, p1)
+	* Read8,16 (carmark, p1)
+	* Verify (carmark, p1)
+	* Support `Target Group` and `Target Port` (p3)
+* Refactor (carmark, p1)
+* Command Line (carmark, p1)
+* More Backstore Plugins(such as `ceph` and `raw device`) (orzhang, p1)
+* Redirect iSCSI Target (orzhang, p2)
+* Homepage (p3)
+* More test cases (p2)
+* Docker image (p3)
 
-```
-$ git clone https://github.com/gostor/libiscsi
-$ cd libiscsi
-$ ./autogen.sh
-$ ./configure
-$ make
-```
+## Contributing
 
-### start the gotgt daemon
-
-```
-$ ./citd
-```
-
-### begin the test
-
-```
-$ ./iscsi-test-cu -v iscsi://127.0.0.1:3260/iqn.test.haha/0
-```
+Want to help build Compose? Check out our [contributing documentation](./CONTRIBUTING.md).
