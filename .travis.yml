@@ -22,6 +22,8 @@ script:
    - ./configure 
    - make
    - hack/verify-gofmt.sh
+   - export GOPATH=`pwd`/Godeps/_workspace/:$GOPATH
+   - go test -v ./pkg/...
    - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=10240
    - mkdir ${HOME}/.gotgt
    - echo '{"storages":[{"deviceID":1000,"path":"file:/var/tmp/disk.img","online":true}],"targets":{"iqn.2016-09.com.gotgt.gostor:example_tgt_0":{"portals":["127.0.0.1"],"luns":{"0":1000}}}}' > ${HOME}/.gotgt/config.json
@@ -34,8 +36,13 @@ script:
    - ./autogen.sh
    - ./configure
    - make
-   - ./test-tool/iscsi-test-cu -d --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.TestUnitReady iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.ReadCapacity10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.ReadCapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Read16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Write16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
    - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/${TARGET}
    - ./utils/iscsi-inq iscsi://127.0.0.1:3260/${TARGET}/0
    - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
