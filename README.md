@@ -45,4 +45,4 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 
 ## Contributing
 
-Want to help build Compose? Check out our [contributing documentation](./CONTRIBUTING.md).
+Want to help build gotgt? Check out our [contributing documentation](./CONTRIBUTING.md).
