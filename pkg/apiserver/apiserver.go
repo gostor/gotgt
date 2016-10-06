@@ -250,12 +250,6 @@ func (s *Server) newServer(proto, addr string) ([]*HTTPServer, error) {
 			return nil, err
 		}
 		ls = append(ls, l)
-	case "unix":
-		l, err := sockets.NewUnixSocket(addr, s.cfg.SocketGroup)
-		if err != nil {
-			return nil, fmt.Errorf("can't create unix socket %s: %v", addr, err)
-		}
-		ls = append(ls, l)
 	default:
 		return nil, fmt.Errorf("Invalid protocol format: %q", proto)
 	}

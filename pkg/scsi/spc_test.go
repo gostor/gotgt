@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,23 +21,25 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	"github.com/gostor/gotgt/pkg/api"
 )
 
 // Test SPCReportLuns function
 func TestSPCReportLuns(t *testing.T) {
 	// make a fake REPORT_LUNS command
-	cmd := new(SCSICommand)
-	device := new(SCSILu)
+	cmd := new(api.SCSICommand)
+	device := new(api.SCSILu)
 	cmd.Device = device
-	lu := new(SCSILu)
-	target := new(SCSITarget)
-	target.Devices = append(target.Devices, *lu)
+	lu := new(api.SCSILu)
+	target := new(api.SCSITarget)
+	target.Devices = map[uint64]*api.SCSILu{lu.Lun: lu}
 	cmd.Target = target
 	cmd.SCB = &bytes.Buffer{}
 	cmd.SenseBuffer = &bytes.Buffer{}
 	cmd.InSDBBuffer.Length = 16
 	cmd.InSDBBuffer.Buffer = &bytes.Buffer{}
-	cmd.SCB.WriteByte(byte(REPORT_LUNS))
+	cmd.SCB.WriteByte(byte(api.REPORT_LUNS))
 	for i := 0; i < 5; i++ {
 		cmd.SCB.WriteByte(0x00)
 	}
@@ -47,13 +49,8 @@ func TestSPCReportLuns(t *testing.T) {
 		t.Errorf("Expected not error, but got %v", err)
 	}
 
-	cmd.InSDBBuffer.Length = 10
-	if err := SPCReportLuns(0, cmd); err.Err == nil {
-		t.Error("Expected error, but got nothing")
-	}
-
 	cmd.SCB = &bytes.Buffer{}
-	cmd.SCB.WriteByte(byte(REPORT_LUNS))
+	cmd.SCB.WriteByte(byte(api.REPORT_LUNS))
 	for i := 0; i < 5; i++ {
 		cmd.SCB.WriteByte(0x00)
 	}
