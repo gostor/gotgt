@@ -81,10 +81,9 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	scmd.Device = target.Devices[0]
 	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d:", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
 	result := scmd.Device.PerformCommand(tid, scmd)
-	scmd.Result = result.Stat
-	if result.Err != nil {
-		glog.Error(result.Err)
-		return result.Err
+	if result != api.SAMStatGood {
+		scmd.Result = result.Stat
+		glog.Warningf("%v", result.Err)
 	}
 	return nil
 }
@@ -114,10 +113,8 @@ func NewSCSIDeviceOperation(fn api.CommandFunc, sa *SCSIServiceAction, pr uint8)
 }
 
 func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
-	senseBuffer := cmd.SenseBuffer
-	if senseBuffer == nil {
-		senseBuffer = &bytes.Buffer{}
-	}
+	senseBuffer := &bytes.Buffer{}
+
 	if cmd.Device.Attrs.SenseFormat {
 		// descriptor format
 		// current, not deferred
@@ -144,6 +141,8 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		senseBuffer.WriteByte(byte(asc) & 0xff)
 		cmd.SenseLength = length + 8
 	}
+	cmd.Result = key
+	cmd.SenseBuffer = senseBuffer
 }
 
 func getSCSIReadWriteOffset(scb []byte) uint64 {

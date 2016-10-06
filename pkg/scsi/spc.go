@@ -146,7 +146,7 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 		b = (uint8(0) & 0x7) << 5
 		b |= uint8(0) & 0x1f
 	}
-	fmt.Println(cmd.Device.Lun, *(*uint64)(unsafe.Pointer(&cmd.Lun)))
+	glog.V(2).Infof("%v, %v", cmd.Device.Lun, *(*uint64)(unsafe.Pointer(&cmd.Lun)))
 	if cmd.Device.Lun != *(*uint64)(unsafe.Pointer(&cmd.Lun)) {
 		goto sense
 	}
@@ -237,7 +237,7 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 
 	for lunumber, lu := range cmd.Target.Devices {
-		fmt.Println("LUN:", lunumber)
+		glog.V(2).Infof("LUN: ", lunumber)
 		if remainLength > 0 {
 			lun := lu.Lun
 			if lun > 0xff {

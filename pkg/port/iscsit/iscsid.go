@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime/debug"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -362,14 +361,10 @@ func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
 	keys := util.ParseKVText(cmd.RawData)
 	if st, ok := keys["SendTargets"]; ok {
 		if st == "All" {
-
 			for name, tgt := range s.Targets {
-				glog.V(2).Infof("iscsi target:", name)
-				glog.V(2).Infof("iscsi target portals:", tgt.Portals)
+				glog.V(2).Infof("iscsi target: %v", name)
+				glog.V(2).Infof("iscsi target portals: %v", tgt.Portals)
 
-			}
-
-			for name, tgt := range s.Targets {
 				result = append(result, util.KeyValue{"TargetName", name})
 				for portal := range tgt.Portals {
 					result = append(result, util.KeyValue{"TargetAddress", portal + ",1"})
@@ -476,9 +471,7 @@ func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
 			glog.V(2).Infof("length of RawData is %d", len(conn.resp.RawData))
 			glog.V(2).Infof("length of resp is %d", len(conn.resp.Bytes()))
 			if l, err := conn.write(conn.resp.Bytes()); err != nil {
-				debug.PrintStack()
 				glog.Error(err)
-				panic(err)
 				return
 			} else {
 				conn.txIOState = IOSTATE_TX_INIT_AHS
@@ -609,6 +602,9 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			case api.SCSIDataNone:
 				resp.OpCode = OpSCSIResp
 			}
+			if scmd.Result != 0 && scmd.SenseBuffer != nil {
+				resp.RawData = scmd.SenseBuffer.Bytes()
+			}
 			conn.resp = resp
 		}
 	case OpSCSITaskReq:
@@ -664,7 +660,7 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 				TaskTag:      req.TaskTag,
 				ExpCmdSN:     conn.session.ExpCmdSN,
 				MaxCmdSN:     conn.session.ExpCmdSN + 10,
-				Status:       0,
+				Status:       task.scmd.Result,
 				SCSIResponse: 0x00,
 				HasStatus:    true,
 			}
