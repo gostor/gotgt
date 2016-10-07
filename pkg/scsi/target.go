@@ -18,6 +18,7 @@ package scsi
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -35,20 +36,22 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 	}
 	s.Targets = append(s.Targets, target)
 	target.Devices = GetTargetLUNMap(target.Name)
-
+	target.LUN0 = NewLUN0()
 	return target, nil
 }
 
 func deviceReserve(cmd *api.SCSICommand) error {
 	var lu *api.SCSILu
-	for _, dev := range cmd.Target.Devices {
-		if dev.Lun == cmd.Device.Lun {
-			lu = dev
+	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
+
+	for tgtLUN, lunDev := range cmd.Target.Devices {
+		if tgtLUN == lun {
+			lu = lunDev
 			break
 		}
 	}
 	if lu == nil {
-		glog.Errorf("invalid target and lun %d %s", cmd.Target.TID, cmd.Device.Lun)
+		glog.Errorf("invalid target and lun %d %s", cmd.Target.TID, lun)
 		return nil
 	}
 

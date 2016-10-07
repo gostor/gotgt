@@ -33,7 +33,7 @@ func TestSPCReportLuns(t *testing.T) {
 	cmd.Device = device
 	lu := new(api.SCSILu)
 	target := new(api.SCSITarget)
-	target.Devices = map[uint64]*api.SCSILu{lu.Lun: lu}
+	target.Devices = map[uint64]*api.SCSILu{0: lu}
 	cmd.Target = target
 	cmd.SCB = &bytes.Buffer{}
 	cmd.SenseBuffer = &bytes.Buffer{}

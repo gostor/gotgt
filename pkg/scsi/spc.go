@@ -21,8 +21,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"reflect"
-	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -55,6 +53,13 @@ const (
 	PIV_ATA
 )
 
+const (
+	VERSION_NOT_CLAIM         = byte(0x00)
+	VERSION_WITHDRAW_STANDARD = byte(0x03)
+	VERSION_WITHDRAW_SPC2     = byte(0x04)
+	VERSION_WITHDRAW_SPC3     = byte(0x05)
+)
+
 /*
  * Code Set
  *
@@ -62,7 +67,7 @@ const (
  *  2 - Designator field contains ASCII printable chars
  *  3 - Designaotor field contains UTF-8
  */
-type CodeSet int
+type CodeSet byte
 
 var (
 	INQ_CODE_BIN   CodeSet = 1
@@ -78,12 +83,62 @@ var (
  * 10b - Associated with SCSI Target device
  * 11b - Reserved
  */
-type AssociationField int
+type AssociationField byte
 
 var (
 	ASS_LU       AssociationField = 0
 	ASS_TGT_PORT AssociationField = 0x10
 	ASS_TGT_DEV  AssociationField = 0x20
+)
+
+/*
+ * Table 177 — PERIPHERAL QUALIFIER field
+ * Qualifier Description
+ * 000b - A peripheral device having the indicated peripheral
+ * 	device type is connected to this logical unit. If the device server is
+ * 	unable to determine whether or not a peripheral device is connected,
+ * 	then the device server also shall use this peripheral qualifier.
+ * 	This peripheral qualifier does not indicate that the peripheral
+ * 	device connected to the logical unit is ready for access.
+ * 001b - A peripheral device having the indicated peripheral device type
+ * 	is not connected to this logical unit. However, the device server is capable of
+ *	supporting the indicated peripheral device type on this logical unit.
+ * 010b - Reserved
+ * 011b - The device server is not capable of supporting a
+ * 	peripheral device on this logical unit. For this peripheral
+ *	qualifier the peripheral device type shall be set to 1Fh. All other peripheral
+ * device type values are reserved for this peripheral qualifier.
+ * 100b to 111b Vendor specific
+ */
+
+const (
+	PQ_DEVICE_CONNECTED   = byte(0x00)
+	PQ_DEVICE_NOT_CONNECT = byte(0x01)
+	PQ_RESERVED           = byte(0x02)
+	PQ_NOT_SUPPORT        = byte(0x03)
+)
+
+const (
+	INQUIRY_SCCS          = byte(0x80)
+	INQUIRY_AAC           = byte(0x40)
+	INQUIRY_TPGS_NO       = byte(0x00)
+	INQUIRY_TPGS_IMPLICIT = byte(0x20)
+	INQUIRY_TPGS_EXPLICIT = byte(0x10)
+	INQUIRY_TPGS_BOTH     = byte(0x30)
+	INQUIRY_3PC           = byte(0x08)
+	INQUIRY_Reserved      = byte(0x06)
+	INQUIRY_PROTECT       = byte(0x01)
+
+	INQUIRY_NORM_ACA        = byte(0x20)
+	INQUIRY_HISUP           = byte(0x10)
+	INQUIRY_STANDARD_FORMAT = byte(0x02)
+)
+
+const (
+	ADDRESS_METHOD_PERIPHERAL_DEVICE     = byte(0x00)
+	ADDRESS_METHOD_FLAT_SPACE            = byte(0x01)
+	ADDRESS_METHOD_LOGICAL_UNIT          = byte(0x02)
+	ADDRESS_METHOD_EXTENDED_LOGICAL_UNIT = byte(0x03)
 )
 
 /*
@@ -123,7 +178,7 @@ func SPCLuOffline(lu *api.SCSILu) error {
 
 func SPCLuOnline(lu *api.SCSILu) error {
 	if luPreventRemoval(lu) {
-		return fmt.Errorf("lu(%s) prevent removal", lu.Lun)
+		return fmt.Errorf("lu prevent removal")
 	}
 
 	lu.Attrs.Online = false
@@ -142,14 +197,19 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	if scb[1]&0x01 > 0 {
 		evpd = true
 	}
-	if reflect.DeepEqual(util.MarshalUint64(cmd.Device.Lun)[0:7], cmd.Lun[0:7]) {
+
+	if cmd.Device == nil {
 		b = (uint8(0) & 0x7) << 5
 		b |= uint8(0) & 0x1f
-	}
-	glog.V(2).Infof("%v, %v", cmd.Device.Lun, *(*uint64)(unsafe.Pointer(&cmd.Lun)))
-	if cmd.Device.Lun != *(*uint64)(unsafe.Pointer(&cmd.Lun)) {
 		goto sense
 	}
+
+	if cmd.Device.Attrs.Online {
+		b = (byte(PQ_DEVICE_CONNECTED) << 5) | byte(cmd.Device.Attrs.DeviceType)
+	} else {
+		b = (byte(PQ_DEVICE_NOT_CONNECT) << 5) | byte(cmd.Device.Attrs.DeviceType)
+	}
+
 	if evpd {
 		if pcode == 0x0 {
 			buf.WriteByte(b)
@@ -179,19 +239,22 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 		}
 	} else {
 		buf.WriteByte(b)
-		b = 0
-		buf.WriteByte(b)
-		buf.WriteByte(byte(1))
-		b = 0x02
-		buf.WriteByte(b)
+		// RMB(0) LU_CONG(0)
+		buf.WriteByte(0x00)
+		// version byte
+		buf.WriteByte(VERSION_WITHDRAW_SPC3)
+
+		// Reserved, Reserved, NORMACA, HISUP, RESPONSE DATA FORMAT
+		buf.WriteByte(INQUIRY_HISUP | INQUIRY_STANDARD_FORMAT)
+		// ADDITIONAL LENGTH
 		buf.WriteByte(0x00)
 		// byte 5
-		b = 0
-		b |= byte(1) << 4 & 0x30
-		buf.WriteByte(b)
+		/*
+		 * SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
+		 */
+		buf.WriteByte(0x00)
 		// byte 6
-		b = 0
-		buf.WriteByte(b)
+		buf.WriteByte(0x00)
 		buf.WriteByte(0x02)
 		buf.Write([]byte{'1', '1', 'c', 'a', 'n', 's'})
 		buf.WriteByte(0x00)
@@ -227,30 +290,43 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 		glog.Warningf("goto sense, allocationLength < 16")
 		goto sense
 	}
-	remainLength = allocationLength - 8
-	availLength = 8 * uint32(len(cmd.Target.Devices))
+
+	remainLength = allocationLength
+	if _, ok := cmd.Target.Devices[0]; !ok {
+		availLength = 8 * uint32(len(cmd.Target.Devices)+1)
+	} else {
+		availLength = 8 * uint32(len(cmd.Target.Devices))
+	}
+
+	// LUN list length
 	buf.Write(util.MarshalUint32(availLength))
 	cmd.InSDBBuffer.Resid = int32(actualLength)
+
 	// Skip through to byte 8, Reserved
 	for i := 0; i < 4; i++ {
 		buf.WriteByte(0x00)
 	}
 
-	for lunumber, lu := range cmd.Target.Devices {
-		glog.V(2).Infof("LUN: ", lunumber)
+	//For LUN0
+	if _, ok := cmd.Target.Devices[0]; !ok {
+		buf.Write(util.MarshalUint64(0))
+		remainLength -= 8
+	}
+
+	for lun := range cmd.Target.Devices {
 		if remainLength > 0 {
-			lun := lu.Lun
 			if lun > 0xff {
-				lun = 0x1 << 30
+				lun = (0x01 << 30) | (0x3fff&lun)<<16
 			} else {
-				lun = 0
+				lun = (0x3fff & lun) << 16
 			}
-			lun = (0x3fff & lun) << 16
 			lun = uint64(lun << 32)
+
 			buf.Write(util.MarshalUint64(lun))
 			remainLength -= 8
 		}
 	}
+
 	cmd.InSDBBuffer.Buffer = buf
 	return api.SAMStatGood
 sense:
