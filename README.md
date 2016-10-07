@@ -14,6 +14,30 @@ $ ./configure
 $ make
 ```
 
+## How to use
+
+Currenty, there is lack of commands to operate the target and LU, however you can init the target/LU with config file in `~/.gotgt/config.json`, such as:
+
+```
+{
+    "storages": [
+        {
+            "deviceID":1000,
+            "path":"file:/var/tmp/disk.img",
+            "online":true
+        }
+    ],
+    "targets": {
+        "test-iscsi-target": {
+            "name": "test-iscsi-target",
+            "luns": {"0": 1000}
+        }
+    }
+}
+```
+
+> Note: make sure file `/var/tmp/disk.img` is existed, you can use `dd` to create it.
+
 ## Test
 
 You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](https://github.com/gostor/libiscsi).
