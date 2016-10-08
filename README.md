@@ -29,7 +29,7 @@ Currenty, there is lack of commands to operate the target and LU, however you ca
     ],
     "targets": {
         "test-iscsi-target": {
-            "name": "test-iscsi-target",
+            "name": "iqn.2016-09.com.gotgt.gostor:example_tgt_0",
             "luns": {"0": 1000}
         }
     }
