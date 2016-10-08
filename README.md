@@ -5,7 +5,7 @@ Simple Golang SCSI Target framework, this includes two binaries, one is `citadm`
 ## Build
 
 ```
-$ mkdir $GOPATH/src/github.com/gotstor/
+$ mkdir -p $GOPATH/src/github.com/gostor/
 $ cd $GOPATH/src/github.com/gostor/
 $ git clone https://github.com/gostor/gotgt gotgt
 $ cd gotgt
