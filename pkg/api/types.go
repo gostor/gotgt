@@ -193,6 +193,7 @@ type SCSITarget struct {
 	LID     int             `json:"lid"`
 	State   SCSITargetState `json:"state"`
 	Devices LUNMap          `json:"-"`
+	LUN0    *SCSILu         `json:"-"`
 	ITNexus []*ITNexus      `json:"itnexus"`
 
 	SCSITargetDriver interface{} `json:"-"`
@@ -306,6 +307,7 @@ var (
 	TYPE_RBC            SCSIDeviceType = 0x0e
 	TYPE_OSD            SCSIDeviceType = 0x11
 	TYPE_NO_LUN         SCSIDeviceType = 0x7f
+	TYPE_UNKNOWN        SCSIDeviceType = 0X1f
 
 	TYPE_PT SCSIDeviceType = 0xff
 )
@@ -338,7 +340,7 @@ type ModePage struct {
 type SCSILu struct {
 	Address        uint64
 	Size           uint64
-	Lun            uint64
+	UUID           uint64
 	Path           string
 	BsoFlags       int
 	BlockShift     uint

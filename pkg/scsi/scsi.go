@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -55,6 +56,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 		target *api.SCSITarget
 		itn    *api.ITNexus
 	)
+
 	s.mutex.RLock()
 	for _, t := range s.Targets {
 		if t.TID == tid {
@@ -74,12 +76,20 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 		}
 	}
 	scmd.ITNexus = itn
+	lun := *(*uint64)(unsafe.Pointer(&scmd.Lun))
+	scmd.Device = target.Devices[lun]
 
-	/*
-	 * TODO: scmd.Device = target.Devices[util.GetUnalignedUint64(scmd.Lun[:])]
-	 */
-	scmd.Device = target.Devices[0]
 	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d:", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
+
+	if scmd.Device == nil {
+		scmd.Device = target.LUN0
+		if lun != 0 {
+			BuildSenseData(scmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+			scmd.Result = api.SAMStatCheckCondition.Stat
+			glog.Warningf("%v", api.SAMStatCheckCondition.Err)
+			return nil
+		}
+	}
 	result := scmd.Device.PerformCommand(tid, scmd)
 	if result != api.SAMStatGood {
 		scmd.Result = result.Stat
@@ -100,7 +110,7 @@ type SCSIDeviceOperation struct {
 }
 
 type BaseSCSIDeviceProtocol struct {
-	Type          api.SCSIDeviceType
+	DeviceType    api.SCSIDeviceType
 	SCSIDeviceOps []SCSIDeviceOperation
 }
 

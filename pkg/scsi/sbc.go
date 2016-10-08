@@ -20,7 +20,7 @@ package scsi
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	"unsafe"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
@@ -46,7 +46,7 @@ func (sbc SBCSCSIDeviceProtocol) PerformCommand(opcode int) interface{} {
 
 func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// init LU's phy attribute
-	lu.Attrs.DeviceType = api.TYPE_DISK
+	lu.Attrs.DeviceType = sbc.DeviceType
 	lu.Attrs.Qualifier = false
 	lu.Attrs.Thinprovisioning = false
 	lu.Attrs.Removable = false
@@ -54,13 +54,25 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.SWP = false
 	lu.Attrs.SenseFormat = false
 	lu.Attrs.VendorID = "GOSTOR"
-	/*
-		lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR    %x%d", tgt.TID, lu.Lun)
-		lu.Attrs.SCSISN = fmt.Sprintf("beaf%d%d", tgt.TID, lu.Lun)
-	*/
-	lu.Attrs.SCSIID = fmt.Sprintf("GOSTOR%d", lu.Lun)
-	lu.Attrs.SCSISN = fmt.Sprintf("beaf%d", lu.Lun)
 	lu.Attrs.ProductID = "VIRTUAL-DISK"
+
+	/*
+		SCSIID for PAGE83 T10 VENDOR IDENTIFICATION field
+		It is going to be the iSCSI target iqn name
+		leave it with a default target name
+	*/
+
+	lu.Attrs.SCSIID = "iqn.2016-09.com.gotgt.gostor:iscsi-tgt"
+	/*
+	   The PRODUCT SERIAL NUMBER field contains
+	   right-aligned ASCII data (see 4.3.1)
+	   that is a vendor specific serial number.
+	   If the product serial number is not available,
+	   the device server shall return ASCII spaces (20h) in this field.
+	   leave it with 4 spaces (20h)
+	*/
+	lu.Attrs.SCSISN = "    "
+
 	lu.Attrs.VersionDesction = []uint16{
 		0x04C0, // SBC-3 no version claimed
 		0x0960, // iSCSI
@@ -104,10 +116,10 @@ func (sbc SBCSCSIDeviceProtocol) ExitLu(lu *api.SCSILu) error {
 	return nil
 }
 
-func NewSBCDevice() api.SCSIDeviceProtocol {
+func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	var sbc = SBCSCSIDeviceProtocol{
 		BaseSCSIDeviceProtocol{
-			Type:          api.TYPE_DISK,
+			DeviceType:    deviceType,
 			SCSIDeviceOps: []SCSIDeviceOperation{},
 		},
 	}
@@ -391,7 +403,8 @@ func SBCReserve(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
-	if err := deviceRelease(cmd.Target.TID, cmd.CommandITNID, cmd.Device.Lun, false); err != nil {
+	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
+	if err := deviceRelease(cmd.Target.TID, cmd.CommandITNID, lun, false); err != nil {
 		return api.SAMStatReservationConflict
 	}
 

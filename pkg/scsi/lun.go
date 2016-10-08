@@ -27,7 +27,7 @@ import (
  * path format <protocol>:/absolute/file/path
  */
 
-func NewSCSILu(device_uuid uint64, path string) (*api.SCSILu, error) {
+func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error) {
 
 	pathinfo := strings.SplitN(path, ":", 2)
 	if len(pathinfo) < 2 {
@@ -36,14 +36,13 @@ func NewSCSILu(device_uuid uint64, path string) (*api.SCSILu, error) {
 	backendType := pathinfo[0]
 	backendPath := pathinfo[1]
 
-	sbc := NewSBCDevice()
+	sbc := NewSBCDevice(api.TYPE_DISK)
 	backing, err := NewBackingStore(backendType)
 	if err != nil {
 		return nil, err
 	}
 
 	var lu = &api.SCSILu{
-		Lun:            0,
 		PerformCommand: luPerformCommand,
 		DeviceProtocol: sbc,
 		Storage:        backing,
@@ -56,9 +55,27 @@ func NewSCSILu(device_uuid uint64, path string) (*api.SCSILu, error) {
 	}
 	lu.Size = backing.Size(lu)
 	lu.DeviceProtocol.InitLu(lu)
-	lu.Attrs.Online = true
+	lu.Attrs.Online = online
 	lu.Attrs.Lbppbe = 3
 	return lu, nil
+}
+
+func NewLUN0() *api.SCSILu {
+
+	sbc := NewSBCDevice(api.TYPE_UNKNOWN)
+	backing, _ := NewBackingStore("null")
+	var lu = &api.SCSILu{
+		PerformCommand: luPerformCommand,
+		DeviceProtocol: sbc,
+		Storage:        backing,
+		BlockShift:     api.DefaultBlockShift,
+	}
+
+	lu.Size = backing.Size(lu)
+	lu.DeviceProtocol.InitLu(lu)
+	lu.Attrs.Online = false
+	lu.Attrs.Lbppbe = 3
+	return lu
 }
 
 func luPerformCommand(tid int, cmd *api.SCSICommand) api.SAMStat {
