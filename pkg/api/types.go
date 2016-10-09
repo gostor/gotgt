@@ -225,7 +225,7 @@ type SCSILuPhyAttribute struct {
 	VendorID        string
 	ProductID       string
 	ProductRev      string
-	VersionDesction []uint16
+	VersionDesction [8]uint16
 	// Peripheral device type
 	DeviceType SCSIDeviceType
 	// Peripheral Qualifier

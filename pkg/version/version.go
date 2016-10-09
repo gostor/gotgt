@@ -17,5 +17,6 @@ limitations under the License.
 package version
 
 const (
-	VERSION = "0.1"
+	VERSION      = "0.1"
+	SCSI_VERSION = "0.1" /* SCSI version string MUST be shorter than 4 characters*/
 )

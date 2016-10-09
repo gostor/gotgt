@@ -42,15 +42,17 @@ import (
  */
 
 const (
-	PIV_FCP = iota
-	PIV_SPI
-	PIV_S3P
-	PIV_SBP
-	PIV_SRP
-	PIV_ISCSI
-	PIV_SAS
-	PIV_ADT
-	PIV_ATA
+	PIV_FCP   = byte(0x00)
+	PIV_SPI   = byte(0x01)
+	PIV_S3P   = byte(0x02)
+	PIV_SBP   = byte(0x03)
+	PIV_SRP   = byte(0x04)
+	PIV_ISCSI = byte(0x05)
+	PIV_SAS   = byte(0x06)
+	PIV_ADT   = byte(0x07)
+	PIV_ATA   = byte(0x08)
+	PIV_USB   = byte(0x09)
+	PIV_SOP   = byte(0x0A)
 )
 
 const (
@@ -67,12 +69,11 @@ const (
  *  2 - Designator field contains ASCII printable chars
  *  3 - Designaotor field contains UTF-8
  */
-type CodeSet byte
 
-var (
-	INQ_CODE_BIN   CodeSet = 1
-	INQ_CODE_ASCII CodeSet = 2
-	INQ_CODE_UTF8  CodeSet = 3
+const (
+	INQ_CODE_BIN   = byte(1)
+	INQ_CODE_ASCII = byte(2)
+	INQ_CODE_UTF8  = byte(3)
 )
 
 /*
@@ -83,12 +84,11 @@ var (
  * 10b - Associated with SCSI Target device
  * 11b - Reserved
  */
-type AssociationField byte
 
-var (
-	ASS_LU       AssociationField = 0
-	ASS_TGT_PORT AssociationField = 0x10
-	ASS_TGT_DEV  AssociationField = 0x20
+const (
+	ASS_LU       = byte(0x00)
+	ASS_TGT_PORT = byte(0x01)
+	ASS_TGT_DEV  = byte(0x02)
 )
 
 /*
@@ -112,10 +112,10 @@ var (
  */
 
 const (
-	PQ_DEVICE_CONNECTED   = byte(0x00)
-	PQ_DEVICE_NOT_CONNECT = byte(0x01)
-	PQ_RESERVED           = byte(0x02)
-	PQ_NOT_SUPPORT        = byte(0x03)
+	PQ_DEVICE_CONNECTED   = byte(0x00 << 5)
+	PQ_DEVICE_NOT_CONNECT = byte(0x01 << 5)
+	PQ_RESERVED           = byte(0x02 << 5)
+	PQ_NOT_SUPPORT        = byte(0x03 << 5)
 )
 
 const (
@@ -132,6 +132,19 @@ const (
 	INQUIRY_NORM_ACA        = byte(0x20)
 	INQUIRY_HISUP           = byte(0x10)
 	INQUIRY_STANDARD_FORMAT = byte(0x02)
+
+	INQUIRY_ENCSERV = byte(0x40)
+	INQUIRY_VS0     = byte(0x20)
+	INQUIRY_MULTIP  = byte(0x10)
+	INQUIRY_ADDR16  = byte(0x01)
+
+	INQUIRY_WBUS16 = byte(0x20)
+	INQUIRY_SYNC   = byte(0x10)
+	INQUIRY_CMDQUE = byte(0x02)
+	INQUIRY_VS1    = byte(0x01)
+
+	INQUIRY_QAS = byte(0x02)
+	INQUIRY_IUS = byte(0x01)
 )
 
 const (
@@ -167,6 +180,18 @@ const (
 	DESG_SCSI
 )
 
+const (
+	NAA_IEEE_EXTD      = byte(0x2)
+	NAA_LOCAL          = byte(0x3)
+	NAA_IEEE_REGD      = byte(0x5)
+	NAA_IEEE_REGD_EXTD = byte(0x6)
+)
+
+const (
+	SCSI_VendorID  = "GOSTOR"
+	SCSI_ProductID = "GOTGT-VDISK"
+)
+
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
@@ -185,90 +210,251 @@ func SPCLuOnline(lu *api.SCSILu) error {
 	return nil
 }
 
+func InquiryPage0x00(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		descBuf           = &bytes.Buffer{}
+		data       []byte = []byte{}
+		pageLength uint16 = 0
+	)
+
+	descBuf.WriteByte(0x00)
+	descBuf.WriteByte(0x80)
+	descBuf.WriteByte(0x83)
+	/*
+		TODO:
+			descBuf.WriteByte(0x86)
+			descBuf.WriteByte(0xB0)
+			descBuf.WriteByte(0xB2)
+	*/
+
+	data = descBuf.Bytes()
+	pageLength = uint16(len(data))
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//byte 1
+	//PAGE CODE
+	buf.WriteByte(0x00)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+	buf.Write(data)
+	return buf, pageLength
+}
+
+func InquiryPage0x80(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		descBuf           = &bytes.Buffer{}
+		data       []byte = []byte{}
+		pageLength uint16 = 0
+	)
+
+	descBuf.WriteByte(0x20)
+	descBuf.WriteByte(0x20)
+	descBuf.WriteByte(0x20)
+	descBuf.WriteByte(0x20)
+
+	data = descBuf.Bytes()
+	pageLength = uint16(len(data))
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//byte 1
+	//PAGE CODE
+	buf.WriteByte(0x80)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+	buf.Write(data)
+	return buf, pageLength
+}
+
+func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		descBuf           = &bytes.Buffer{}
+		data       []byte = []byte{}
+		pageLength uint16 = 0
+	)
+
+	//DESCRIPTOR 1 TARGET NAME
+	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_ASCII)
+	descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_VENDOR)
+	descBuf.WriteByte(0x00)
+	//length
+	descBuf.WriteByte(byte(len([]byte(cmd.Target.Name))))
+	//target name
+	descBuf.Write([]byte(cmd.Target.Name))
+
+	//DESCRIPTOR 2 NNA Locally
+	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
+	descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_NAA)
+	descBuf.WriteByte(0x00)
+	//length
+	descBuf.WriteByte(0x08)
+	//NNA
+	binary.Write(descBuf, binary.BigEndian, (cmd.Device.UUID | (uint64(NAA_LOCAL) << 60)))
+
+	//TODO: Target Port Group(0x05), Relative Target port identifier(0x04)
+
+	/*
+		//DESCRIPTOR 3 TPG
+		descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
+		descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_REL_TGT_PORT)
+		descBuf.WriteByte(0x00)
+		//length
+		descBuf.WriteByte(0x08)
+		//TPG
+		binary.Write(descBuf, binary.BigEndian,)
+
+		//DESCRIPTOR 4 RTPI
+		descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
+		descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_NAA)
+		descBuf.WriteByte(0x00)
+		//length
+		descBuf.WriteByte(0x08)
+		//RTPGI
+		binary.Write(descBuf, binary.BigEndian,)
+	*/
+
+	data = descBuf.Bytes()
+	pageLength = uint16(len(data))
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//byte 1
+	//PAGE CODE
+	buf.WriteByte(0x83)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+	buf.Write(data)
+	return buf, pageLength
+}
+
 func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf          = &bytes.Buffer{}
-		data  []byte = []byte{}
-		b     byte   = 0x75
+		allocationLength uint16
+		pageLength       uint16
+		additionLength   byte
+		buf                     = &bytes.Buffer{}
+		data             []byte = []byte{}
+		addBuf                  = &bytes.Buffer{}
+		addBufData       []byte = []byte{}
+		//b                byte   = 0x75
 		scb   []byte = cmd.SCB.Bytes()
 		pcode byte   = scb[2]
 		evpd  bool   = false
+
+		vendorID   = make([]byte, 8)
+		productID  = make([]byte, 16)
+		productRev = make([]byte, 4)
 	)
+
+	allocationLength = util.GetUnalignedUint16(scb[3:5])
+
 	if scb[1]&0x01 > 0 {
 		evpd = true
 	}
 
 	if cmd.Device == nil {
-		b = (uint8(0) & 0x7) << 5
-		b |= uint8(0) & 0x1f
 		goto sense
 	}
 
-	if cmd.Device.Attrs.Online {
-		b = (byte(PQ_DEVICE_CONNECTED) << 5) | byte(cmd.Device.Attrs.DeviceType)
-	} else {
-		b = (byte(PQ_DEVICE_NOT_CONNECT) << 5) | byte(cmd.Device.Attrs.DeviceType)
-	}
-
 	if evpd {
-		if pcode == 0x0 {
-			buf.WriteByte(b)
-			b = 0
-			buf.WriteByte(b)
-			buf.WriteByte(b)
-			buf.WriteByte(b)
-			buf.WriteByte(b)
-			buf.WriteByte(b)
-		} else if pcode == 0xb0 {
-			buf.WriteByte(b)
-			buf.WriteByte(0xb0)
-			buf.WriteByte(0x00)
-			buf.WriteByte(0x3c)
-			buf.WriteByte(0x00)
-			buf.WriteByte(0x80)
+		switch pcode {
+		case 0x00:
+			buf, pageLength = InquiryPage0x00(host, cmd)
 
-			for i := 0; i < 58; i++ {
-				buf.WriteByte(0x00)
-			}
+		case 0x80:
+			buf, pageLength = InquiryPage0x80(host, cmd)
+
+		case 0x83:
+			buf, pageLength = InquiryPage0x83(host, cmd)
+
+		default:
+			goto sense
+		}
+		data = buf.Bytes()
+		if allocationLength < pageLength {
+			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:allocationLength])
 		} else {
-			buf.WriteByte(b)
-			buf.WriteByte(0xb0)
-			buf.WriteByte(0x00)
-			buf.WriteByte(0x00)
-			buf.WriteByte(0x00)
+			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:])
 		}
 	} else {
-		buf.WriteByte(b)
+		//byte 5
+		//SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
+		addBuf.WriteByte(0x00)
+		//byte 6
+		//ENCSERV(0) VS(0) MULTIP(0) ADDR16(0)
+		addBuf.WriteByte(0x00)
+		//byte 7
+		//WBUS16(0) SYNC(0) CMDQUE(1) VS1(0)
+		addBuf.WriteByte(INQUIRY_CMDQUE)
+
+		copy(vendorID, []byte(cmd.Device.Attrs.VendorID))
+		addBuf.Write(vendorID)
+
+		copy(productID, []byte(cmd.Device.Attrs.ProductID))
+		addBuf.Write(productID)
+
+		copy(productRev, []byte(cmd.Device.Attrs.ProductRev))
+		addBuf.Write(productRev)
+		//Vendor specific(20 bytes)
+		for i := 0; i < 20; i++ {
+			addBuf.WriteByte(0x00)
+		}
+		//byte 56
+		addBuf.WriteByte(0x00)
+		//byte 57
+		addBuf.WriteByte(0x00)
+		//VERSION DESCRIPTOR 1 ~ 8
+		binary.Write(addBuf, binary.BigEndian, cmd.Device.Attrs.VersionDesction)
+
+		addBufData = addBuf.Bytes()
+		additionLength = byte(len(addBufData))
+
+		//Write header
+		//byte 0
+		//PERIPHERAL QUALIFIER, PERIPHERAL DEVICE TYPE
+		if cmd.Device.Attrs.Online {
+			buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+		} else {
+			buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+		}
+		// byte 1
 		// RMB(0) LU_CONG(0)
 		buf.WriteByte(0x00)
-		// version byte
+		// byte 2
+		// VERSION
 		buf.WriteByte(VERSION_WITHDRAW_SPC3)
-
+		// byte 3
 		// Reserved, Reserved, NORMACA, HISUP, RESPONSE DATA FORMAT
 		buf.WriteByte(INQUIRY_HISUP | INQUIRY_STANDARD_FORMAT)
+		// byte 4
 		// ADDITIONAL LENGTH
-		buf.WriteByte(0x00)
-		// byte 5
-		/*
-		 * SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
-		 */
-		buf.WriteByte(0x00)
-		// byte 6
-		buf.WriteByte(0x00)
-		buf.WriteByte(0x02)
-		buf.Write([]byte{'1', '1', 'c', 'a', 'n', 's'})
-		buf.WriteByte(0x00)
-		buf.WriteByte(0x00)
-		buf.Write([]byte{'c', 'o', 'f', 'f', 'e', 'e'})
-		for i := 0; i < 10; i++ {
-			buf.WriteByte(0x00)
+		buf.WriteByte(additionLength)
+
+		buf.Write(addBufData)
+		data = buf.Bytes()
+		if allocationLength < uint16(additionLength) {
+			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:allocationLength])
+		} else {
+			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:])
 		}
-		buf.Write([]byte{'1', '.', '0'})
-		buf.WriteByte(0x00)
 	}
-	data = buf.Bytes()
-	data[4] = byte(len(data) - 4)
-	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
+
 	return api.SAMStatGood
 sense:
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
@@ -302,7 +488,7 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	buf.Write(util.MarshalUint32(availLength))
 	cmd.InSDBBuffer.Resid = int32(actualLength)
 
-	// Skip through to byte 8, Reserved
+	// Skip through to byte 4, Reserved
 	for i := 0; i < 4; i++ {
 		buf.WriteByte(0x00)
 	}

@@ -47,6 +47,7 @@ func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error
 		DeviceProtocol: sbc,
 		Storage:        backing,
 		BlockShift:     api.DefaultBlockShift,
+		UUID:           device_uuid,
 	}
 
 	err = backing.Open(lu, backendPath)
@@ -69,6 +70,7 @@ func NewLUN0() *api.SCSILu {
 		DeviceProtocol: sbc,
 		Storage:        backing,
 		BlockShift:     api.DefaultBlockShift,
+		UUID:           0,
 	}
 
 	lu.Size = backing.Size(lu)
