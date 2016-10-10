@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/gostor/gotgt/pkg/version"
 )
 
 const (
@@ -53,8 +54,9 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.Readonly = false
 	lu.Attrs.SWP = false
 	lu.Attrs.SenseFormat = false
-	lu.Attrs.VendorID = "GOSTOR"
-	lu.Attrs.ProductID = "VIRTUAL-DISK"
+	lu.Attrs.VendorID = SCSI_VendorID
+	lu.Attrs.ProductID = SCSI_ProductID
+	lu.Attrs.ProductRev = version.SCSI_VERSION
 
 	/*
 		SCSIID for PAGE83 T10 VENDOR IDENTIFICATION field
@@ -73,10 +75,11 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	*/
 	lu.Attrs.SCSISN = "    "
 
-	lu.Attrs.VersionDesction = []uint16{
-		0x04C0, // SBC-3 no version claimed
-		0x0960, // iSCSI
-		0x0300, // SPC-3
+	lu.Attrs.VersionDesction = [8]uint16{
+		0x0320, // SBC-2 no version claimed
+		0x0960, // iSCSI no version claimed
+		0x0300, // SPC-3 no version claimed
+		0x0060, // SAM-3 no version claimed
 	}
 	if lu.BlockShift == 0 {
 		lu.BlockShift = api.DefaultBlockShift
