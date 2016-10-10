@@ -48,7 +48,6 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 * ACL (Access control) (p3)
 * SCSI Task Management (p3)
 * iSCSI Task Management (p3)
-* Dummy LUN0 (orzhang, p1)
 * SCSI Command Queue (p2)
 * More SCSI commands
 	* SPC3/SAM2
