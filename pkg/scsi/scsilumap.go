@@ -76,7 +76,7 @@ func InitSCSILUMap(config *config.Config) error {
 		globalSCSILUMap.AllDevices[bs.DeviceID] = lu
 	}
 
-	for tgtName, tgt := range config.Targets {
+	for tgtName, tgt := range config.ISCSITargets {
 		for lunstr, deviceID := range tgt.LUNs {
 			lun, err := strconv.ParseUint(lunstr, 10, 64)
 			if err != nil {

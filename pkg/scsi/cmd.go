@@ -16,6 +16,10 @@ limitations under the License.
 
 package scsi
 
+import (
+	"github.com/gostor/gotgt/pkg/util"
+)
+
 type SCSIPRServiceAction byte
 type SCSIPRType byte
 
@@ -72,4 +76,40 @@ const (
 
 func SCSICDBGroupID(opcode byte) byte {
 	return ((opcode >> 5) & 0x7)
+}
+
+/*
+ * Transfer Length (if any)
+ * Parameter List Length (if any)
+ * Allocation Length (if any)
+ */
+func SCSICDBBufXLength(scb []byte) (int64, bool) {
+	var (
+		opcode byte
+		length int64
+		group  byte
+		ok     bool = true
+	)
+	opcode = scb[0]
+	group = SCSICDBGroupID(opcode)
+
+	switch group {
+	case CBD_GROUPID_0:
+		length = int64(scb[4])
+	case CBD_GROUPID_1, CBD_GROUPID_2:
+		length = int64(util.GetUnalignedUint16(scb[7:9]))
+	case CBD_GROUPID_3:
+		if opcode == 0x7F {
+			length = int64(scb[7])
+		} else {
+			ok = false
+		}
+	case CBD_GROUPID_4:
+		length = int64(util.GetUnalignedUint32(scb[6:10]))
+	case CBD_GROUPID_5:
+		length = int64(util.GetUnalignedUint32(scb[10:14]))
+	default:
+		ok = false
+	}
+	return length, ok
 }

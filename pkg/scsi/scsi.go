@@ -124,6 +124,7 @@ func NewSCSIDeviceOperation(fn api.CommandFunc, sa *SCSIServiceAction, pr uint8)
 
 func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	senseBuffer := &bytes.Buffer{}
+	inBufLen, ok := SCSICDBBufXLength(cmd.SCB.Bytes())
 
 	if cmd.Device.Attrs.SenseFormat {
 		// descriptor format
@@ -149,7 +150,18 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		}
 		senseBuffer.WriteByte((byte(asc) >> 8) & 0xff)
 		senseBuffer.WriteByte(byte(asc) & 0xff)
+		senseBuffer.WriteByte(0x00)
+		senseBuffer.WriteByte(0x00)
+		senseBuffer.WriteByte(0x00)
+		senseBuffer.WriteByte(0x00)
 		cmd.SenseLength = length + 8
+	}
+	if ok {
+		if int64(len(senseBuffer.Bytes())) > inBufLen {
+			senseBuffer.Truncate(int(inBufLen))
+		}
+	} else {
+		glog.V(2).Infof("cannot calc cbd alloc length. truncate failed")
 	}
 	cmd.Result = key
 	cmd.SenseBuffer = senseBuffer

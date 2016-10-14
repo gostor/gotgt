@@ -34,13 +34,23 @@ Format of configuration file
             "deviceID": integer, uniqu device id,
             "path": string, <protocal>:<absolute/file/path>",
             "online": bool, online/offline
-        },
+        }
     ],
+
+	"portals": [
+    	{
+    		"id": integer, uniqu portal id
+    		"portal":string, <IP>:<PORT>
+    	}
+    ],
+
     "targets": {
         <target name >: {
-            "portals": [
-                <IP Addresswith Port(assumed port as 3260 without port information>
-            ],
+            "tpgts":{
+            	<tpgt number>: [<portal id[,portal id....]]
+            }
+            //n shoud be an value from 0 ~ 65535
+
             "luns": {
                 <lu number for the target>: <mappingd with the device ID>
             }
@@ -54,27 +64,29 @@ Example of the configuration file
     "storages": [
         {
             "deviceID": 1000,
-            "path": "file:/tmp/image",
-            "online": true
-        },
-        {
-            "deviceID": 2000,
-            "path": "ceph:/rbd/image",
+            "path": "file:/tmp/disk.img",
             "online": true
         }
     ],
-    "targets": {
+    "iscsiportals":[
+        {
+            "id":0,
+            "portal":"192.168.159.1:3260"
+        }
+    ],
+    "iscsitargets": {
         "iqn.2016-09.com.gotgt.gostor:example_tgt_0": {
-            "portals": [
-                "192.168.1.1"
-            ],
+            "tpgts": {
+                "1":[0]
+            }
+            ,
             "luns": {
                 "1": 1000
-                "2": 2000
             }
         }
     }
 }
+
 */
 
 const (
@@ -93,14 +105,20 @@ type BackendStorage struct {
 	Online   bool   `json:"online"`
 }
 
-type Target struct {
-	Portals []string          `json:"portals"`
-	LUNs    map[string]uint64 `json:"luns"`
+type ISCSIPortalInfo struct {
+	ID     uint16 `json:"id"`
+	Portal string `json:"portal"`
+}
+
+type ISCSITarget struct {
+	TPGTs map[string][]uint64 `json:"tpgts"`
+	LUNs  map[string]uint64   `json:"luns"`
 }
 
 type Config struct {
-	Storages []BackendStorage  `json:"storages"`
-	Targets  map[string]Target `json:"targets"`
+	Storages     []BackendStorage       `json:"storages"`
+	ISCSIPortals []ISCSIPortalInfo      `json:"iscsiportals"`
+	ISCSITargets map[string]ISCSITarget `json:"iscsitargets"`
 }
 
 func init() {
@@ -126,7 +144,7 @@ func Load(configDir string) (*Config, error) {
 
 	filename := filepath.Join(configDir, ConfigFileName)
 	config = &Config{
-		Targets: make(map[string]Target),
+		ISCSITargets: make(map[string]ISCSITarget),
 	}
 
 	// Try happy path first - latest config file

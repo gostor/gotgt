@@ -18,21 +18,24 @@ package iscsit
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/port"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
 )
 
 type ISCSITargetService struct {
-	SCSI    *scsi.SCSITargetService
-	Name    string
-	Targets map[string]*ISCSITarget
+	SCSI         *scsi.SCSITargetService
+	Name         string
+	iSCSITargets map[string]*ISCSITarget
 }
 
 func init() {
@@ -41,47 +44,86 @@ func init() {
 
 func NewISCSITargetService(base *scsi.SCSITargetService) (port.SCSITargetService, error) {
 	return &ISCSITargetService{
-		Name:    "iscsi",
-		Targets: map[string]*ISCSITarget{},
-		SCSI:    base,
+		Name:         "iscsi",
+		iSCSITargets: map[string]*ISCSITarget{},
+		SCSI:         base,
 	}, nil
 }
 
-func (s *ISCSITargetService) NewTarget(target string, portals []string) (port.SCSITargetDriver, error) {
-	if _, ok := s.Targets[target]; ok {
+func (s *ISCSITargetService) NewTarget(tgtName string, configInfo *config.Config) (port.SCSITargetDriver, error) {
+	if _, ok := s.iSCSITargets[tgtName]; ok {
 		return nil, fmt.Errorf("target name has been existed")
 	}
-	stgt, err := s.SCSI.NewSCSITarget(len(s.Targets), "iscsi", target)
+	stgt, err := s.SCSI.NewSCSITarget(len(s.iSCSITargets), "iscsi", tgtName)
 	if err != nil {
 		return nil, err
 	}
 	tgt := newISCSITarget(stgt)
-	s.Targets[target] = tgt
-	for _, portal := range portals {
-		s.AddNewPortal(target, portal)
+	s.iSCSITargets[tgtName] = tgt
+	scsiTPG := tgt.SCSITarget.TargetPortGroups[0]
+	targetConfig := configInfo.ISCSITargets[tgtName]
+	for tpgt, portalIDArrary := range targetConfig.TPGTs {
+		tpgtNumber, _ := strconv.ParseUint(tpgt, 10, 16)
+		tgt.TPGTs[uint16(tpgtNumber)] = &iSCSITPGT{uint16(tpgtNumber), make(map[string]struct{})}
+		targetPortName := fmt.Sprintf("%s,t,0x%02x", tgtName, tpgtNumber)
+		scsiTPG.TargetPortGroup = append(scsiTPG.TargetPortGroup, &api.SCSITargetPort{uint16(tpgtNumber), targetPortName})
+		for _, portalID := range portalIDArrary {
+			portal := configInfo.ISCSIPortals[portalID]
+			s.AddiSCSIPortal(tgtName, uint16(tpgtNumber), portal.Portal)
+		}
 	}
 	return tgt, nil
 }
 
-func (s *ISCSITargetService) AddNewPortal(tgtName string, portal string) error {
-	target := s.Targets[tgtName]
-	tgtPortals := target.Portals
-	_, ok := tgtPortals[portal]
-	if !ok {
-		tgtPortals[portal] = struct{}{}
+func (s *ISCSITargetService) AddiSCSIPortal(tgtName string, tpgt uint16, portal string) error {
+	var (
+		ok       bool
+		errMsg   string
+		target   *ISCSITarget
+		tpgtInfo *iSCSITPGT
+	)
+
+	if target, ok = s.iSCSITargets[tgtName]; !ok {
+		errMsg = fmt.Sprintf("no target %s", tgtName)
+		return errors.New(errMsg)
 	}
+
+	if tpgtInfo, ok = target.TPGTs[tpgt]; !ok {
+		errMsg = fmt.Sprintf("no tpgt %d", tpgt)
+		return errors.New(errMsg)
+	}
+	tgtPortals := tpgtInfo.Portals
+
+	if _, ok = tgtPortals[portal]; !ok {
+		tgtPortals[portal] = struct{}{}
+	} else {
+		errMsg := fmt.Sprintf("duplicate portal %s,in %s,%d", portal, tgtName, tpgt)
+		return errors.New(errMsg)
+	}
+
 	return nil
 }
 
-func (s *ISCSITargetService) HasPortal(tgtName string, portal string) bool {
-	target := s.Targets[tgtName]
-	tgtPortals := target.Portals
+func (s *ISCSITargetService) HasPortal(tgtName string, tpgt uint16, portal string) bool {
+	var (
+		ok       bool
+		target   *ISCSITarget
+		tpgtInfo *iSCSITPGT
+	)
 
-	if len(tgtPortals) == 0 {
+	if target, ok = s.iSCSITargets[tgtName]; !ok {
+		return false
+	}
+	if tpgtInfo, ok = target.TPGTs[tpgt]; !ok {
+		return false
+	}
+	tgtPortals := tpgtInfo.Portals
+
+	if _, ok = tgtPortals[portal]; !ok {
+		return false
+	} else {
 		return true
 	}
-	_, ok := tgtPortals[portal]
-	return ok
 }
 
 func (s *ISCSITargetService) Run() error {
@@ -254,6 +296,8 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 	var (
 		target *ISCSITarget
 		cmd    = conn.req
+		TPGT   uint16
+		err    error
 	)
 	conn.resp = &ISCSICommand{
 		OpCode:   OpLoginResp,
@@ -298,7 +342,7 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 	if conn.sessionType == SESSION_DISCOVERY {
 		conn.tid = 0xffff
 	} else {
-		for _, t := range s.Targets {
+		for _, t := range s.iSCSITargets {
 			if t.SCSITarget.Name == targetName {
 				target = t
 				break
@@ -308,7 +352,15 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 			conn.state = CONN_STATE_EXIT
 			return fmt.Errorf("No target found with name(%s)", targetName)
 		}
+
+		TPGT, err = target.FindTPG(conn.conn.LocalAddr().String())
+		if err != nil {
+			conn.state = CONN_STATE_EXIT
+			return err
+		}
+		conn.tpgt = TPGT
 		conn.tid = target.TID
+
 	}
 	switch conn.state {
 	case CONN_STATE_FREE:
@@ -361,13 +413,16 @@ func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
 	keys := util.ParseKVText(cmd.RawData)
 	if st, ok := keys["SendTargets"]; ok {
 		if st == "All" {
-			for name, tgt := range s.Targets {
+			for name, tgt := range s.iSCSITargets {
 				glog.V(2).Infof("iscsi target: %v", name)
-				glog.V(2).Infof("iscsi target portals: %v", tgt.Portals)
+				//glog.V(2).Infof("iscsi target portals: %v", tgt.Portals)
 
 				result = append(result, util.KeyValue{"TargetName", name})
-				for portal := range tgt.Portals {
-					result = append(result, util.KeyValue{"TargetAddress", portal + ",1"})
+				for _, tpgt := range tgt.TPGTs {
+					for portal := range tpgt.Portals {
+						targetPort := fmt.Sprintf("%s,%d", portal, tpgt.TPGT)
+						result = append(result, util.KeyValue{"TargetAddress", targetPort})
+					}
 				}
 			}
 		}
@@ -754,6 +809,7 @@ func (s *ISCSITargetService) iscsiExecTask(task *iscsiTask) error {
 		task.scmd.SCBLength = len(cmd.CDB)
 		task.scmd.Lun = cmd.LUN
 		task.scmd.Tag = uint64(cmd.TaskTag)
+		task.scmd.RelTargetPortID = task.conn.tpgt
 		task.state = taskSCSI
 		if task.scmd.OutSDBBuffer.Buffer == nil {
 			task.scmd.OutSDBBuffer.Buffer = bytes.NewBuffer(cmd.RawData)

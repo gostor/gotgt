@@ -149,13 +149,14 @@ type SCSIDataBuffer struct {
 }
 
 type SCSICommand struct {
-	Target       *SCSITarget
-	DeviceID     uint64
-	Device       *SCSILu
-	State        uint64
-	Direction    SCSIDataDirection
-	InSDBBuffer  SCSIDataBuffer
-	OutSDBBuffer SCSIDataBuffer
+	Target          *SCSITarget
+	DeviceID        uint64
+	Device          *SCSILu
+	State           uint64
+	Direction       SCSIDataDirection
+	InSDBBuffer     SCSIDataBuffer
+	OutSDBBuffer    SCSIDataBuffer
+	RelTargetPortID uint16
 	// Command ITN ID
 	CommandITNID  uint64
 	Offset        uint64
@@ -187,16 +188,26 @@ type ITNexusLuInfo struct {
 	Prevent int
 }
 
-type SCSITarget struct {
-	Name    string          `json:"name"`
-	TID     int             `json:"tid"`
-	LID     int             `json:"lid"`
-	State   SCSITargetState `json:"state"`
-	Devices LUNMap          `json:"-"`
-	LUN0    *SCSILu         `json:"-"`
-	ITNexus []*ITNexus      `json:"itnexus"`
+type SCSITargetPort struct {
+	RelativeTargetPortID uint16
+	TargetPortName       string
+}
 
-	SCSITargetDriver interface{} `json:"-"`
+type TargetPortGroup struct {
+	GroupID         uint16
+	TargetPortGroup []*SCSITargetPort `json:"targetportgroup"`
+}
+
+type SCSITarget struct {
+	Name             string             `json:"name"`
+	TID              int                `json:"tid"`
+	LID              int                `json:"lid"`
+	State            SCSITargetState    `json:"state"`
+	Devices          LUNMap             `json:"-"`
+	LUN0             *SCSILu            `json:"-"`
+	ITNexus          []*ITNexus         `json:"itnexus"`
+	TargetPortGroups []*TargetPortGroup `json:"tpg"`
+	SCSITargetDriver interface{}        `json:"-"`
 }
 
 type SCSITargetDriverState int
