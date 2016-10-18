@@ -76,8 +76,8 @@ Help Options:
 		os.Exit(1)
 	}
 
-	for tgtname, tgt := range config.Targets {
-		targetDriver.NewTarget(tgtname, tgt.Portals)
+	for tgtname := range config.ISCSITargets {
+		targetDriver.NewTarget(tgtname, config)
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())

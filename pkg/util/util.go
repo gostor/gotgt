@@ -90,6 +90,28 @@ func MarshalUint64(i uint64) []byte {
 	return data
 }
 
+func StringToByte(str string, align int, maxlength int) []byte {
+	var (
+		data   []byte
+		data2  []byte
+		length int
+		d      int
+	)
+
+	data = []byte(str)
+	length = len(data)
+	d = align - (length % align)
+
+	if (length + d) > maxlength {
+		data = ([]byte(str))[0:maxlength]
+		return data
+	} else {
+		data2 = make([]byte, length+d)
+		copy(data2, data)
+		return data2
+	}
+}
+
 const (
 	POSIX_FADV_NORMAL = iota
 	POSIX_FADV_RANDOM

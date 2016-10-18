@@ -19,13 +19,13 @@ package port
 import (
 	"fmt"
 
+	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/scsi"
 )
 
 type SCSITargetService interface {
 	Run() error
-	NewTarget(string, []string) (SCSITargetDriver, error)
-	AddNewPortal(string, string) error
+	NewTarget(string, *config.Config) (SCSITargetDriver, error)
 }
 
 type TargetServiceFunc func(*scsi.SCSITargetService) (SCSITargetService, error)

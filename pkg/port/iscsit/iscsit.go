@@ -17,7 +17,13 @@ limitations under the License.
 // iSCSI Target Driver
 package iscsit
 
-import "github.com/gostor/gotgt/pkg/api"
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/gostor/gotgt/pkg/api"
+)
 
 const (
 	IOSTATE_FREE = iota
@@ -64,10 +70,15 @@ type ISCSIRedirectInfo struct {
 	Callback string
 }
 
+type iSCSITPGT struct {
+	TPGT    uint16 /* Mapping to SCSI Reltive Target Port ID */
+	Portals map[string]struct{}
+}
+
 type ISCSITarget struct {
 	api.SCSITarget
 	api.SCSITargetDriverCommon
-	Portals      map[string]struct{}
+	TPGTs        map[uint16]*iSCSITPGT
 	Sessions     []*ISCSISession
 	SessionParam []ISCSISessionParam
 	Alias        string
@@ -78,10 +89,22 @@ type ISCSITarget struct {
 	NopCount     int
 }
 
+func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
+	for tpgt, TPG := range tgt.TPGTs {
+		for tgtPortal := range TPG.Portals {
+			if strings.EqualFold(portal, tgtPortal) {
+				return tpgt, nil
+			}
+		}
+	}
+	errMsg := fmt.Sprintf("No TPGT found with IP(%s)", portal)
+	return 0, errors.New(errMsg)
+}
+
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {
 	return &ISCSITarget{
 		SCSITarget: *target,
-		Portals:    make(map[string]struct{}),
+		TPGTs:      make(map[uint16]*iSCSITPGT),
 	}
 }
 

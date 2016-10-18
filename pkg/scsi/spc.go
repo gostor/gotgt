@@ -122,8 +122,8 @@ const (
 	INQUIRY_SCCS          = byte(0x80)
 	INQUIRY_AAC           = byte(0x40)
 	INQUIRY_TPGS_NO       = byte(0x00)
-	INQUIRY_TPGS_IMPLICIT = byte(0x20)
-	INQUIRY_TPGS_EXPLICIT = byte(0x10)
+	INQUIRY_TPGS_IMPLICIT = byte(0x10)
+	INQUIRY_TPGS_EXPLICIT = byte(0x20)
 	INQUIRY_TPGS_BOTH     = byte(0x30)
 	INQUIRY_3PC           = byte(0x08)
 	INQUIRY_Reserved      = byte(0x06)
@@ -189,11 +189,12 @@ const (
 
 const (
 	SCSI_VendorID  = "GOSTOR"
-	SCSI_ProductID = "GOTGT-VDISK"
+	SCSI_ProductID = "GOTGT"
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
-	return api.SAMStatGood
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCLuOffline(lu *api.SCSILu) error {
@@ -282,12 +283,16 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 		buf               = &bytes.Buffer{}
 		descBuf           = &bytes.Buffer{}
 		data       []byte = []byte{}
-		pageLength uint16 = 0
+		portName   []byte
+		pageLength uint16              = 0
+		portID     uint16              = cmd.RelTargetPortID
+		portGroup  uint16              = FindTargetGroup(cmd.Target, portID)
+		targetPort *api.SCSITargetPort = FindTargetPort(cmd.Target, portID)
 	)
 
 	//DESCRIPTOR 1 TARGET NAME
 	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_ASCII)
-	descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_VENDOR)
+	descBuf.WriteByte(0x80 | (ASS_TGT_PORT << 4) | DESG_VENDOR)
 	descBuf.WriteByte(0x00)
 	//length
 	descBuf.WriteByte(byte(len([]byte(cmd.Target.Name))))
@@ -296,7 +301,7 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 
 	//DESCRIPTOR 2 NNA Locally
 	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
-	descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_NAA)
+	descBuf.WriteByte(0x80 | (ASS_LU << 4) | DESG_NAA)
 	descBuf.WriteByte(0x00)
 	//length
 	descBuf.WriteByte(0x08)
@@ -305,25 +310,37 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 
 	//TODO: Target Port Group(0x05), Relative Target port identifier(0x04)
 
-	/*
-		//DESCRIPTOR 3 TPG
-		descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
-		descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_REL_TGT_PORT)
-		descBuf.WriteByte(0x00)
-		//length
-		descBuf.WriteByte(0x08)
-		//TPG
-		binary.Write(descBuf, binary.BigEndian,)
+	//DESCRIPTOR 3 TPG
+	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
+	descBuf.WriteByte(0x80 | (ASS_TGT_PORT << 4) | DESG_TGT_PORT_GRP)
+	descBuf.WriteByte(0x00)
+	//length
+	descBuf.WriteByte(0x04)
+	//TPG
+	descBuf.WriteByte(0x00)
+	descBuf.WriteByte(0x00)
+	binary.Write(descBuf, binary.BigEndian, portGroup)
 
-		//DESCRIPTOR 4 RTPI
-		descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
-		descBuf.WriteByte(0x80 | ASS_TGT_PORT | DESG_NAA)
-		descBuf.WriteByte(0x00)
-		//length
-		descBuf.WriteByte(0x08)
-		//RTPGI
-		binary.Write(descBuf, binary.BigEndian,)
-	*/
+	//DESCRIPTOR 4 Relative Target Port ID
+	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_BIN)
+	descBuf.WriteByte(0x80 | (ASS_TGT_PORT << 4) | DESG_REL_TGT_PORT)
+	descBuf.WriteByte(0x00)
+	//length
+	descBuf.WriteByte(0x04)
+	//RTPGI
+	descBuf.WriteByte(0x00)
+	descBuf.WriteByte(0x00)
+	binary.Write(descBuf, binary.BigEndian, portID)
+
+	//DESCRIPTOR 5 SCSI Name,Port
+	portName = util.StringToByte(targetPort.TargetPortName, 4, 256)
+	descBuf.WriteByte((PIV_ISCSI << 4) | INQ_CODE_UTF8)
+	descBuf.WriteByte(0x80 | (ASS_TGT_PORT << 4) | DESG_SCSI)
+	descBuf.WriteByte(0x00)
+	//length
+	descBuf.WriteByte(byte(len(portName)))
+	//RTPGI
+	descBuf.Write(portName)
 
 	data = descBuf.Bytes()
 	pageLength = uint16(len(data))
@@ -395,7 +412,7 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	} else {
 		//byte 5
 		//SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
-		addBuf.WriteByte(0x00)
+		addBuf.WriteByte(INQUIRY_TPGS_IMPLICIT)
 		//byte 6
 		//ENCSERV(0) VS(0) MULTIP(0) ADDR16(0)
 		addBuf.WriteByte(0x00)

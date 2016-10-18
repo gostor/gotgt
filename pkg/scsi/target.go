@@ -31,13 +31,38 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 
 	// verify the low level driver
 	var target = &api.SCSITarget{
-		Name: name,
-		TID:  tid,
+		Name:             name,
+		TID:              tid,
+		TargetPortGroups: []*api.TargetPortGroup{},
 	}
+	tpg := &api.TargetPortGroup{0, []*api.SCSITargetPort{}}
 	s.Targets = append(s.Targets, target)
 	target.Devices = GetTargetLUNMap(target.Name)
 	target.LUN0 = NewLUN0()
+	target.TargetPortGroups = append(target.TargetPortGroups, tpg)
 	return target, nil
+}
+
+func FindTargetGroup(target *api.SCSITarget, relPortID uint16) uint16 {
+	for _, tpg := range target.TargetPortGroups {
+		for _, port := range tpg.TargetPortGroup {
+			if port.RelativeTargetPortID == relPortID {
+				return tpg.GroupID
+			}
+		}
+	}
+	return 0
+}
+
+func FindTargetPort(target *api.SCSITarget, relPortID uint16) *api.SCSITargetPort {
+	for _, tpg := range target.TargetPortGroups {
+		for _, port := range tpg.TargetPortGroup {
+			if port.RelativeTargetPortID == relPortID {
+				return port
+			}
+		}
+	}
+	return nil
 }
 
 func deviceReserve(cmd *api.SCSICommand) error {

@@ -272,7 +272,8 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	}
 	buf.WriteByte(b)
 
-	buf.WriteByte(0x00)                                       // 4
+	buf.WriteByte(0x00) // 4
+
 	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
 	// Skip through to byte 16
 	for i := 0; i < 8; i++ {

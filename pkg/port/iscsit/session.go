@@ -221,7 +221,7 @@ func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection) (*ISCSISessi
 		tsih   uint64
 	)
 
-	for _, t := range s.Targets {
+	for _, t := range s.iSCSITargets {
 		if t.TID == conn.tid {
 			target = t
 			break

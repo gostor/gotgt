@@ -61,6 +61,7 @@ type iscsiConnection struct {
 	conn           net.Conn
 	initiator      string
 	initiatorAlias string
+	tpgt           uint16
 
 	rxBuffer []byte
 	txBuffer []byte
