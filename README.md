@@ -20,20 +20,31 @@ Currenty, there is lack of commands to operate the target and LU, however you ca
 
 ```
 {
-    "storages": [
-        {
-            "deviceID":1000,
-            "path":"file:/var/tmp/disk.img",
-            "online":true
-        }
-    ],
-    "targets": {
-        "test-iscsi-target": {
-            "name": "iqn.2016-09.com.gotgt.gostor:example_tgt_0",
-            "luns": {"0": 1000}
-        }
+  "storages":[
+    {
+      "deviceID":1000,
+      "path":"file:/var/tmp/disk.img",
+      "online":true
     }
+  ],
+  "iscsiportals":[
+    {
+      "id":0,
+      "portal":"127.0.0.1:3260"
+    }
+  ],
+  "iscsitargets":{
+    "iqn.2016-09.com.gotgt.gostor:02:example-tgt-0":{
+      "tpgts":{
+        "1":[0]
+      },
+      "luns":{
+        "0":1000
+      }
+    }
+  }
 }
+
 ```
 
 > Note: make sure file `/var/tmp/disk.img` is existed, you can use `dd` to create it.
