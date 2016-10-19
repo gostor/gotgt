@@ -420,13 +420,13 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 		//WBUS16(0) SYNC(0) CMDQUE(1) VS1(0)
 		addBuf.WriteByte(INQUIRY_CMDQUE)
 
-		copy(vendorID, []byte(cmd.Device.Attrs.VendorID))
+		copy(vendorID, []byte(fmt.Sprintf("%-8s", cmd.Device.Attrs.VendorID)))
 		addBuf.Write(vendorID)
 
-		copy(productID, []byte(cmd.Device.Attrs.ProductID))
+		copy(productID, []byte(fmt.Sprintf("%-16s", cmd.Device.Attrs.ProductID)))
 		addBuf.Write(productID)
 
-		copy(productRev, []byte(cmd.Device.Attrs.ProductRev))
+		copy(productRev, []byte(fmt.Sprintf("%-4s", cmd.Device.Attrs.ProductRev)))
 		addBuf.Write(productRev)
 		//Vendor specific(20 bytes)
 		for i := 0; i < 20; i++ {
