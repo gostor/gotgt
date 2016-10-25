@@ -54,7 +54,7 @@ type iscsiConnection struct {
 	sessionType    int
 	sessionParam   []ISCSISessionParam
 	tid            int
-	cid            uint16
+	CID            uint16
 	rxIOState      int
 	txIOState      int
 	refcount       int

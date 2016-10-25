@@ -45,6 +45,16 @@ func (sbc SBCSCSIDeviceProtocol) PerformCommand(opcode int) interface{} {
 	return sbc.SCSIDeviceOps[opcode]
 }
 
+func (sbc SBCSCSIDeviceProtocol) PerformServiceAction(opcode int, action uint8) interface{} {
+	var sa *SCSIServiceAction
+	for _, sa = range sbc.SCSIDeviceOps[opcode].ServiceAction {
+		if sa.ServiceAction == action {
+			return sa
+		}
+	}
+	return nil
+}
+
 func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// init LU's phy attribute
 	lu.Attrs.DeviceType = sbc.DeviceType
@@ -158,8 +168,23 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 
 	sbc.SCSIDeviceOps[api.MODE_SELECT_10] = NewSCSIDeviceOperation(SBCModeSelect, nil, PR_WE_FA|PR_EA_FA|PR_EA_FN|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.MODE_SENSE_10] = NewSCSIDeviceOperation(SBCModeSense, nil, PR_WE_FA|PR_WE_FN|PR_EA_FA|PR_EA_FN)
-	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_IN] = NewSCSIDeviceOperation(SPCIllegalOp, nil, 0)
-	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_OUT] = NewSCSIDeviceOperation(SPCIllegalOp, nil, 0)
+
+	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_IN] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
+		{ServiceAction: PR_IN_READ_KEYS, CommandPerformFunc: SPCPRReadKeys},
+		{ServiceAction: PR_IN_READ_RESERVATION, CommandPerformFunc: SPCPRReadReservation},
+		{ServiceAction: PR_IN_REPORT_CAPABILITIES, CommandPerformFunc: SPCPRReportCapabilities},
+	}, 0)
+
+	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_OUT] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
+		{ServiceAction: PR_OUT_REGISTER, CommandPerformFunc: SPCPRRegister},
+		{ServiceAction: PR_OUT_RESERVE, CommandPerformFunc: SPCPRReserve},
+		{ServiceAction: PR_OUT_RELEASE, CommandPerformFunc: SPCPRRelease},
+		{ServiceAction: PR_OUT_CLEAR, CommandPerformFunc: SPCPRClear},
+		{ServiceAction: PR_OUT_PREEMPT, CommandPerformFunc: SPCPRPreempt},
+		//		{ServiceAction: PR_OUT_PREEMPT_AND_ABORT, CommandPerformFunc: SPCPRPreempt},
+		{ServiceAction: PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY, CommandPerformFunc: SPCPRRegister},
+		{ServiceAction: PR_OUT_REGISTER_AND_MOVE, CommandPerformFunc: SPCPRRegisterAndMove},
+	}, 0)
 
 	sbc.SCSIDeviceOps[api.READ_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.WRITE_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN|PR_WE_FA|PR_WE_FN)
@@ -173,8 +198,10 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.SERVICE_ACTION_IN] = NewSCSIDeviceOperation(SBCServiceAction, nil, 0)
 
 	sbc.SCSIDeviceOps[api.REPORT_LUNS] = NewSCSIDeviceOperation(SPCReportLuns, nil, 0)
-	sbc.SCSIDeviceOps[api.MAINT_PROTOCOL_IN] = NewSCSIDeviceOperation(SPCServiceAction, nil, 0)
-	sbc.SCSIDeviceOps[api.EXCHANGE_MEDIUM] = NewSCSIDeviceOperation(SPCServiceAction, nil, 0)
+	sbc.SCSIDeviceOps[api.MAINT_PROTOCOL_IN] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
+		{ServiceAction: 0x0C, CommandPerformFunc: SPCReportSupportedOperationCodes},
+	}, 0)
+	sbc.SCSIDeviceOps[api.EXCHANGE_MEDIUM] = NewSCSIDeviceOperation(SPCIllegalOp, nil, 0)
 	sbc.SCSIDeviceOps[api.READ_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.WRITE_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_WE_FA|PR_EA_FA|PR_WE_FA|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.WRITE_VERIFY_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
@@ -431,7 +458,7 @@ func SBCReserve(host int, cmd *api.SCSICommand) api.SAMStat {
 
 func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
 	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
-	if err := deviceRelease(cmd.Target.TID, cmd.CommandITNID, lun, false); err != nil {
+	if err := deviceRelease(cmd.Target.TID, cmd.ITNexusID, lun, false); err != nil {
 		return api.SAMStatReservationConflict
 	}
 

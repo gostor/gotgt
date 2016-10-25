@@ -20,36 +20,33 @@ import (
 	"github.com/gostor/gotgt/pkg/util"
 )
 
-type SCSIPRServiceAction byte
-type SCSIPRType byte
+const (
+	/* PERSISTENT_RESERVE_IN service action codes */
+	PR_IN_READ_KEYS           byte = 0x00
+	PR_IN_READ_RESERVATION    byte = 0x01
+	PR_IN_REPORT_CAPABILITIES byte = 0x02
+	PR_IN_READ_FULL_STATUS    byte = 0x03
 
-var (
-	// PERSISTENT_RESERVE_IN service action codes
-	PR_IN_READ_KEYS           SCSIPRServiceAction = 0x00
-	PR_IN_READ_RESERVATION    SCSIPRServiceAction = 0x01
-	PR_IN_REPORT_CAPABILITIES SCSIPRServiceAction = 0x02
-	PR_IN_READ_FULL_STATUS    SCSIPRServiceAction = 0x03
-
-	// PERSISTENT_RESERVE_OUT service action codes
-	PR_OUT_REGISTER                         SCSIPRServiceAction = 0x00
-	PR_OUT_RESERVE                          SCSIPRServiceAction = 0x01
-	PR_OUT_RELEASE                          SCSIPRServiceAction = 0x02
-	PR_OUT_CLEAR                            SCSIPRServiceAction = 0x03
-	PR_OUT_PREEMPT                          SCSIPRServiceAction = 0x04
-	PR_OUT_PREEMPT_AND_ABORT                SCSIPRServiceAction = 0x05
-	PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY SCSIPRServiceAction = 0x06
-	PR_OUT_REGISTER_AND_MOVE                SCSIPRServiceAction = 0x07
+	/* PERSISTENT_RESERVE_OUT service action codes */
+	PR_OUT_REGISTER                         byte = 0x00
+	PR_OUT_RESERVE                          byte = 0x01
+	PR_OUT_RELEASE                          byte = 0x02
+	PR_OUT_CLEAR                            byte = 0x03
+	PR_OUT_PREEMPT                          byte = 0x04
+	PR_OUT_PREEMPT_AND_ABORT                byte = 0x05
+	PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY byte = 0x06
+	PR_OUT_REGISTER_AND_MOVE                byte = 0x07
 
 	// Persistent Reservation scope
 	PR_LU_SCOPE byte = 0x00
 
-	// Persistent Reservation Type Mask format
-	PR_TYPE_WRITE_EXCLUSIVE          SCSIPRType = 0x01
-	PR_TYPE_EXCLUSIVE_ACCESS         SCSIPRType = 0x03
-	PR_TYPE_WRITE_EXCLUSIVE_REGONLY  SCSIPRType = 0x05
-	PR_TYPE_EXCLUSIVE_ACCESS_REGONLY SCSIPRType = 0x06
-	PR_TYPE_WRITE_EXCLUSIVE_ALLREG   SCSIPRType = 0x07
-	PR_TYPE_EXCLUSIVE_ACCESS_ALLREG  SCSIPRType = 0x08
+	/* Persistent Reservation Type Mask format */
+	PR_TYPE_WRITE_EXCLUSIVE          byte = 0x01
+	PR_TYPE_EXCLUSIVE_ACCESS         byte = 0x03
+	PR_TYPE_WRITE_EXCLUSIVE_REGONLY  byte = 0x05
+	PR_TYPE_EXCLUSIVE_ACCESS_REGONLY byte = 0x06
+	PR_TYPE_WRITE_EXCLUSIVE_ALLREG   byte = 0x07
+	PR_TYPE_EXCLUSIVE_ACCESS_ALLREG  byte = 0x08
 )
 
 const (

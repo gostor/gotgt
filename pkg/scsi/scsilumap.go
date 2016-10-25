@@ -65,6 +65,8 @@ func GetTargetLUNMap(tgtName string) api.LUNMap {
 }
 
 func InitSCSILUMap(config *config.Config) error {
+	var simpleOp *SCSISimpleReservationOperator
+	var ok bool
 	globalSCSILUMap.mutex.Lock()
 	defer globalSCSILUMap.mutex.Unlock()
 
@@ -83,6 +85,11 @@ func InitSCSILUMap(config *config.Config) error {
 				return errors.New("LU Number must be a number")
 			}
 			mappingLUN(deviceID, lun, tgtName)
+			//Init SCSISimpleReservationOperator
+			op := GetSCSIReservationOperator()
+			if simpleOp, ok = op.(*SCSISimpleReservationOperator); ok {
+				simpleOp.InitLUReservation(tgtName, deviceID)
+			}
 		}
 	}
 	return nil
