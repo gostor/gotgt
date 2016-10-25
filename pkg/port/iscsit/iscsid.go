@@ -30,6 +30,7 @@ import (
 	"github.com/gostor/gotgt/pkg/port"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/satori/go.uuid"
 )
 
 type ISCSITargetService struct {
@@ -165,7 +166,7 @@ func (s *ISCSITargetService) handler(events byte, conn *iscsiConnection) {
 		s.txHandler(conn)
 	}
 	if conn.state == CONN_STATE_CLOSE {
-		glog.Warningf("iscsi connection[%d] closed", conn.cid)
+		glog.Warningf("iscsi connection[%d] closed", conn.CID)
 		conn.close()
 	}
 }
@@ -324,6 +325,7 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 			{"DataSequenceInOrder", "Yes"},
 		}),
 	}
+	conn.CID = cmd.ConnID
 	pairs := util.ParseKVText(cmd.RawData)
 	if initiatorName, ok := pairs["InitiatorName"]; ok {
 		conn.initiator = initiatorName
@@ -376,11 +378,14 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 	case SESSION_NORMAL:
 		if conn.session == nil {
 			// create a new session
-			sess, err := s.NewISCSISession(conn)
+			sess, err := s.NewISCSISession(conn, cmd.ISID)
 			if err != nil {
 				glog.Error(err)
 				return err
 			}
+			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(sess)}
+			scsi.AddITNexus(&sess.Target.SCSITarget, itnexus)
+			sess.ITNexusID = itnexus.ID
 			conn.session = sess
 		}
 	case SESSION_DISCOVERY:
@@ -477,7 +482,6 @@ func iscsiExecReject(conn *iscsiConnection) error {
 }
 
 func iscsiExecR2T(conn *iscsiConnection) error {
-	conn.session.ExpCmdSN += 1
 	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
 	conn.txIOState = IOSTATE_TX_BHS
 	conn.statSN += 1
@@ -609,6 +613,7 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 			task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
 			if task.r2tCount > 0 {
 				// prepare to receive more data
+				conn.session.ExpCmdSN += 1
 				task.state = taskPending
 				conn.session.PendingTasks.Push(task)
 				conn.rxTask = task
@@ -804,7 +809,7 @@ func (s *ISCSITargetService) iscsiExecTask(task *iscsiTask) error {
 				task.scmd.Direction = api.SCSIDataWrite
 			}
 		}
-		task.scmd.CommandITNID = task.conn.session.Tsih
+		task.scmd.ITNexusID = task.conn.session.ITNexusID
 		task.scmd.SCB = bytes.NewBuffer(cmd.CDB)
 		task.scmd.SCBLength = len(cmd.CDB)
 		task.scmd.Lun = cmd.LUN

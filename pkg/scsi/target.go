@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/satori/go.uuid"
 )
 
 func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*api.SCSITarget, error) {
@@ -34,6 +35,7 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 		Name:             name,
 		TID:              tid,
 		TargetPortGroups: []*api.TargetPortGroup{},
+		ITNexus:          make(map[uuid.UUID]*api.ITNexus),
 	}
 	tpg := &api.TargetPortGroup{0, []*api.SCSITargetPort{}}
 	s.Targets = append(s.Targets, target)
@@ -65,6 +67,25 @@ func FindTargetPort(target *api.SCSITarget, relPortID uint16) *api.SCSITargetPor
 	return nil
 }
 
+func AddITNexus(target *api.SCSITarget, itnexus *api.ITNexus) bool {
+	var ret bool = true
+	target.ITNexusMutex.Lock()
+	defer target.ITNexusMutex.Unlock()
+	if _, ok := target.ITNexus[itnexus.ID]; !ok {
+		target.ITNexus[itnexus.ID] = itnexus
+		ret = true
+	} else {
+		ret = false
+	}
+	return ret
+}
+
+func RemoveITNexus(target *api.SCSITarget, itnexus *api.ITNexus) {
+	target.ITNexusMutex.Lock()
+	defer target.ITNexusMutex.Unlock()
+	delete(target.ITNexus, itnexus.ID)
+}
+
 func deviceReserve(cmd *api.SCSICommand) error {
 	var lu *api.SCSILu
 	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
@@ -80,15 +101,15 @@ func deviceReserve(cmd *api.SCSICommand) error {
 		return nil
 	}
 
-	if lu.ReserveID != 0 && lu.ReserveID != cmd.CommandITNID {
-		glog.Errorf("already reserved %d, %d", lu.ReserveID, cmd.CommandITNID)
+	if !uuid.Equal(lu.ReserveID, uuid.Nil) && uuid.Equal(lu.ReserveID, cmd.ITNexusID) {
+		glog.Errorf("already reserved %d, %d", lu.ReserveID, cmd.ITNexusID)
 		return fmt.Errorf("already reserved")
 	}
-	lu.ReserveID = cmd.CommandITNID
+	lu.ReserveID = cmd.ITNexusID
 	return nil
 }
 
-func deviceRelease(tid int, itn, lun uint64, force bool) error {
+func deviceRelease(tid int, itn uuid.UUID, lun uint64, force bool) error {
 	// TODO
 	return nil
 }

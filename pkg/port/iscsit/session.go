@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"github.com/satori/go.uuid"
 )
 
 var (
@@ -149,8 +151,9 @@ type ISCSISession struct {
 	Initiator      string
 	InitiatorAlias string
 	Target         *ISCSITarget
-	Isid           uint64
-	Tsih           uint64
+	ISID           uint64
+	TSIH           uint64
+	ITNexusID      uuid.UUID
 
 	ExpCmdSN uint32
 	// only one connection per session
@@ -215,7 +218,7 @@ type iscsiPdu struct {
 }
 
 // New creates a new session.
-func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection) (*ISCSISession, error) {
+func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection, isid uint64) (*ISCSISession, error) {
 	var (
 		target *ISCSITarget
 		tsih   uint64
@@ -235,7 +238,7 @@ func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection) (*ISCSISessi
 		rand.Seed(int64(time.Now().UTC().Nanosecond()))
 		tsih = uint64(rand.Uint32())
 		for _, s := range target.Sessions {
-			if s.Tsih == tsih {
+			if s.TSIH == tsih {
 				tsih = 0
 				break
 			}
@@ -246,7 +249,8 @@ func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection) (*ISCSISessi
 	}
 
 	sess := &ISCSISession{
-		Tsih:            tsih,
+		TSIH:            tsih,
+		ISID:            isid,
 		Initiator:       conn.initiator,
 		InitiatorAlias:  conn.initiatorAlias,
 		Target:          target,
@@ -258,4 +262,15 @@ func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection) (*ISCSISessi
 	}
 	conn.session = sess
 	return sess, nil
+}
+
+/*
+ * iSCSI I_T nexus identifer = (iSCSI Initiator Name + 'i' + ISID, iSCSI Target Name + 't' + Portal Group Tag)
+ */
+func GeniSCSIITNexusID(sess *ISCSISession) string {
+	strID := fmt.Sprintf("%si0x%12x,%st%d",
+		sess.Initiator, sess.ISID,
+		sess.Target.SCSITarget.Name,
+		sess.Connections[0].tpgt)
+	return strID
 }

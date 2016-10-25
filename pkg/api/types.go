@@ -18,6 +18,9 @@ package api
 import (
 	"bytes"
 	"errors"
+	"sync"
+
+	"github.com/satori/go.uuid"
 )
 
 type SCSICommandType byte
@@ -158,7 +161,7 @@ type SCSICommand struct {
 	OutSDBBuffer    SCSIDataBuffer
 	RelTargetPortID uint16
 	// Command ITN ID
-	CommandITNID  uint64
+	ITNexusID     uuid.UUID
 	Offset        uint64
 	TL            uint32
 	SCB           *bytes.Buffer
@@ -174,12 +177,8 @@ type SCSICommand struct {
 }
 
 type ITNexus struct {
-	ID       uint64        `json:"id"`
-	Ctime    uint64        `json:"ctime"`
-	Commands []SCSICommand `json:"-"`
-	Target   *SCSITarget   `json:"-"`
-	Host     int           `json:"host"`
-	Info     string        `json:"info"`
+	ID  uuid.UUID `json:"id"`  /*UUIDv1*/
+	Tag string    `json:"Tag"` /*For protocal spec identifer*/
 }
 
 type ITNexusLuInfo struct {
@@ -199,15 +198,18 @@ type TargetPortGroup struct {
 }
 
 type SCSITarget struct {
-	Name             string             `json:"name"`
-	TID              int                `json:"tid"`
-	LID              int                `json:"lid"`
-	State            SCSITargetState    `json:"state"`
-	Devices          LUNMap             `json:"-"`
-	LUN0             *SCSILu            `json:"-"`
-	ITNexus          []*ITNexus         `json:"itnexus"`
+	Name    string          `json:"name"`
+	TID     int             `json:"tid"`
+	LID     int             `json:"lid"`
+	State   SCSITargetState `json:"state"`
+	Devices LUNMap          `json:"-"`
+	LUN0    *SCSILu         `json:"-"`
+
 	TargetPortGroups []*TargetPortGroup `json:"tpg"`
 	SCSITargetDriver interface{}        `json:"-"`
+
+	ITNexusMutex sync.Mutex
+	ITNexus      map[uuid.UUID]*ITNexus `json:"itnexus"`
 }
 
 type SCSITargetDriverState int
@@ -336,6 +338,7 @@ type BackingStore interface {
 
 type SCSIDeviceProtocol interface {
 	PerformCommand(opcode int) interface{}
+	PerformServiceAction(opcode int, action uint8) interface{}
 	InitLu(lu *SCSILu) error
 	ConfigLu(lu *SCSILu) error
 	OnlineLu(lu *SCSILu) error
@@ -348,6 +351,14 @@ type ModePage struct {
 	Data     []byte // Rest of mode page info
 }
 
+type SCSIReservation struct {
+	ID        uuid.UUID //Internal Reservation ID
+	Key       uint64
+	ITNexusID uuid.UUID
+	Scope     uint8
+	Type      uint8
+}
+
 type SCSILu struct {
 	Address        uint64
 	Size           uint64
@@ -355,7 +366,7 @@ type SCSILu struct {
 	Path           string
 	BsoFlags       int
 	BlockShift     uint
-	ReserveID      uint64
+	ReserveID      uuid.UUID
 	Attrs          SCSILuPhyAttribute
 	ModePages      []ModePage
 	Storage        BackingStore
