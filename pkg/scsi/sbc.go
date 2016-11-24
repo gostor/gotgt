@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.Readonly = false
 	lu.Attrs.SWP = false
 	lu.Attrs.SenseFormat = false
-	lu.Attrs.VendorID = SCSI_VendorID
-	lu.Attrs.ProductID = SCSI_ProductID
+	lu.Attrs.VendorID = SCSIVendorID
+	lu.Attrs.ProductID = SCSIProductID
 	lu.Attrs.ProductRev = version.SCSI_VERSION
 
 	/*
@@ -216,11 +216,17 @@ func SBCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
-// The FORMAT UNIT command requests that the device server format the medium into application client
-// accessible logical blocks as specified in the number of blocks and block length values received
-// in the last mode parameter block descriptor in a MODE SELECT command (see SPC-3).  In addition,
-// the device server may certify the medium and create control structures for the management of the medium and defects.
-// The degree that the medium is altered by this command is vendor-specific.
+/*
+ * SBCFormatUnit Implements SCSI FORMAT UNIT command
+ * The FORMAT UNIT command requests that the device server format the medium into application client
+ * accessible logical blocks as specified in the number of blocks and block length values received
+ * in the last mode parameter block descriptor in a MODE SELECT command (see SPC-3).  In addition,
+ * the device server may certify the medium and create control structures for the management of the medium and defects.
+ * The degree that the medium is altered by this command is vendor-specific.
+ *
+ * Reference : SBC2r16
+ * 5.2 - FORMAT UNIT
+ */
 func SBCFormatUnit(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		key = ILLEGAL_REQUEST
@@ -266,6 +272,24 @@ func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
+/*
+ * SBCReadWrite Implements SCSI READ(10/12/16), WRITE(10/12/16), WRITE AND VERIFY(10/12/16), WRITE SAME(10/12/16)
+ * The READ command requests that the device server read the specified logical block(s) and transfer them to the data-in buffer.
+ * The WRITE command requests that the device server transfer the specified logical block(s) from the data-out buffer and write them.
+ * The WRITE AND VERIFY command requests that the device server transfer the specified logical block(s) from the data-out buffer,
+ * write them to the medium, and then verify that they are correctly written.
+ *
+ * Reference : SBC2r16
+ * 5.6 - READ (10)
+ * 5.7 - READ (12)
+ * 5.8 - READ (16)
+ * 5.25 - WRITE (10)
+ * 5.26 - WRITE (12)
+ * 5.27 - WRITE (16)
+ * 5.29 - WRITE AND VERIFY (10)
+ * 5.30 - WRITE AND VERIFY (12)
+ * 5.31 - WRITE AND VERIFY (16)
+ */
 func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		key    = ILLEGAL_REQUEST
@@ -414,11 +438,17 @@ func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
-// The READ CAPACITY (10) command requests that the device server transfer 8 bytes of parameter data
-// describing the capacity and medium format of the direct-access block device to the data-in buffer.
-// This command may be processed as if it has a HEAD OF QUEUE task attribute.  If the logical unit supports
-// protection information, the application client should use the READ CAPACITY (16) command instead of
-// the READ CAPACITY (10) command.
+/*
+ * SBCReadCapacity Implements SCSI READ CAPACITY(10) command
+ * The READ CAPACITY (10) command requests that the device server transfer 8 bytes of parameter data
+ * describing the capacity and medium format of the direct-access block device to the data-in buffer.
+ * This command may be processed as if it has a HEAD OF QUEUE task attribute.  If the logical unit supports
+ * protection information, the application client should use the READ CAPACITY (16) command instead of
+ * the READ CAPACITY (10) command.
+ *
+ * Reference : SBC2r16
+ * 5.10 - READ CAPACITY(10)
+ */
 func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		scb    = cmd.SCB.Bytes()
@@ -465,7 +495,12 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
-// The VERIFY (10) command requests that the device server verify the specified logical block(s) on the medium.
+/* SBCVerify Implements SCSI VERIFY(10) command
+ * The VERIFY (10) command requests that the device server verify the specified logical block(s) on the medium.
+ *
+ * Reference : SBC2r16
+ * 5.20 - VERIFY(10)
+ */
 func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		key = ILLEGAL_REQUEST
@@ -495,6 +530,14 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+/*
+ * SBCReadCapacity16 Implements SCSI READ CAPACITY(16) command
+ * The READ CAPACITY (16) command requests that the device server transfer parameter data
+ * describing the capacity and medium format of the direct-access block device to the data-in buffer.
+ *
+ * Reference : SBC2r16
+ * 5.11 - READ CAPACITY(16)
+ */
 func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		data   = &bytes.Buffer{}
@@ -526,9 +569,16 @@ func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
-// The SYNCHRONIZE CACHE (10) command requests that the device server ensure that
-// the specified logical blocks have their most recent data values recorded in
-// non-volatile cache and/or on the medium, based on the SYNC_NV bit.
+/*
+ * SBCSyncCache Implements SCSI SYNCHRONIZE CACHE(10) and SYNCHRONIZE CACHE(16) command
+ * The SYNCHRONIZE CACHE command requests that the device server ensure that
+ * the specified logical blocks have their most recent data values recorded in
+ * non-volatile cache and/or on the medium, based on the SYNC_NV bit.
+ *
+ * Reference : SBC2r16
+ * 5.18 - SYNCHRONIZE CACHE (10)
+ * 5.19 - SYNCHRONIZE CACHE (16)
+ */
 func SBCSyncCache(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }

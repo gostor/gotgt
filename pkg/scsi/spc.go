@@ -27,171 +27,6 @@ import (
 	"github.com/gostor/gotgt/pkg/util"
 )
 
-/*
- * Protocol Identifier Values
- *
- * 0 Fibre Channel (FCP-2)
- * 1 Parallel SCSI (SPI-5)
- * 2 SSA (SSA-S3P)
- * 3 IEEE 1394 (SBP-3)
- * 4 SCSI Remote Direct Memory Access (SRP)
- * 5 iSCSI
- * 6 SAS Serial SCSI Protocol (SAS)
- * 7 Automation/Drive Interface (ADT)
- * 8 AT Attachment Interface (ATA/ATAPI-7)
- */
-
-const (
-	PIV_FCP   = byte(0x00)
-	PIV_SPI   = byte(0x01)
-	PIV_S3P   = byte(0x02)
-	PIV_SBP   = byte(0x03)
-	PIV_SRP   = byte(0x04)
-	PIV_ISCSI = byte(0x05)
-	PIV_SAS   = byte(0x06)
-	PIV_ADT   = byte(0x07)
-	PIV_ATA   = byte(0x08)
-	PIV_USB   = byte(0x09)
-	PIV_SOP   = byte(0x0A)
-)
-
-const (
-	VERSION_NOT_CLAIM         = byte(0x00)
-	VERSION_WITHDRAW_STANDARD = byte(0x03)
-	VERSION_WITHDRAW_SPC2     = byte(0x04)
-	VERSION_WITHDRAW_SPC3     = byte(0x05)
-)
-
-/*
- * Code Set
- *
- *  1 - Designator fild contains binary values
- *  2 - Designator field contains ASCII printable chars
- *  3 - Designaotor field contains UTF-8
- */
-
-const (
-	INQ_CODE_BIN   = byte(1)
-	INQ_CODE_ASCII = byte(2)
-	INQ_CODE_UTF8  = byte(3)
-)
-
-/*
- * Association field
- *
- * 00b - Associated with Logical Unit
- * 01b - Associated with target port
- * 10b - Associated with SCSI Target device
- * 11b - Reserved
- */
-
-const (
-	ASS_LU       = byte(0x00)
-	ASS_TGT_PORT = byte(0x01)
-	ASS_TGT_DEV  = byte(0x02)
-)
-
-/*
- * Table 177 — PERIPHERAL QUALIFIER field
- * Qualifier Description
- * 000b - A peripheral device having the indicated peripheral
- * 	device type is connected to this logical unit. If the device server is
- * 	unable to determine whether or not a peripheral device is connected,
- * 	then the device server also shall use this peripheral qualifier.
- * 	This peripheral qualifier does not indicate that the peripheral
- * 	device connected to the logical unit is ready for access.
- * 001b - A peripheral device having the indicated peripheral device type
- * 	is not connected to this logical unit. However, the device server is capable of
- *	supporting the indicated peripheral device type on this logical unit.
- * 010b - Reserved
- * 011b - The device server is not capable of supporting a
- * 	peripheral device on this logical unit. For this peripheral
- *	qualifier the peripheral device type shall be set to 1Fh. All other peripheral
- * device type values are reserved for this peripheral qualifier.
- * 100b to 111b Vendor specific
- */
-
-const (
-	PQ_DEVICE_CONNECTED   = byte(0x00 << 5)
-	PQ_DEVICE_NOT_CONNECT = byte(0x01 << 5)
-	PQ_RESERVED           = byte(0x02 << 5)
-	PQ_NOT_SUPPORT        = byte(0x03 << 5)
-)
-
-const (
-	INQUIRY_SCCS          = byte(0x80)
-	INQUIRY_AAC           = byte(0x40)
-	INQUIRY_TPGS_NO       = byte(0x00)
-	INQUIRY_TPGS_IMPLICIT = byte(0x10)
-	INQUIRY_TPGS_EXPLICIT = byte(0x20)
-	INQUIRY_TPGS_BOTH     = byte(0x30)
-	INQUIRY_3PC           = byte(0x08)
-	INQUIRY_Reserved      = byte(0x06)
-	INQUIRY_PROTECT       = byte(0x01)
-
-	INQUIRY_NORM_ACA        = byte(0x20)
-	INQUIRY_HISUP           = byte(0x10)
-	INQUIRY_STANDARD_FORMAT = byte(0x02)
-
-	INQUIRY_ENCSERV = byte(0x40)
-	INQUIRY_VS0     = byte(0x20)
-	INQUIRY_MULTIP  = byte(0x10)
-	INQUIRY_ADDR16  = byte(0x01)
-
-	INQUIRY_WBUS16 = byte(0x20)
-	INQUIRY_SYNC   = byte(0x10)
-	INQUIRY_CMDQUE = byte(0x02)
-	INQUIRY_VS1    = byte(0x01)
-
-	INQUIRY_QAS = byte(0x02)
-	INQUIRY_IUS = byte(0x01)
-)
-
-const (
-	ADDRESS_METHOD_PERIPHERAL_DEVICE     = byte(0x00)
-	ADDRESS_METHOD_FLAT_SPACE            = byte(0x01)
-	ADDRESS_METHOD_LOGICAL_UNIT          = byte(0x02)
-	ADDRESS_METHOD_EXTENDED_LOGICAL_UNIT = byte(0x03)
-)
-
-/*
- * Designator type - SPC-4 Reference
- *
- * 0 - Vendor specific - 7.6.3.3
- * 1 - T10 vendor ID - 7.6.3.4
- * 2 - EUI-64 - 7.6.3.5
- * 3 - NAA - 7.6.3.6
- * 4 - Relative Target port identifier - 7.6.3.7
- * 5 - Target Port group - 7.6.3.8
- * 6 - Logical Unit group - 7.6.3.9
- * 7 - MD5 logical unit identifier - 7.6.3.10
- * 8 - SCSI name string - 7.6.3.11
- */
-
-const (
-	DESG_VENDOR = iota
-	DESG_T10
-	DESG_EUI64
-	DESG_NAA
-	DESG_REL_TGT_PORT
-	DESG_TGT_PORT_GRP
-	DESG_LU_GRP
-	DESG_MD5
-	DESG_SCSI
-)
-
-const (
-	NAA_IEEE_EXTD      = byte(0x2)
-	NAA_LOCAL          = byte(0x3)
-	NAA_IEEE_REGD      = byte(0x5)
-	NAA_IEEE_REGD_EXTD = byte(0x6)
-)
-
-const (
-	SCSI_VendorID  = "GOSTOR"
-	SCSI_ProductID = "GOTGT"
-)
-
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
 	return api.SAMStatCheckCondition
@@ -360,6 +195,13 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	return buf, pageLength
 }
 
+/*
+ * SPCInquiry Implements SCSI INQUIRY command
+ * The INQUIRY command requests the device server to return information regarding the logical unit and SCSI target device.
+ *
+ * Reference : SPC4r11
+ * 6.6 - INQUIRY
+ */
 func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		allocationLength uint16
@@ -478,6 +320,14 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+/*
+ * SPCReportLuns Implements SCSI REPORT LUNS command
+ * The REPORT LUNS command requests the device server to return the peripheral Device
+ * logical unit inventory accessible to the I_T nexus.
+ *
+ * Reference : SPC4r11
+ * 6.33 - REPORT LUNS
+ */
 func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		remainLength     uint32
@@ -576,6 +426,13 @@ func SPCStartStop(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
+/*
+ * SPCTestUnit Implements SCSI TEST UNIT READY command
+ * The TEST UNIT READY command requests the device server to indicate whether the logical unit is ready.
+ *
+ * Reference : SPC4r11
+ * 6.47 - TEST UNIT READY
+ */
 func SPCTestUnit(host int, cmd *api.SCSICommand) api.SAMStat {
 	/*
 		if err := deviceReserve(cmd); err != nil {
@@ -603,10 +460,15 @@ func SPCPreventAllowMediaRemoval(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
-// SPCModeSense Implement SCSI op MODE SENSE(6) and MODE SENSE(10)
-//  Reference : SPC4r11
-//  6.11 - MODE SENSE(6)
-//  6.12 - MODE SENSE(10)
+/*
+ * SPCModeSense Implement SCSI MODE SENSE(6) and MODE SENSE(10) command
+ * The MODE SENSE command requests the device server to return the specified medium,
+ * logical unit, or peripheral device parameters.
+ *
+ * Reference : SPC4r11
+ * 6.11 - MODE SENSE(6)
+ * 6.12 - MODE SENSE(10)
+ */
 func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		scb            = cmd.SCB.Bytes()
@@ -637,6 +499,14 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+/*
+ * SPCSendDiagnostics Implements SCSI SEND DIAGNOSTIC command
+ * The SEND DIAGNOSTIC command requests the device server to perform diagnostic operations
+ * on the SCSI target device, on the logical unit, or on both.
+ *
+ * Reference : SPC4r11
+ * 6.42 - SEND DIAGNOSTIC
+ */
 func SPCSendDiagnostics(host int, cmd *api.SCSICommand) api.SAMStat {
 	// we only support SELF-TEST==1
 	if cmd.SCB.Bytes()[1]&0x04 == 0 {
@@ -826,6 +696,13 @@ func SPCPRRegisterAndMove(host int, cmd *api.SCSICommand) api.SAMStat {
 	return api.SAMStatGood
 }
 
+/*
+ * SPCRequestSense Implements SCSI REQUEST SENSE command
+ * The REQUEST SENSE command requests the device server to return parameter data that contains sense data.
+ *
+ * Reference : SPC4r11
+ * 6.39 - REQUEST SENSE
+ */
 func SPCRequestSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		allocationLength uint32
@@ -844,7 +721,7 @@ func SPCRequestSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		actualLength = allocationLength
 	}
 	if cmd.SenseBuffer != nil {
-		data.Write(cmd.SenseBuffer.Bytes()[0:actualLength])
+		data.Write(cmd.SenseBuffer.Bytes()[:actualLength])
 	}
 	cmd.InSDBBuffer.Resid = int32(actualLength)
 	cmd.InSDBBuffer.Buffer = data

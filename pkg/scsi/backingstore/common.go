@@ -205,13 +205,13 @@ verify:
 		}
 	}
 	glog.Infof("io done %s", string(scb))
+	return nil
 sense:
 	if err != nil {
 		glog.Error(err)
 		return err
 	}
-	_ = key
-	_ = asc
 
-	return nil
+	err = fmt.Errorf("sense data encounter, key: %v, asc: %v", key, asc)
+	return err
 }

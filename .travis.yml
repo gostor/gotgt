@@ -43,6 +43,11 @@ script:
    - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Read16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Write16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Read32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.Write32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.WriteVerify10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.WriteVerify16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -f --test=SCSI.WriteVerify32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
    - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/${TARGET}
    - ./utils/iscsi-inq iscsi://127.0.0.1:3260/${TARGET}/0
    - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/${TARGET}/0

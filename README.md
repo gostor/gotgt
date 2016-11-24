@@ -65,8 +65,6 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 	* Page83(Inquiry) (orzhang, p1)
 	* Page0 (Inquiry) (orzhang, p1)
 	* Define Device UUID
-	* More SCSI flags (carmark, p1)
-	* Read8,16 (carmark, p1)
 	* Verify (carmark, p1)
 	* Support `Target Group` and `Target Port` (p3)
 * Refactor (carmark, p1)
