@@ -78,8 +78,8 @@ type iSCSITPGT struct {
 type ISCSITarget struct {
 	api.SCSITarget
 	api.SCSITargetDriverCommon
-	TPGTs        map[uint16]*iSCSITPGT
-	Sessions     []*ISCSISession
+	TPGTs        map[uint16]*iSCSITPGT    /* Key is a TPGT number */
+	Sessions     map[uint16]*ISCSISession /* Key is an TSIH */
 	SessionParam []ISCSISessionParam
 	Alias        string
 	MaxSessions  int
@@ -87,6 +87,23 @@ type ISCSITarget struct {
 	Rdma         int
 	NopInterval  int
 	NopCount     int
+	TSIHCounter  uint16
+}
+
+/*
+ * RFC 3720 iSCSI SSID = ISID , TPGT
+ * ISID is an 6 bytes number, TPGT is an 2 bytes number
+ * We combime ISID and TPGT together to be SSID
+ */
+func MakeSSID(ISID uint64, TPGT uint16) uint64 {
+	SSID := ISID<<16 | uint64(TPGT)
+	return SSID
+}
+
+func ParseSSID(SSID uint64) (uint64, uint16) {
+	TPGT := uint16(uint64(0xFFFF) & SSID)
+	ISID := SSID >> 16
+	return ISID, TPGT
 }
 
 func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
@@ -103,8 +120,10 @@ func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
 
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {
 	return &ISCSITarget{
-		SCSITarget: *target,
-		TPGTs:      make(map[uint16]*iSCSITPGT),
+		SCSITarget:  *target,
+		TPGTs:       make(map[uint16]*iSCSITPGT),
+		Sessions:    make(map[uint16]*ISCSISession),
+		TSIHCounter: 1,
 	}
 }
 

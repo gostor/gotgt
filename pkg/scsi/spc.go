@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/satori/go.uuid"
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -568,9 +569,7 @@ func reportOpcodeOne(cmd *api.SCSICommand, rctd int, opcode byte, rsa uint16, se
 	return nil
 }
 
-// This is useful for the various commands using the SERVICE ACTION format.
-func SPCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
-	// TODO
+func SPCReportSupportedOperationCodes(host int, cmd *api.SCSICommand) api.SAMStat {
 	scb := cmd.SCB.Bytes()
 	reporting_options := scb[2] & 0x07
 	opcode := scb[3]
@@ -609,15 +608,60 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+// This is useful for the various commands using the SERVICE ACTION format.
+func SPCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
+
+	scb := cmd.SCB.Bytes()
+	opcode := int(scb[0])
+	action := uint8(scb[1] & 0x1F)
+	serviceAction := cmd.Device.DeviceProtocol.PerformServiceAction(opcode, action)
+	if serviceAction == nil {
+		cmd.InSDBBuffer.Resid = 0
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+		return api.SAMStatCheckCondition
+	} else {
+		fnop := serviceAction.(*SCSIServiceAction)
+		return fnop.CommandPerformFunc(host, cmd)
+	}
+}
+
 func SPCPRReadKeys(host int, cmd *api.SCSICommand) api.SAMStat {
-	allocationLength := util.GetUnalignedUint32(cmd.SCB.Bytes()[7:9])
+	var (
+		buf                     = &bytes.Buffer{}
+		data             []byte = []byte{}
+		addBuf                  = &bytes.Buffer{}
+		allocationLength uint16
+		additionLength   uint32
+	)
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	PRGeneration, _ := scsiResOp.GetPRGeneration(tgtName, devUUID)
+	resList := scsiResOp.GetReservationList(tgtName, devUUID)
+	length, _ := SCSICDBBufXLength(cmd.SCB.Bytes())
+
+	allocationLength = uint16(length)
 	if allocationLength < 8 {
 		goto sense
 	}
-	if cmd.InSDBBuffer.Length < allocationLength {
-		goto sense
+
+	for _, res := range resList {
+		addBuf.Write(util.MarshalUint64(res.Key))
 	}
-	// TODO
+	additionLength = uint32(len(addBuf.Bytes()))
+
+	buf.Write(util.MarshalUint32(PRGeneration))
+	buf.Write(util.MarshalUint32(additionLength))
+	buf.Write(addBuf.Bytes())
+	data = buf.Bytes()
+	if allocationLength < uint16(additionLength) {
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:allocationLength])
+	} else {
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
+	}
+
+	cmd.InSDBBuffer.Resid = int32(additionLength)
+	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
@@ -625,7 +669,59 @@ sense:
 }
 
 func SPCPRReadReservation(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf                     = &bytes.Buffer{}
+		data             []byte = []byte{}
+		addBuf                  = &bytes.Buffer{}
+		allocationLength uint16
+		additionLength   uint32
+	)
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	PRGeneration, _ := scsiResOp.GetPRGeneration(tgtName, devUUID)
+	curRes := scsiResOp.GetCurrentReservation(tgtName, devUUID)
+
+	length, _ := SCSICDBBufXLength(cmd.SCB.Bytes())
+	allocationLength = uint16(length)
+	if allocationLength < 8 {
+		goto sense
+	}
+
+	if curRes == nil {
+		additionLength = 0
+	} else {
+		addBuf.Write(util.MarshalUint64(curRes.Key))
+		//Obsolete
+		addBuf.WriteByte(0x00)
+		addBuf.WriteByte(0x00)
+		addBuf.WriteByte(0x00)
+		addBuf.WriteByte(0x00)
+		//Reserved
+		addBuf.WriteByte(0x00)
+		//SCOPE and TYPE
+		scope_type := (curRes.Scope << 4) | curRes.Type
+		addBuf.WriteByte(scope_type)
+		additionLength = uint32(0x10)
+	}
+
+	buf.Write(util.MarshalUint32(PRGeneration))
+	buf.Write(util.MarshalUint32(additionLength))
+	buf.Write(addBuf.Bytes())
+	data = buf.Bytes()
+	if allocationLength < uint16(additionLength) {
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:allocationLength])
+	} else {
+		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
+	}
+
+	cmd.InSDBBuffer.Resid = int32(additionLength)
 	return api.SAMStatGood
+
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRReportCapabilities(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -672,28 +768,466 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+func reservationCheck(host int, cmd *api.SCSICommand) bool {
+	var (
+		paramLen uint32
+		buf      []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+	)
+	length, _ := SCSICDBBufXLength(cmd.SCB.Bytes())
+	paramLen = uint32(length)
+	if paramLen != 24 {
+		return false
+	}
+	spec_i_pt := uint8(buf[20] & 0x08)
+	all_tg_pt := uint8(buf[20] & 0x04)
+	aptpl := uint8(buf[20] & 0x01)
+	/* Currently, We don't support these flags */
+	if (spec_i_pt | all_tg_pt | aptpl) > 0 {
+		return false
+	}
+	return true
+}
+
 func SPCPRRegister(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf       []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+		scb       []byte = cmd.SCB.Bytes()
+		ignoreKey bool   = false
+		ok        bool   = false
+		resKey    uint64
+		sAResKey  uint64
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	res := scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+
+	if scb[1] == PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY {
+		ignoreKey = true
+	}
+	ok = reservationCheck(host, cmd)
+	if !ok {
+		goto sense
+	}
+	resKey = util.GetUnalignedUint64(buf[0:8])
+	sAResKey = util.GetUnalignedUint64(buf[8:16])
+
+	if res != nil {
+		if ignoreKey || resKey == res.Key {
+			if sAResKey != 0 {
+				res.Key = sAResKey
+			} else {
+				scsiResOp.DeleteAndRemoveReservation(tgtName, devUUID, res)
+			}
+		} else {
+			return api.SAMStatReservationConflict
+		}
+	} else {
+		if ignoreKey || resKey == 0 {
+			if sAResKey != 0 {
+				newRes := &api.SCSIReservation{
+					ID:        uuid.NewV1(),
+					Key:       sAResKey,
+					ITNexusID: cmd.ITNexusID,
+				}
+				scsiResOp.AddReservation(tgtName, devUUID, newRes)
+			}
+		} else {
+			return api.SAMStatReservationConflict
+		}
+	}
+	scsiResOp.IncPRGeneration(tgtName, devUUID)
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRReserve(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		scb      []byte = cmd.SCB.Bytes()
+		curRes   *api.SCSIReservation
+		res      *api.SCSIReservation
+		ok       bool = false
+		resScope uint8
+		resType  uint8
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+
+	ok = reservationCheck(host, cmd)
+	if !ok {
+		goto sense
+	}
+
+	resScope = scb[2] & 0xf0 >> 4
+	resType = scb[2] & 0x0f
+
+	switch resType {
+	case PR_TYPE_WRITE_EXCLUSIVE_REGONLY,
+		PR_TYPE_EXCLUSIVE_ACCESS_REGONLY,
+		PR_TYPE_WRITE_EXCLUSIVE_ALLREG,
+		PR_TYPE_EXCLUSIVE_ACCESS_ALLREG:
+		break
+	default:
+		goto sense
+	}
+	if resScope != PR_LU_SCOPE {
+		goto sense
+	}
+
+	res = scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+	if res == nil {
+		return api.SAMStatReservationConflict
+	}
+
+	curRes = scsiResOp.GetCurrentReservation(tgtName, devUUID)
+	if curRes != nil {
+		if !scsiResOp.IsCurrentReservation(tgtName, devUUID, res) {
+			return api.SAMStatReservationConflict
+		}
+
+		if curRes.Type != resType ||
+			curRes.Scope != resScope {
+			return api.SAMStatReservationConflict
+		}
+	}
+	res.Scope = resScope
+	res.Type = resType
+	scsiResOp.SetCurrentReservation(tgtName, devUUID, res)
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRRelease(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf      []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+		scb      []byte = cmd.SCB.Bytes()
+		curRes   *api.SCSIReservation
+		res      *api.SCSIReservation
+		resList  []*api.SCSIReservation
+		ok       bool = false
+		resKey   uint64
+		resScope uint8
+		resType  uint8
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+
+	ok = reservationCheck(host, cmd)
+	if !ok {
+		goto sense
+	}
+
+	resScope = scb[2] & 0xf0 >> 4
+	resType = scb[2] & 0x0f
+	resKey = util.GetUnalignedUint64(buf[0:8])
+
+	res = scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+	if res == nil {
+		return api.SAMStatReservationConflict
+	}
+
+	curRes = scsiResOp.GetCurrentReservation(tgtName, devUUID)
+	if curRes == nil {
+		return api.SAMStatGood
+	}
+
+	if !scsiResOp.IsCurrentReservation(tgtName, devUUID, res) {
+		return api.SAMStatGood
+	}
+
+	if resKey != res.Key {
+		return api.SAMStatReservationConflict
+	}
+
+	if curRes.Scope != resScope || curRes.Type != resType {
+		cmd.InSDBBuffer.Resid = 0
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_RELEASE_OF_PERSISTENT_RESERVATION)
+		return api.SAMStatCheckCondition
+	}
+
+	scsiResOp.SetCurrentReservation(tgtName, devUUID, nil)
+	res.Scope = 0
+	res.Type = 0
+
+	switch resType {
+	case PR_TYPE_WRITE_EXCLUSIVE,
+		PR_TYPE_EXCLUSIVE_ACCESS,
+		PR_TYPE_WRITE_EXCLUSIVE_REGONLY,
+		PR_TYPE_EXCLUSIVE_ACCESS_REGONLY,
+		PR_TYPE_WRITE_EXCLUSIVE_ALLREG,
+		PR_TYPE_EXCLUSIVE_ACCESS_ALLREG:
+		break
+	default:
+		goto sense
+	}
+
+	resList = scsiResOp.GetReservationList(tgtName, devUUID)
+	for _, tmpRes := range resList {
+		if tmpRes.ID == res.ID {
+			continue
+		}
+		//TODO send sense code
+	}
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRClear(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf    []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+		curRes *api.SCSIReservation
+		res    *api.SCSIReservation
+		ok     bool = false
+		resKey uint64
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	resList := scsiResOp.GetReservationList(tgtName, devUUID)
+
+	ok = reservationCheck(host, cmd)
+	if !ok {
+		goto sense
+	}
+
+	resKey = util.GetUnalignedUint64(buf[0:8])
+
+	res = scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+
+	if res == nil {
+		return api.SAMStatReservationConflict
+	}
+
+	if res.Key != resKey {
+		return api.SAMStatReservationConflict
+	}
+
+	curRes = scsiResOp.GetCurrentReservation(tgtName, devUUID)
+
+	if curRes != nil {
+		curRes.Scope = 0
+		curRes.Type = 0
+		scsiResOp.SetCurrentReservation(tgtName, devUUID, nil)
+	}
+
+	for _, tmpRes := range resList {
+		if tmpRes != res {
+			//TODO send sense code
+		}
+		scsiResOp.DeleteAndRemoveReservation(tgtName, devUUID, tmpRes)
+	}
+	scsiResOp.IncPRGeneration(tgtName, devUUID)
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRPreempt(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf          []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+		scb          []byte = cmd.SCB.Bytes()
+		ok           bool   = false
+		resKey       uint64
+		sAResKey     uint64
+		res          *api.SCSIReservation
+		curRes       *api.SCSIReservation
+		resReleased  bool
+		removeAllRes bool
+		resScope     uint8
+		resType      uint8
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	resList := scsiResOp.GetReservationList(tgtName, devUUID)
+
+	ok = reservationCheck(host, cmd)
+	if !ok {
+		goto sense
+	}
+	resScope = scb[2] & 0xf0 >> 4
+	resType = scb[2] & 0x0f
+	resKey = util.GetUnalignedUint64(buf[0:8])
+	sAResKey = util.GetUnalignedUint64(buf[8:16])
+
+	res = scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+
+	if res == nil {
+		return api.SAMStatReservationConflict
+	}
+
+	if res.Key != resKey {
+		return api.SAMStatReservationConflict
+	}
+
+	if sAResKey != 0 {
+		ok = scsiResOp.IsKeyExists(tgtName, devUUID, sAResKey)
+		if ok {
+			return api.SAMStatReservationConflict
+		}
+	}
+
+	curRes = scsiResOp.GetCurrentReservation(tgtName, devUUID)
+	if curRes != nil {
+		if curRes.Type == PR_TYPE_WRITE_EXCLUSIVE_ALLREG ||
+			curRes.Type == PR_TYPE_EXCLUSIVE_ACCESS_ALLREG {
+			if sAResKey == 0 {
+				if resType != curRes.Type ||
+					resScope != curRes.Scope {
+					resReleased = true
+				}
+				res.Type = resType
+				res.Scope = resScope
+				scsiResOp.SetCurrentReservation(tgtName, devUUID, res)
+				removeAllRes = true
+			}
+		} else {
+			if curRes.Key == resKey {
+				if resType != curRes.Type ||
+					resScope != curRes.Scope {
+					resReleased = true
+				}
+				res.Type = resType
+				res.Scope = resScope
+				scsiResOp.SetCurrentReservation(tgtName, devUUID, res)
+			} else {
+				if sAResKey == 0 {
+					goto sense
+				}
+			}
+		}
+	}
+
+	for _, tmpRes := range resList {
+		if tmpRes == res {
+			continue
+		}
+
+		if res.Key == resKey || removeAllRes {
+			//TODO send sense code
+			scsiResOp.RemoveReservation(tgtName, devUUID, res)
+		} else {
+			if resReleased {
+				//TODO send sense code
+			}
+		}
+	}
+	scsiResOp.IncPRGeneration(tgtName, devUUID)
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 func SPCPRRegisterAndMove(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		buf                 []byte = cmd.OutSDBBuffer.Buffer.Bytes()
+		scb                 []byte = cmd.SCB.Bytes()
+		resKey              uint64
+		sAResKey            uint64
+		curRes, dstReg, res *api.SCSIReservation
+		paramListLen        uint32
+		unreg               uint8
+		aptpl               uint8
+		tpidDataLen         uint32
+		//idLen        uint32
+	)
+
+	tgtName := cmd.Target.Name
+	devUUID := cmd.Device.UUID
+	scsiResOp := GetSCSIReservationOperator()
+	resList := scsiResOp.GetReservationList(tgtName, devUUID)
+
+	paramListLen = util.GetUnalignedUint32(scb[5:9])
+	if paramListLen < 24 {
+		goto sense
+	}
+	aptpl = buf[17] & 0x01
+	if aptpl != 0 { /* no reported in capabilities */
+		goto sense
+	}
+
+	unreg = buf[17] & 0x02
+
+	resKey = util.GetUnalignedUint64(buf[0:8])
+	sAResKey = util.GetUnalignedUint64(buf[8:16])
+
+	tpidDataLen = util.GetUnalignedUint32(buf[20:25])
+	if tpidDataLen < 24 || (tpidDataLen%4) != 0 {
+		goto sense
+	}
+
+	if (paramListLen - 24) < tpidDataLen {
+		goto sense
+	}
+
+	res = scsiResOp.GetReservation(tgtName, devUUID, cmd.ITNexusID)
+	curRes = scsiResOp.GetCurrentReservation(tgtName, devUUID)
+	if res == nil {
+		if curRes != nil {
+			return api.SAMStatReservationConflict
+		} else {
+			goto sense
+		}
+	}
+
+	if scsiResOp.IsCurrentReservation(tgtName, devUUID, res) {
+		return api.SAMStatGood
+	}
+
+	if res.Key != resKey {
+		return api.SAMStatReservationConflict
+	}
+
+	if sAResKey == 0 {
+		return api.SAMStatReservationConflict
+	}
+
+	for _, dstReg = range resList {
+		if dstReg.Key == sAResKey {
+			goto found
+		}
+	}
+
+	goto sense
+found:
+	//TODO check transportid
+	scsiResOp.SetCurrentReservation(tgtName, devUUID, dstReg)
+	if unreg != 0 {
+		scsiResOp.RemoveReservation(tgtName, devUUID, res)
+	}
+	scsiResOp.IncPRGeneration(tgtName, devUUID)
+	scsiResOp.Save(tgtName, devUUID)
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	return api.SAMStatCheckCondition
 }
 
 /*

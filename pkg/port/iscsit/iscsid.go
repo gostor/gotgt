@@ -30,6 +30,7 @@ import (
 	"github.com/gostor/gotgt/pkg/port"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/satori/go.uuid"
 )
 
 type ISCSITargetService struct {
@@ -165,7 +166,7 @@ func (s *ISCSITargetService) handler(events byte, conn *iscsiConnection) {
 		s.txHandler(conn)
 	}
 	if conn.state == CONN_STATE_CLOSE {
-		glog.Warningf("iscsi connection[%d] closed", conn.cid)
+		glog.Warningf("iscsi connection[%d] closed", conn.CID)
 		conn.close()
 	}
 }
@@ -324,6 +325,7 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 			{"DataSequenceInOrder", "Yes"},
 		}),
 	}
+	conn.CID = cmd.ConnID
 	pairs := util.ParseKVText(cmd.RawData)
 	if initiatorName, ok := pairs["InitiatorName"]; ok {
 		conn.initiator = initiatorName
@@ -376,11 +378,14 @@ func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
 	case SESSION_NORMAL:
 		if conn.session == nil {
 			// create a new session
-			sess, err := s.NewISCSISession(conn)
+			sess, err := s.NewISCSISession(conn, cmd.ISID)
 			if err != nil {
 				glog.Error(err)
 				return err
 			}
+			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(sess)}
+			scsi.AddITNexus(&sess.Target.SCSITarget, itnexus)
+			sess.ITNexusID = itnexus.ID
 			conn.session = sess
 		}
 	case SESSION_DISCOVERY:
@@ -804,7 +809,7 @@ func (s *ISCSITargetService) iscsiExecTask(task *iscsiTask) error {
 				task.scmd.Direction = api.SCSIDataWrite
 			}
 		}
-		task.scmd.CommandITNID = task.conn.session.Tsih
+		task.scmd.ITNexusID = task.conn.session.ITNexusID
 		task.scmd.SCB = bytes.NewBuffer(cmd.CDB)
 		task.scmd.SCBLength = len(cmd.CDB)
 		task.scmd.Lun = cmd.LUN

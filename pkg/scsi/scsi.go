@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/satori/go.uuid"
 )
 
 type SCSITargetService struct {
@@ -70,7 +71,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	}
 	scmd.Target = target
 	for _, it := range target.ITNexus {
-		if it.ID == scmd.CommandITNID {
+		if uuid.Equal(it.ID, scmd.ITNexusID) {
 			itn = it
 			break
 		}
@@ -99,13 +100,13 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 }
 
 type SCSIServiceAction struct {
-	ServiceAction      uint32
+	ServiceAction      uint8
 	CommandPerformFunc api.CommandFunc
 }
 
 type SCSIDeviceOperation struct {
 	CommandPerformFunc api.CommandFunc
-	ServiceAction      *SCSIServiceAction
+	ServiceAction      []*SCSIServiceAction
 	PRConflictBits     uint8
 }
 
@@ -114,7 +115,7 @@ type BaseSCSIDeviceProtocol struct {
 	SCSIDeviceOps []SCSIDeviceOperation
 }
 
-func NewSCSIDeviceOperation(fn api.CommandFunc, sa *SCSIServiceAction, pr uint8) SCSIDeviceOperation {
+func NewSCSIDeviceOperation(fn api.CommandFunc, sa []*SCSIServiceAction, pr uint8) SCSIDeviceOperation {
 	return SCSIDeviceOperation{
 		CommandPerformFunc: fn,
 		ServiceAction:      sa,
