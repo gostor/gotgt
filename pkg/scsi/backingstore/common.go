@@ -164,7 +164,7 @@ write:
 		glog.V(2).Infof("write data at %d for length %d", offset, length)
 		var pg *api.ModePage
 		for _, p := range lu.ModePages {
-			if p.Pcode == 0x08 && p.SubPcode == 0 {
+			if p.PageCode == 0x08 && p.SubPageCode == 0 {
 				pg = &p
 				break
 			}

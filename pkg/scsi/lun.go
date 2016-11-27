@@ -22,10 +22,8 @@ import (
 	"github.com/gostor/gotgt/pkg/api"
 )
 
-/*
- * path format <protocol>:/absolute/file/path
- */
-
+// NewSCSILu: create a new SCSI LU
+// path format <protocol>:/absolute/file/path
 func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error) {
 
 	pathinfo := strings.SplitN(path, ":", 2)
@@ -60,6 +58,7 @@ func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error
 	return lu, nil
 }
 
+// NewLUN0: create a new fake SCSI LU
 func NewLUN0() *api.SCSILu {
 
 	sbc := NewSBCDevice(api.TYPE_UNKNOWN)

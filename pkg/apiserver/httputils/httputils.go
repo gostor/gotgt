@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package httputils contains a bunch of HTTP utility code, some generic
 package httputils
 
 import (
@@ -157,11 +159,11 @@ func WriteJSON(w http.ResponseWriter, code int, v interface{}) error {
 // It panics if the context value does not have version.Version type.
 func VersionFromContext(ctx context.Context) string {
 	if ctx == nil {
-		return version.VERSION
+		return version.Version
 	}
 	val := ctx.Value(APIVersionKey)
 	if val == nil {
-		return version.VERSION
+		return version.Version
 	}
 	return val.(string)
 }

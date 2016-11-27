@@ -14,11 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package version provides the Version information.
-package version
-
-const (
-	Version = "0.1"
-	// SCSI version string MUST be shorter than 4 characters
-	SCSIVersion = "0.1"
-)
+// Package backingstore provides the plugin to connect backend storage.
+package backingstore

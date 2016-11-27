@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package config contains how to get/save config parameters from file.
 package config
 
 import (
