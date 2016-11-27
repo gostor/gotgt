@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,3 +16,33 @@ limitations under the License.
 
 // Target Driver Interface
 package scsi
+
+import (
+	"fmt"
+
+	"github.com/gostor/gotgt/pkg/config"
+)
+
+type SCSITargetDriver interface {
+	Run() error
+	NewTarget(string, *config.Config) error
+}
+
+type TargetDriverFunc func(*SCSITargetService) (SCSITargetDriver, error)
+
+var registeredPlugins = map[string](TargetDriverFunc){}
+
+func RegisterTargetDriver(name string, f TargetDriverFunc) {
+	registeredPlugins[name] = f
+}
+
+func NewTargetDriver(tgtDriver string, s *SCSITargetService) (SCSITargetDriver, error) {
+	if tgtDriver == "" {
+		return nil, nil
+	}
+	targetInitFunc, ok := registeredPlugins[tgtDriver]
+	if !ok {
+		return nil, fmt.Errorf("SCSI target driver %s is not found.", tgtDriver)
+	}
+	return targetInitFunc(s)
+}

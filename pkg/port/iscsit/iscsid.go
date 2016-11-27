@@ -18,7 +18,6 @@ package iscsit
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -27,37 +26,36 @@ import (
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/config"
-	"github.com/gostor/gotgt/pkg/port"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/satori/go.uuid"
 )
 
-type ISCSITargetService struct {
+type ISCSITargetDriver struct {
 	SCSI         *scsi.SCSITargetService
 	Name         string
 	iSCSITargets map[string]*ISCSITarget
 }
 
 func init() {
-	port.RegisterTargetService("iscsi", NewISCSITargetService)
+	scsi.RegisterTargetDriver("iscsi", NewISCSITargetDriver)
 }
 
-func NewISCSITargetService(base *scsi.SCSITargetService) (port.SCSITargetService, error) {
-	return &ISCSITargetService{
+func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, error) {
+	return &ISCSITargetDriver{
 		Name:         "iscsi",
 		iSCSITargets: map[string]*ISCSITarget{},
 		SCSI:         base,
 	}, nil
 }
 
-func (s *ISCSITargetService) NewTarget(tgtName string, configInfo *config.Config) (port.SCSITargetDriver, error) {
+func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config) error {
 	if _, ok := s.iSCSITargets[tgtName]; ok {
-		return nil, fmt.Errorf("target name has been existed")
+		return fmt.Errorf("target name has been existed")
 	}
 	stgt, err := s.SCSI.NewSCSITarget(len(s.iSCSITargets), "iscsi", tgtName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	tgt := newISCSITarget(stgt)
 	s.iSCSITargets[tgtName] = tgt
@@ -73,39 +71,35 @@ func (s *ISCSITargetService) NewTarget(tgtName string, configInfo *config.Config
 			s.AddiSCSIPortal(tgtName, uint16(tpgtNumber), portal.Portal)
 		}
 	}
-	return tgt, nil
+	return nil
 }
 
-func (s *ISCSITargetService) AddiSCSIPortal(tgtName string, tpgt uint16, portal string) error {
+func (s *ISCSITargetDriver) AddiSCSIPortal(tgtName string, tpgt uint16, portal string) error {
 	var (
 		ok       bool
-		errMsg   string
 		target   *ISCSITarget
 		tpgtInfo *iSCSITPGT
 	)
 
 	if target, ok = s.iSCSITargets[tgtName]; !ok {
-		errMsg = fmt.Sprintf("no target %s", tgtName)
-		return errors.New(errMsg)
+		return fmt.Errorf("no target %s", tgtName)
 	}
 
 	if tpgtInfo, ok = target.TPGTs[tpgt]; !ok {
-		errMsg = fmt.Sprintf("no tpgt %d", tpgt)
-		return errors.New(errMsg)
+		return fmt.Errorf("no tpgt %d", tpgt)
 	}
 	tgtPortals := tpgtInfo.Portals
 
 	if _, ok = tgtPortals[portal]; !ok {
 		tgtPortals[portal] = struct{}{}
 	} else {
-		errMsg := fmt.Sprintf("duplicate portal %s,in %s,%d", portal, tgtName, tpgt)
-		return errors.New(errMsg)
+		return fmt.Errorf("duplicate portal %s,in %s,%d", portal, tgtName, tpgt)
 	}
 
 	return nil
 }
 
-func (s *ISCSITargetService) HasPortal(tgtName string, tpgt uint16, portal string) bool {
+func (s *ISCSITargetDriver) HasPortal(tgtName string, tpgt uint16, portal string) bool {
 	var (
 		ok       bool
 		target   *ISCSITarget
@@ -127,7 +121,7 @@ func (s *ISCSITargetService) HasPortal(tgtName string, tpgt uint16, portal strin
 	}
 }
 
-func (s *ISCSITargetService) Run() error {
+func (s *ISCSITargetDriver) Run() error {
 	l, err := net.Listen("tcp", ":3260")
 	if err != nil {
 		glog.Error(err)
@@ -155,7 +149,7 @@ func (s *ISCSITargetService) Run() error {
 	return nil
 }
 
-func (s *ISCSITargetService) handler(events byte, conn *iscsiConnection) {
+func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 
 	if events&DATAIN != 0 {
 		glog.V(1).Infof("rx handler processing...")
@@ -171,7 +165,7 @@ func (s *ISCSITargetService) handler(events byte, conn *iscsiConnection) {
 	}
 }
 
-func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
+func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 	var (
 		hdigest uint = 0
 		ddigest uint = 0
@@ -293,7 +287,7 @@ func (s *ISCSITargetService) rxHandler(conn *iscsiConnection) {
 	}
 }
 
-func (s *ISCSITargetService) iscsiExecLogin(conn *iscsiConnection) error {
+func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	var (
 		target *ISCSITarget
 		cmd    = conn.req
@@ -412,7 +406,7 @@ func iscsiExecLogout(conn *iscsiConnection) error {
 	return nil
 }
 
-func (s *ISCSITargetService) iscsiExecText(conn *iscsiConnection) error {
+func (s *ISCSITargetDriver) iscsiExecText(conn *iscsiConnection) error {
 	var result = []util.KeyValue{}
 	cmd := conn.req
 	keys := util.ParseKVText(cmd.RawData)
@@ -505,7 +499,7 @@ func iscsiExecR2T(conn *iscsiConnection) error {
 	return nil
 }
 
-func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
+func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
 	var (
 		hdigest uint = 0
 		ddigest uint = 0
@@ -592,7 +586,7 @@ func (s *ISCSITargetService) txHandler(conn *iscsiConnection) {
 	glog.Infof("%d", conn.state)
 }
 
-func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err error) {
+func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error) {
 	req := conn.req
 	switch req.OpCode {
 	case OpSCSICmd:
@@ -748,7 +742,7 @@ func (s *ISCSITargetService) scsiCommandHandler(conn *iscsiConnection) (err erro
 	return nil
 }
 
-func (s *ISCSITargetService) iscsiTaskQueueHandler(task *iscsiTask) error {
+func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 	conn := task.conn
 	sess := conn.session
 	cmd := task.cmd
@@ -794,7 +788,7 @@ func (s *ISCSITargetService) iscsiTaskQueueHandler(task *iscsiTask) error {
 	return nil
 }
 
-func (s *ISCSITargetService) iscsiExecTask(task *iscsiTask) error {
+func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 	cmd := task.cmd
 	switch cmd.OpCode {
 	case OpSCSICmd, OpSCSIOut:

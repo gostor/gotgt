@@ -29,7 +29,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/gostor/gotgt/pkg/apiserver"
 	"github.com/gostor/gotgt/pkg/config"
-	"github.com/gostor/gotgt/pkg/port"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
 	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
@@ -70,7 +69,7 @@ Help Options:
 	}
 
 	scsiTarget := scsi.NewSCSITargetService()
-	targetDriver, err := port.NewTargetService(*flDriver, scsiTarget)
+	targetDriver, err := scsi.NewTargetDriver(*flDriver, scsiTarget)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)

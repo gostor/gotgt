@@ -218,7 +218,7 @@ type iscsiPdu struct {
 }
 
 // New creates a new session.
-func (s *ISCSITargetService) NewISCSISession(conn *iscsiConnection, isid uint64) (*ISCSISession, error) {
+func (s *ISCSITargetDriver) NewISCSISession(conn *iscsiConnection, isid uint64) (*ISCSISession, error) {
 	var (
 		target *ISCSITarget
 		tsih   uint64

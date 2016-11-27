@@ -18,7 +18,6 @@ limitations under the License.
 package iscsit
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -114,8 +113,7 @@ func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
 			}
 		}
 	}
-	errMsg := fmt.Sprintf("No TPGT found with IP(%s)", portal)
-	return 0, errors.New(errMsg)
+	return 0, fmt.Errorf("No TPGT found with IP(%s)", portal)
 }
 
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {

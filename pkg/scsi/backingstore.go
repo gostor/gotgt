@@ -30,17 +30,17 @@ type BaseBackingStore struct {
 
 type BackingStoreFunc func() (api.BackingStore, error)
 
-var registeredPlugins = map[string](BackingStoreFunc){}
+var registeredBSPlugins = map[string](BackingStoreFunc){}
 
 func RegisterBackingStore(name string, f BackingStoreFunc) {
-	registeredPlugins[name] = f
+	registeredBSPlugins[name] = f
 }
 
 func NewBackingStore(name string) (api.BackingStore, error) {
 	if name == "" {
 		return nil, nil
 	}
-	f, ok := registeredPlugins[name]
+	f, ok := registeredBSPlugins[name]
 	if !ok {
 		return nil, fmt.Errorf("BackingStore %s is not found.", name)
 	}
