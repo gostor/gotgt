@@ -435,7 +435,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		*/
 	}
 
-	err = dev.Storage.CommandSubmit(cmd)
+	err = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
 		glog.Error(err)
 		key = HARDWARE_ERROR

@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	lun := *(*uint64)(unsafe.Pointer(&scmd.Lun))
 	scmd.Device = target.Devices[lun]
 
-	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d:", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
+	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
 
 	if scmd.Device == nil {
 		scmd.Device = target.LUN0

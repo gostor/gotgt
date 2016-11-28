@@ -335,7 +335,10 @@ type BackingStore interface {
 	Init(dev *SCSILu, Opts string) error
 	Exit(dev *SCSILu) error
 	Size(dev *SCSILu) uint64
-	CommandSubmit(cmd *SCSICommand) error
+	Read(offset, tl int64) ([]byte, error)
+	Write([]byte, int64) error
+	DataSync() error
+	DataAdvise(int64, int64, uint32) error
 }
 
 type SCSIDeviceProtocol interface {

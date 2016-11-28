@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	/* PERSISTENT_RESERVE_IN service action codes */
+	// PERSISTENT_RESERVE_IN service action codes
 	PR_IN_READ_KEYS           byte = 0x00
 	PR_IN_READ_RESERVATION    byte = 0x01
 	PR_IN_REPORT_CAPABILITIES byte = 0x02
 	PR_IN_READ_FULL_STATUS    byte = 0x03
 
-	/* PERSISTENT_RESERVE_OUT service action codes */
+	// PERSISTENT_RESERVE_OUT service action codes
 	PR_OUT_REGISTER                         byte = 0x00
 	PR_OUT_RESERVE                          byte = 0x01
 	PR_OUT_RELEASE                          byte = 0x02
@@ -40,7 +40,7 @@ const (
 	// Persistent Reservation scope
 	PR_LU_SCOPE byte = 0x00
 
-	/* Persistent Reservation Type Mask format */
+	// Persistent Reservation Type Mask format
 	PR_TYPE_WRITE_EXCLUSIVE          byte = 0x01
 	PR_TYPE_EXCLUSIVE_ACCESS         byte = 0x03
 	PR_TYPE_WRITE_EXCLUSIVE_REGONLY  byte = 0x05
@@ -50,14 +50,22 @@ const (
 )
 
 const (
-	CDB_GROUPID_0 = 6  /*  6-byte commands */
-	CDB_GROUPID_1 = 10 /* 10-byte commands */
-	CDB_GROUPID_2 = 10 /* 10-byte commands */
-	CDB_GROUPID_3 = 0  /* reserved */
-	CDB_GROUPID_4 = 16 /* 16-byte commands */
-	CDB_GROUPID_5 = 12 /* 12-byte commands */
-	CDB_GROUPID_6 = 0  /* vendor specific  */
-	CDB_GROUPID_7 = 0  /* vendor specific  */
+	//  6-byte commands
+	CDB_GROUPID_0 = 6
+	// 10-byte commands
+	CDB_GROUPID_1 = 10
+	// 10-byte commands
+	CDB_GROUPID_2 = 10
+	// reserved
+	CDB_GROUPID_3 = 0
+	// 16-byte commands
+	CDB_GROUPID_4 = 16
+	// 12-byte commands
+	CDB_GROUPID_5 = 12
+	// vendor specific
+	CDB_GROUPID_6 = 0
+	// vendor specific
+	CDB_GROUPID_7 = 0
 )
 
 func SCSICDBGroupID(opcode byte) byte {
@@ -106,7 +114,6 @@ const (
  *  2 - Designator field contains ASCII printable chars
  *  3 - Designaotor field contains UTF-8
  */
-
 const (
 	INQ_CODE_BIN   = byte(1)
 	INQ_CODE_ASCII = byte(2)
@@ -121,7 +128,6 @@ const (
  * 10b - Associated with SCSI Target device
  * 11b - Reserved
  */
-
 const (
 	ASS_LU       = byte(0x00)
 	ASS_TGT_PORT = byte(0x01)
@@ -204,7 +210,6 @@ const (
  * 7 - MD5 logical unit identifier - 7.6.3.10
  * 8 - SCSI name string - 7.6.3.11
  */
-
 const (
 	DESG_VENDOR = iota
 	DESG_T10
