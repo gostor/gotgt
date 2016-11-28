@@ -67,18 +67,27 @@ type ISCSICommand struct {
 	ExpCmdSN, MaxCmdSN uint32
 	AHSLen             int
 
-	ConnID    uint16 // Connection ID.
-	CmdSN     uint32 // Command serial number.
-	ExpStatSN uint32 // Expected status serial.
+	// Connection ID.
+	ConnID uint16
+	// Command serial number.
+	CmdSN uint32
+	// Expected status serial.
+	ExpStatSN uint32
 
 	Read, Write bool
 	LUN         [8]uint8
-	Transit     bool   // Transit bit.
-	Cont        bool   // Continue bit.
-	CSG, NSG    Stage  // Current Stage, Next Stage.
-	ISID        uint64 // Initiator part of the SSID.
-	TSIH        uint16 // Target-assigned Session Identifying Handle.
-	StatSN      uint32 // Status serial number.
+	// Transit bit.
+	Transit bool
+	// Continue bit.
+	Cont bool
+	// Current Stage, Next Stage.
+	CSG, NSG Stage
+	// Initiator part of the SSID.
+	ISID uint64
+	// Target-assigned Session Identifying Handle.
+	TSIH uint16
+	// Status serial number.
+	StatSN uint32
 
 	// For login response.
 	StatusClass  uint8

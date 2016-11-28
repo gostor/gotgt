@@ -153,7 +153,6 @@ const (
  * device type values are reserved for this peripheral qualifier.
  * 100b to 111b Vendor specific
  */
-
 const (
 	PQ_DEVICE_CONNECTED   = byte(0x00 << 5)
 	PQ_DEVICE_NOT_CONNECT = byte(0x01 << 5)

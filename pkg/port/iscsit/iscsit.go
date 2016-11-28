@@ -70,15 +70,18 @@ type ISCSIRedirectInfo struct {
 }
 
 type iSCSITPGT struct {
-	TPGT    uint16 /* Mapping to SCSI Reltive Target Port ID */
+	// Mapping to SCSI Reltive Target Port ID
+	TPGT    uint16
 	Portals map[string]struct{}
 }
 
 type ISCSITarget struct {
 	api.SCSITarget
 	api.SCSITargetDriverCommon
-	TPGTs        map[uint16]*iSCSITPGT    /* Key is a TPGT number */
-	Sessions     map[uint16]*ISCSISession /* Key is an TSIH */
+	// TPGT number is the key
+	TPGTs map[uint16]*iSCSITPGT
+	// TSIH is the key
+	Sessions     map[uint16]*ISCSISession
 	SessionParam []ISCSISessionParam
 	Alias        string
 	MaxSessions  int

@@ -192,31 +192,6 @@ func (tq *taskQueue) Pop() interface{} {
 	return item
 }
 
-// The BHS is 48 bytes long.  The Opcode and DataSegmentLength fields
-// appear in all iSCSI PDUs.  In addition, when used, the Initiator Task
-// Tag and Logical Unit Number always appear in the same location in the
-// header.
-type iscsiHeader struct {
-	opcode    uint8
-	flags     uint8 // Final bit
-	rsvd2     [2]uint8
-	hlength   uint8    // AHSs total length
-	dlength   [3]uint8 // Data length
-	lun       [8]uint8
-	itt       uint8 // Initiator Task Tag
-	ttt       uint8 // Target Task Tag
-	statsn    uint8
-	expStatSN uint8
-	maxStatSN uint8
-	other     [12]uint8
-}
-
-type iscsiPdu struct {
-	bhs      iscsiHeader
-	ahsSize  uint
-	dataSize uint
-}
-
 // New creates a new session.
 func (s *ISCSITargetDriver) NewISCSISession(conn *iscsiConnection, isid uint64) (*ISCSISession, error) {
 	var (
