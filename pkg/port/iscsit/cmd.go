@@ -261,6 +261,12 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	for i := 0; i < 3*4; i++ {
 		buf.WriteByte(0x00)
 	}
+	buf.Write(m.RawData)
+	dl := len(m.RawData)
+	for dl%4 > 0 {
+		dl++
+		buf.WriteByte(0x00)
+	}
 
 	return buf.Bytes()
 }
