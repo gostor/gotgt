@@ -55,14 +55,12 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 
 ## Roadmap
 * Auth (p3)
-* Login Process (p2)
+* Login Process (orzhang, p2)
 * ACL (Access control) (p3)
 * SCSI Task Management (p3)
 * iSCSI Task Management (p3)
 * SCSI Command Queue (p2)
-* More SCSI commands
-	* SPC3/SAM2
-	* Support `Target Group` and `Target Port` (p3)
+* More SCSI commands (p2)
 * Refactor (carmark, p1)
 * Command Line (carmark, p1)
 * More Backstore Plugins(such as `ceph` and `raw device`) (orzhang, p1)
