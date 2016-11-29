@@ -67,7 +67,6 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 * Redirect iSCSI Target (orzhang, p2)
 * Homepage (p3)
 * More test cases (p2)
-* Docker image (p3)
 * IDM implementation (p3) https://tools.ietf.org/html/rfc5047
 
 ## Contributing
