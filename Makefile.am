@@ -1,13 +1,10 @@
 export GOPATH:=$(abs_top_srcdir)/Godeps/_workspace:$(GOPATH)
 
-all-local: build-cli build-daemon
+all-local: build
 clean-local:
-	-rm -f citadm citd
+	-rm -f gotgt
 install-exec-local: 
-	$(INSTALL_PROGRAM) citadm $(bindir)
-	$(INSTALL_PROGRAM) citd $(bindir)
+	$(INSTALL_PROGRAM) gotgt $(bindir)
 
-build-cli:
-	go build citadm.go
-build-daemon:
-	go build citd.go
+build:
+	go build gotgt.go

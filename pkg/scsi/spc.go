@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/satori/go.uuid"
@@ -341,7 +341,7 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	// Get Allocation Length
 	allocationLength = util.GetUnalignedUint32(scb.Bytes()[6:10])
 	if allocationLength < 16 {
-		glog.Warningf("goto sense, allocationLength < 16")
+		log.Warn("goto sense, allocationLength < 16")
 		goto sense
 	}
 
@@ -577,24 +577,24 @@ func SPCReportSupportedOperationCodes(host int, cmd *api.SCSICommand) api.SAMSta
 	rsa := util.GetUnalignedUint16(scb[4:])
 	switch reporting_options {
 	case 0x00: /* report all */
-		glog.V(3).Infof("Service Action: report all")
+		log.Debugf("Service Action: report all")
 		err := reportOpcodesAll(cmd, rctd)
 		if err != nil {
-			glog.Error(err)
+			log.Error(err)
 			goto sense
 		}
 	case 0x01: /* report one no service action*/
-		glog.V(3).Infof("Service Action: report one no service action")
+		log.Debugf("Service Action: report one no service action")
 		err := reportOpcodeOne(cmd, rctd, opcode, rsa, false)
 		if err != nil {
-			glog.Error(err)
+			log.Error(err)
 			goto sense
 		}
 	case 0x02: /* report one service action */
-		glog.V(3).Infof("Service Action: report one service action")
+		log.Debugf("Service Action: report one service action")
 		err := reportOpcodeOne(cmd, rctd, opcode, rsa, true)
 		if err != nil {
-			glog.Error(err)
+			log.Error(err)
 			goto sense
 		}
 	default:

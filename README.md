@@ -1,6 +1,6 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-Simple Golang SCSI Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
+Simple Golang SCSI Target framework, this includes only one binary, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
 
 ## Build
 

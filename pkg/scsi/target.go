@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/satori/go.uuid"
 )
@@ -97,12 +97,12 @@ func deviceReserve(cmd *api.SCSICommand) error {
 		}
 	}
 	if lu == nil {
-		glog.Errorf("invalid target and lun %d %s", cmd.Target.TID, lun)
+		log.Errorf("invalid target and lun %d %s", cmd.Target.TID, lun)
 		return nil
 	}
 
 	if !uuid.Equal(lu.ReserveID, uuid.Nil) && uuid.Equal(lu.ReserveID, cmd.ITNexusID) {
-		glog.Errorf("already reserved %d, %d", lu.ReserveID, cmd.ITNexusID)
+		log.Errorf("already reserved %d, %d", lu.ReserveID, cmd.ITNexusID)
 		return fmt.Errorf("already reserved")
 	}
 	lu.ReserveID = cmd.ITNexusID

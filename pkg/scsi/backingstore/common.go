@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
@@ -97,7 +97,7 @@ func (bs *FileBackingStore) Read(offset, tl int64) ([]byte, error) {
 func (bs *FileBackingStore) Write(wbuf []byte, offset int64) error {
 	length, err := bs.file.WriteAt(wbuf, offset)
 	if err != nil {
-		glog.Error(err)
+		log.Error(err)
 		return err
 	}
 	if length != len(wbuf) {

@@ -17,7 +17,7 @@ limitations under the License.
 package scsi
 
 import (
-	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -75,7 +75,7 @@ func InitSCSILUMap(config *config.Config) error {
 	for _, bs := range config.Storages {
 		lu, err := NewSCSILu(bs.DeviceID, bs.Path, bs.Online)
 		if err != nil {
-			return errors.New("Init SCSI LU map error.")
+			return fmt.Errorf("Init SCSI LU map error: %v", err)
 		}
 		globalSCSILUMap.AllDevices[bs.DeviceID] = lu
 	}
@@ -84,7 +84,7 @@ func InitSCSILUMap(config *config.Config) error {
 		for lunstr, deviceID := range tgt.LUNs {
 			lun, err := strconv.ParseUint(lunstr, 10, 64)
 			if err != nil {
-				return errors.New("LU Number must be a number")
+				return fmt.Errorf("LU Number must be a number")
 			}
 			mappingLUN(deviceID, lun, tgtName)
 			// Init SCSISimpleReservationOperator

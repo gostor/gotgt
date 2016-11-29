@@ -23,7 +23,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/satori/go.uuid"
 )
@@ -80,21 +80,21 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	lun := *(*uint64)(unsafe.Pointer(&scmd.Lun))
 	scmd.Device = target.Devices[lun]
 
-	glog.V(2).Infof("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
+	log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
 
 	if scmd.Device == nil {
 		scmd.Device = target.LUN0
 		if lun != 0 {
 			BuildSenseData(scmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
 			scmd.Result = api.SAMStatCheckCondition.Stat
-			glog.Warningf("%v", api.SAMStatCheckCondition.Err)
+			log.Warnf("%v", api.SAMStatCheckCondition.Err)
 			return nil
 		}
 	}
 	result := scmd.Device.PerformCommand(tid, scmd)
 	if result != api.SAMStatGood {
 		scmd.Result = result.Stat
-		glog.Warningf("%v", result.Err)
+		log.Warnf("%v", result.Err)
 	}
 	return nil
 }
@@ -162,7 +162,7 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 			senseBuffer.Truncate(int(inBufLen))
 		}
 	} else {
-		glog.V(2).Infof("cannot calc cbd alloc length. truncate failed")
+		log.Debugf("cannot calc cbd alloc length. truncate failed")
 	}
 	cmd.Result = key
 	cmd.SenseBuffer = senseBuffer

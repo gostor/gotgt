@@ -25,9 +25,11 @@ import (
 	"github.com/docker/go-connections/sockets"
 	"github.com/gostor/gotgt/cmd"
 	"github.com/gostor/gotgt/pkg/api/client"
+	"github.com/gostor/gotgt/pkg/version"
 )
 
 func main() {
+
 	host := "tcp://127.0.0.1:23457"
 	httpClient, err := newHTTPClient(host)
 	if err != nil {
@@ -35,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cli, err := client.NewClient(host, "0.1", httpClient, nil)
+	cli, err := client.NewClient(host, version.Version, httpClient, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)

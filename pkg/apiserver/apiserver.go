@@ -25,9 +25,9 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	systemdActivation "github.com/coreos/go-systemd/activation"
 	"github.com/docker/go-connections/sockets"
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"github.com/gostor/gotgt/pkg/apiserver/httputils"
 	"github.com/gostor/gotgt/pkg/apiserver/router"
@@ -79,7 +79,7 @@ func New(cfg *Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		glog.V(3).Infof("Server created for HTTP on %s (%s)", addr.Proto, addr.Addr)
+		log.Infof("Server created for HTTP on %s (%s)", addr.Proto, addr.Addr)
 		s.servers = append(s.servers, srv...)
 	}
 	return s, nil
@@ -89,7 +89,7 @@ func New(cfg *Config) (*Server, error) {
 func (s *Server) Close() {
 	for _, srv := range s.servers {
 		if err := srv.Close(); err != nil {
-			glog.Error(err)
+			log.Error(err)
 		}
 	}
 }
@@ -104,7 +104,7 @@ func (s *Server) serveAPI() error {
 		srv.srv.Handler = s.routerSwapper
 		go func(srv *HTTPServer) {
 			var err error
-			glog.V(3).Infof("API listen on %s", srv.l.Addr())
+			log.Infof("API listen on %s", srv.l.Addr())
 			if err = srv.Serve(); err != nil && strings.Contains(err.Error(), "use of closed network connection") {
 				err = nil
 			}
@@ -142,7 +142,7 @@ func (s *HTTPServer) Close() error {
 
 func (s *Server) initTCPSocket(addr string) (l net.Listener, err error) {
 	if s.cfg.TLSConfig == nil || s.cfg.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert {
-		glog.Warning("/!\\ DON'T BIND ON ANY IP ADDRESS WITHOUT setting -tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
+		log.Warning("/!\\ DON'T BIND ON ANY IP ADDRESS WITHOUT setting -tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
 	}
 	if l, err = sockets.NewTCPSocket(addr, s.cfg.TLSConfig); err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func (s *Server) initTCPSocket(addr string) (l net.Listener, err error) {
 func (s *Server) makeHTTPHandler(handler httputils.APIFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// log the handler call
-		glog.V(3).Infof("Calling %s %s", r.Method, r.URL.Path)
+		log.Infof("Calling %s %s", r.Method, r.URL.Path)
 
 		// Define the context that we'll pass around to share info
 		// like the docker-request-id.
@@ -172,7 +172,7 @@ func (s *Server) makeHTTPHandler(handler httputils.APIFunc) http.HandlerFunc {
 		}
 
 		if err := handlerFunc(ctx, w, r, vars); err != nil {
-			glog.Errorf("Handler for %s %s returned error: %v", r.Method, r.URL.Path, err)
+			log.Errorf("Handler for %s %s returned error: %v", r.Method, r.URL.Path, err)
 			httputils.WriteError(w, err)
 		}
 	}
@@ -195,12 +195,12 @@ func (s *Server) addRouter(r router.Router) {
 func (s *Server) createMux() *mux.Router {
 	m := mux.NewRouter()
 
-	glog.V(3).Infof("Registering routers")
+	log.Infof("Registering routers")
 	for _, apiRouter := range s.routers {
 		for _, r := range apiRouter.Routes() {
 			f := s.makeHTTPHandler(r.Handler())
 
-			glog.V(3).Infof("Registering %s, %s", r.Method(), r.Path())
+			log.Infof("Registering %s, %s", r.Method(), r.Path())
 			m.Path(versionMatcher + r.Path()).Methods(r.Method()).Handler(f)
 			m.Path(r.Path()).Methods(r.Method()).Handler(f)
 		}
@@ -214,7 +214,7 @@ func (s *Server) createMux() *mux.Router {
 // the API execution.
 func (s *Server) Wait(waitChan chan error) {
 	if err := s.serveAPI(); err != nil {
-		glog.Errorf("ServeAPI error: %v", err)
+		log.Errorf("ServeAPI error: %v", err)
 		waitChan <- err
 		return
 	}
@@ -307,7 +307,7 @@ func listenFD(addr string, tlsConfig *tls.Config) ([]net.Listener, error) {
 			continue
 		}
 		if err := ls.Close(); err != nil {
-			glog.Errorf("Failed to close systemd activated file at fd %d: %v", fdOffset+3, err)
+			log.Errorf("Failed to close systemd activated file at fd %d: %v", fdOffset+3, err)
 		}
 	}
 	return []net.Listener{listeners[fdOffset]}, nil

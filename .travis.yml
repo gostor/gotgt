@@ -27,7 +27,7 @@ script:
    - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=10240
    - mkdir ${HOME}/.gotgt
    - echo '{"storages":[{"deviceID":1000,"path":"file:/var/tmp/disk.img","online":true}],"iscsiportals":[{"id":0,"portal":"127.0.0.1:3260"}],"iscsitargets":{"iqn.2016-09.com.gotgt.gostor:example_tgt_0":{"tpgts":{"1":[0]},"luns":{"0":1000}}}}' > ${HOME}/.gotgt/config.json
-   - ./citd -v 4 1>/dev/null 2>&1 &
+   - ./gotgt daemon --log debug 1>/dev/null 2>&1 &
    # libiscsi test
    - mkdir ${HOME}/libiscsi
    - git clone https://github.com/gostor/libiscsi ${HOME}/libiscsi

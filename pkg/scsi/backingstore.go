@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 )
@@ -133,12 +133,12 @@ write:
 		// hack: wbuf = []byte("hello world!")
 		err = bs.Write(wbuf, int64(offset))
 		if err != nil {
-			glog.Error(err)
+			log.Error(err)
 			key = MEDIUM_ERROR
 			asc = ASC_READ_ERROR
 			goto sense
 		}
-		glog.V(2).Infof("write data at %d for length %d", offset, len(wbuf))
+		log.Debugf("write data at %d for length %d", offset, len(wbuf))
 		var pg *api.ModePage
 		for _, p := range lu.ModePages {
 			if p.PageCode == 0x08 && p.SubPageCode == 0 {
@@ -181,11 +181,11 @@ verify:
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
 		}
 	}
-	glog.Infof("io done %s", string(scb))
+	log.Infof("io done %s", string(scb))
 	return nil
 sense:
 	if err != nil {
-		glog.Error(err)
+		log.Error(err)
 		return err
 	}
 
