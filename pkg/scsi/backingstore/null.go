@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -59,7 +59,18 @@ func (bs *NullBackingStore) Size(dev *api.SCSILu) uint64 {
 	return 0
 }
 
-func (bs *NullBackingStore) CommandSubmit(cmd *api.SCSICommand) error {
-	cmd.Result = api.SAM_STAT_GOOD
+func (bs *NullBackingStore) Read(offset, tl int64) ([]byte, error) {
+	return nil, nil
+}
+
+func (bs *NullBackingStore) Write(wbuf []byte, offset int64) error {
+	return nil
+}
+
+func (bs *NullBackingStore) DataSync() error {
+	return nil
+}
+
+func (bs *NullBackingStore) DataAdvise(offset, length int64, advise uint32) error {
 	return nil
 }

@@ -14,12 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package iscsit
-
-type ISCSIPortal struct {
-	Address string
-	Port    int
-	Tpgt    int
-	Fd      int
-	Af      int
-}
+// Package backingstore provides the plugin to connect backend storage.
+package backingstore

@@ -14,7 +14,7 @@ func newVersionCommand(cli *client.Client) *cobra.Command {
 		Short: "Print the version number of gotgt",
 		Long:  `All software has versions. This is Gotgt 's`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Gotgt %s -- HEAD\n", version.VERSION)
+			fmt.Printf("Gotgt %s -- HEAD\n", version.Version)
 		},
 	}
 	return cmd

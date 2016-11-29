@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package util provides some basic util functions.
 package util
 
 import (
@@ -121,9 +122,9 @@ const (
 	POSIX_FADV_NOREUSE
 )
 
-func Fadvise(file *os.File, off, length int64, advice uint32) error {
+func Fadvise(file *os.File, off, length int64, advise uint32) error {
 	// syscall.SYS_FADVISE64 = 221
-	_, _, err := syscall.Syscall6(221, file.Fd(), uintptr(off), uintptr(length), uintptr(advice), 0, 0)
+	_, _, err := syscall.Syscall6(221, file.Fd(), uintptr(off), uintptr(length), uintptr(advise), 0, 0)
 	if err != 0 {
 		return err
 	}

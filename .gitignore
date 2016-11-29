@@ -42,8 +42,7 @@ _testmain.go
 
 # intellij idea configure
 .idea
-/citadm
-/citd
+/gotgt
 *.out
 examples/*
 *.bak

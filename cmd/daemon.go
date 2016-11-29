@@ -14,11 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// SCSI target daemon
-package main
+package cmd
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -26,54 +24,65 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
+	"github.com/gostor/gotgt/pkg/api/client"
 	"github.com/gostor/gotgt/pkg/apiserver"
 	"github.com/gostor/gotgt/pkg/config"
-	"github.com/gostor/gotgt/pkg/port"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
 	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-
-	flHelp := flag.Bool("help", false, "Print help message for Hyperd daemon")
-	flHost := flag.String("host", "tcp://127.0.0.1:23457", "Host for SCSI target daemon")
-	flDriver := flag.String("driver", "iscsi", "SCSI low level driver")
-	flag.Usage = func() { *flHelp = true }
-	flag.Parse()
-	flag.Set("logtostderr", "true")
-	if *flHelp == true {
-		fmt.Println(`Usage:
-  xxxd [OPTIONS]
-
-Application Options:
-  --host=""                 Host for SCSI target daemon
-  --driver=iscsi            SCSI low level driver
-
-Help Options:
-  -h, --help                Show this help message
-`)
-		return
+func newDaemonCommand(cli *client.Client) *cobra.Command {
+	var host string
+	var driver string
+	var logLevel string
+	var cmd = &cobra.Command{
+		Use:   "daemon",
+		Short: "Setup a daemon",
+		Long:  `Setup the Gotgt's daemon`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return createDaemon(host, driver, logLevel)
+		},
 	}
+	flags := cmd.Flags()
+	flags.StringVar(&logLevel, "log", "info", "Log level of SCSI target daemon")
+	flags.StringVar(&host, "host", "tcp://127.0.0.1:23457", "Host for SCSI target daemon")
+	flags.StringVar(&driver, "driver", "iscsi", "SCSI low level driver")
+	return cmd
+}
 
+func createDaemon(host, driver, level string) error {
+	switch level {
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "warn":
+		log.SetLevel(log.WarnLevel)
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "panic", "fatal", "error":
+		log.SetLevel(log.ErrorLevel)
+	default:
+		return fmt.Errorf("unknown log level: %v", level)
+	}
 	config, err := config.Load(config.ConfigDir())
 	if err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		log.Error(err)
+		return err
 	}
 
 	err = scsi.InitSCSILUMap(config)
 	if err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		log.Error(err)
+		return err
 	}
 
 	scsiTarget := scsi.NewSCSITargetService()
-	targetDriver, err := port.NewTargetService(*flDriver, scsiTarget)
+	targetDriver, err := scsi.NewTargetDriver(driver, scsiTarget)
 	if err != nil {
-		glog.Error(err)
-		os.Exit(1)
+		log.Error(err)
+		return err
 	}
 
 	for tgtname := range config.ISCSITargets {
@@ -89,22 +98,23 @@ Help Options:
 	}
 
 	hosts := []string{}
-	if *flHost != "" {
-		hosts = append(hosts, *flHost)
+	if host != "" {
+		hosts = append(hosts, host)
 	}
 	for _, protoAddr := range hosts {
 		protoAddrParts := strings.SplitN(protoAddr, "://", 2)
 		if len(protoAddrParts) != 2 {
-			glog.Errorf("bad format %s, expected PROTO://ADDR", protoAddr)
-			return
+			err = fmt.Errorf("bad format %s, expected PROTO://ADDR", protoAddr)
+			log.Error(err)
+			return err
 		}
 		serverConfig.Addrs = append(serverConfig.Addrs, apiserver.Addr{Proto: protoAddrParts[0], Addr: protoAddrParts[1]})
 	}
 
 	s, err := apiserver.New(serverConfig)
 	if err != nil {
-		glog.Errorf(err.Error())
-		return
+		log.Error(err)
+		return err
 	}
 	s.InitRouters()
 	// The serve API routine never exits unless an error occurs
@@ -123,10 +133,11 @@ Help Options:
 		// If we have an error here it is unique to API (as daemonErr would have
 		// exited the daemon process above)
 		if errAPI != nil {
-			glog.Warningf("Shutting down due to ServeAPI error: %v", errAPI)
+			log.Warnf("Shutting down due to ServeAPI error: %v", errAPI)
 		}
 	case <-stopAll:
 		break
 	}
 	s.Close()
+	return nil
 }

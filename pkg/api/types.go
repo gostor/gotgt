@@ -177,8 +177,10 @@ type SCSICommand struct {
 }
 
 type ITNexus struct {
-	ID  uuid.UUID `json:"id"`  /*UUIDv1*/
-	Tag string    `json:"Tag"` /*For protocal spec identifer*/
+	// UUID v1
+	ID uuid.UUID `json:"id"`
+	// For protocal spec identifer
+	Tag string `json:"Tag"`
 }
 
 type ITNexusLuInfo struct {
@@ -333,7 +335,10 @@ type BackingStore interface {
 	Init(dev *SCSILu, Opts string) error
 	Exit(dev *SCSILu) error
 	Size(dev *SCSILu) uint64
-	CommandSubmit(cmd *SCSICommand) error
+	Read(offset, tl int64) ([]byte, error)
+	Write([]byte, int64) error
+	DataSync() error
+	DataAdvise(int64, int64, uint32) error
 }
 
 type SCSIDeviceProtocol interface {
@@ -346,13 +351,17 @@ type SCSIDeviceProtocol interface {
 	ExitLu(lu *SCSILu) error
 }
 type ModePage struct {
-	Pcode    uint8  // Page code
-	SubPcode uint8  // Sub page code
-	Data     []byte // Rest of mode page info
+	// Page code
+	PageCode uint8
+	// Sub page code
+	SubPageCode uint8
+	// Rest of mode page info
+	Data []byte
 }
 
 type SCSIReservation struct {
-	ID        uuid.UUID //Internal Reservation ID
+	// Internal reservation ID
+	ID        uuid.UUID
 	Key       uint64
 	ITNexusID uuid.UUID
 	Scope     uint8

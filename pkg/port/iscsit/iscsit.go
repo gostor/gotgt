@@ -18,7 +18,6 @@ limitations under the License.
 package iscsit
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -71,15 +70,18 @@ type ISCSIRedirectInfo struct {
 }
 
 type iSCSITPGT struct {
-	TPGT    uint16 /* Mapping to SCSI Reltive Target Port ID */
+	// Mapping to SCSI Reltive Target Port ID
+	TPGT    uint16
 	Portals map[string]struct{}
 }
 
 type ISCSITarget struct {
 	api.SCSITarget
 	api.SCSITargetDriverCommon
-	TPGTs        map[uint16]*iSCSITPGT    /* Key is a TPGT number */
-	Sessions     map[uint16]*ISCSISession /* Key is an TSIH */
+	// TPGT number is the key
+	TPGTs map[uint16]*iSCSITPGT
+	// TSIH is the key
+	Sessions     map[uint16]*ISCSISession
 	SessionParam []ISCSISessionParam
 	Alias        string
 	MaxSessions  int
@@ -114,8 +116,7 @@ func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
 			}
 		}
 	}
-	errMsg := fmt.Sprintf("No TPGT found with IP(%s)", portal)
-	return 0, errors.New(errMsg)
+	return 0, fmt.Errorf("No TPGT found with IP(%s)", portal)
 }
 
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {

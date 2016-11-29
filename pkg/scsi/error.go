@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import "errors"
 
 type SCSIError struct {
 	errno byte
-	Err   error
+	err   error
 }
 
 var (
@@ -58,7 +58,7 @@ var (
 type SCSISubError uint16
 
 var (
-	/* Key 0: No Sense Errors */
+	// Key 0: No Sense Errors
 	NO_ADDITIONAL_SENSE         SCSISubError = 0x0000
 	ASC_MARK                    SCSISubError = 0x0001
 	ASC_EOM                     SCSISubError = 0x0002
@@ -67,14 +67,14 @@ var (
 	ASC_OP_IN_PROGRESS          SCSISubError = 0x0016
 	ASC_DRIVE_REQUIRES_CLEANING SCSISubError = 0x8282
 
-	/* Key 1: Recovered Errors */
+	// Key 1: Recovered Errors
 	ASC_WRITE_ERROR            SCSISubError = 0x0c00
 	ASC_READ_ERROR             SCSISubError = 0x1100
 	ASC_RECOVERED_WITH_RETRYS  SCSISubError = 0x1701
 	ASC_MEDIA_LOAD_EJECT_ERROR SCSISubError = 0x5300
 	ASC_FAILURE_PREDICTION     SCSISubError = 0x5d00
 
-	/* Key 2: Not ready */
+	// Key 2: Not ready
 	ASC_CAUSE_NOT_REPORTABLE    SCSISubError = 0x0400
 	ASC_BECOMING_READY          SCSISubError = 0x0401
 	ASC_INITIALIZING_REQUIRED   SCSISubError = 0x0402
@@ -83,7 +83,7 @@ var (
 	ASC_MEDIUM_NOT_PRESENT      SCSISubError = 0x3a00
 	ASC_LOGICAL_UNIT_NOT_CONFIG SCSISubError = 0x3e00
 
-	/* Key 3: Medium Errors */
+	// Key 3: Medium Errors
 	ASC_UNRECOVERED_READ           SCSISubError = 0x1100
 	ASC_RECORDED_ENTITY_NOT_FOUND  SCSISubError = 0x1400
 	ASC_UNKNOWN_FORMAT             SCSISubError = 0x3001
@@ -94,7 +94,7 @@ var (
 	ASC_CARTRIDGE_FAULT            SCSISubError = 0x5200
 	ASC_MEDIA_LOAD_OR_EJECT_FAILED SCSISubError = 0x5300
 
-	/* Key 4: Hardware Failure */
+	// Key 4: Hardware Failure
 	ASC_COMPRESSION_CHECK            SCSISubError = 0x0c04
 	ASC_DECOMPRESSION_CRC            SCSISubError = 0x110d
 	ASC_MECHANICAL_POSITIONING_ERROR SCSISubError = 0x1501
@@ -103,7 +103,7 @@ var (
 	ASC_INTERNAL_TGT_FAILURE         SCSISubError = 0x4400
 	ASC_ERASE_FAILURE                SCSISubError = 0x5100
 
-	/* Key 5: Illegal Request */
+	// Key 5: Illegal Request
 	ASC_PARAMETER_LIST_LENGTH_ERR                 SCSISubError = 0x1a00
 	ASC_INVALID_OP_CODE                           SCSISubError = 0x2000
 	ASC_LBA_OUT_OF_RANGE                          SCSISubError = 0x2100
@@ -120,7 +120,7 @@ var (
 	ASC_INSUFFICENT_REGISTRATION_RESOURCES        SCSISubError = 0x5504
 	ASC_BAD_MICROCODE_DETECTED                    SCSISubError = 0x8283
 
-	/* Key 6: Unit Attention */
+	// Key 6: Unit Attention
 	ASC_NOT_READY_TO_TRANSITION         SCSISubError = 0x2800
 	ASC_POWERON_RESET                   SCSISubError = 0x2900
 	ASC_I_T_NEXUS_LOSS_OCCURRED         SCSISubError = 0x2907
@@ -134,10 +134,10 @@ var (
 	ASC_REPORTED_LUNS_DATA_HAS_CHANGED  SCSISubError = 0x3f0e
 	ASC_FAILURE_PREDICTION_FALSE        SCSISubError = 0x5dff
 
-	/* Data Protect */
+	// Data Protect
 	ASC_WRITE_PROTECT              SCSISubError = 0x2700
 	ASC_MEDIUM_OVERWRITE_ATTEMPTED SCSISubError = 0x300c
 
-	/* Miscompare */
+	// Miscompare
 	ASC_MISCOMPARE_DURING_VERIFY_OPERATION SCSISubError = 0x1d00
 )

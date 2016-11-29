@@ -1,6 +1,6 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-Simple Golang SCSI Target framework, this includes two binaries, one is `citadm` which is command line to config and control, the other is `citd` which is a target daemon.
+Simple Golang SCSI Target framework, this includes only one binary, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
 
 ## Build
 
@@ -62,10 +62,6 @@ You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](ht
 * SCSI Command Queue (p2)
 * More SCSI commands
 	* SPC3/SAM2
-	* Page83(Inquiry) (orzhang, p1)
-	* Page0 (Inquiry) (orzhang, p1)
-	* Define Device UUID
-	* Verify (carmark, p1)
 	* Support `Target Group` and `Target Port` (p3)
 * Refactor (carmark, p1)
 * Command Line (carmark, p1)

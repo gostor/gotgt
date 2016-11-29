@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ limitations under the License.
 package scsi
 
 import (
-	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -28,9 +28,11 @@ import (
 type BackendType string
 
 type SCSILUMap struct {
-	mutex         sync.RWMutex
-	AllDevices    api.LUNMap            /* use UUID as the key for all LUs*/
-	TargetsLUNMap map[string]api.LUNMap /* use target name as the key for target's LUN map*/
+	mutex sync.RWMutex
+	// use UUID as the key for all LUs
+	AllDevices api.LUNMap
+	// use target name as the key for target's LUN map
+	TargetsLUNMap map[string]api.LUNMap
 }
 
 var globalSCSILUMap = SCSILUMap{AllDevices: make(api.LUNMap), TargetsLUNMap: make(map[string]api.LUNMap)}
@@ -73,7 +75,7 @@ func InitSCSILUMap(config *config.Config) error {
 	for _, bs := range config.Storages {
 		lu, err := NewSCSILu(bs.DeviceID, bs.Path, bs.Online)
 		if err != nil {
-			return errors.New("Init SCSI LU map error.")
+			return fmt.Errorf("Init SCSI LU map error: %v", err)
 		}
 		globalSCSILUMap.AllDevices[bs.DeviceID] = lu
 	}
@@ -82,10 +84,10 @@ func InitSCSILUMap(config *config.Config) error {
 		for lunstr, deviceID := range tgt.LUNs {
 			lun, err := strconv.ParseUint(lunstr, 10, 64)
 			if err != nil {
-				return errors.New("LU Number must be a number")
+				return fmt.Errorf("LU Number must be a number")
 			}
 			mappingLUN(deviceID, lun, tgtName)
-			//Init SCSISimpleReservationOperator
+			// Init SCSISimpleReservationOperator
 			op := GetSCSIReservationOperator()
 			if simpleOp, ok = op.(*SCSISimpleReservationOperator); ok {
 				simpleOp.InitLUReservation(tgtName, deviceID)

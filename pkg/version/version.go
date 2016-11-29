@@ -1,5 +1,5 @@
 /*
-Copyright 2015 The GoStor Authors All rights reserved.
+Copyright 2016 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,9 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package version provides the Version information.
 package version
 
 const (
-	VERSION      = "0.1"
-	SCSI_VERSION = "0.1" /* SCSI version string MUST be shorter than 4 characters*/
+	Version = "0.1"
+	// SCSI version string MUST be shorter than 4 characters
+	SCSIVersion = "0.1"
 )

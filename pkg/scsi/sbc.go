@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"unsafe"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/gostor/gotgt/pkg/version"
@@ -66,7 +66,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.SenseFormat = false
 	lu.Attrs.VendorID = SCSIVendorID
 	lu.Attrs.ProductID = SCSIProductID
-	lu.Attrs.ProductRev = version.SCSI_VERSION
+	lu.Attrs.ProductRev = version.SCSIVersion
 
 	/*
 		SCSIID for PAGE83 T10 VENDOR IDENTIFICATION field
@@ -331,7 +331,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 	if dev.Attrs.Removable && !dev.Attrs.Online {
 		key = NOT_READY
 		asc = ASC_MEDIUM_NOT_PRESENT
-		glog.Warningf("sense")
+		log.Warnf("sense")
 		goto sense
 	}
 
@@ -343,7 +343,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			if scb[1]&0xe0 != 0 {
 				key = ILLEGAL_REQUEST
 				asc = ASC_INVALID_FIELD_IN_CDB
-				glog.Warningf("sense")
+				log.Warnf("sense")
 				goto sense
 			}
 		*/
@@ -384,7 +384,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			api.PRE_FETCH_10, api.PRE_FETCH_16, api.COMPARE_AND_WRITE:
 			key = DATA_PROTECT
 			asc = ASC_WRITE_PROTECT
-			glog.Warningf("sense")
+			log.Warnf("sense")
 			goto sense
 		}
 	}
@@ -397,14 +397,14 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
 			key = ILLEGAL_REQUEST
 			asc = ASC_LBA_OUT_OF_RANGE
-			glog.Warningf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
+			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
 			goto sense
 		}
 	} else {
 		if lba >= dev.Size>>dev.BlockShift {
 			key = ILLEGAL_REQUEST
 			asc = ASC_LBA_OUT_OF_RANGE
-			glog.Warningf("sense")
+			log.Warnf("sense")
 			goto sense
 		}
 	}
@@ -435,9 +435,9 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		*/
 	}
 
-	err = dev.Storage.CommandSubmit(cmd)
+	err = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
-		glog.Error(err)
+		log.Error(err)
 		key = HARDWARE_ERROR
 		asc = ASC_INTERNAL_TGT_FAILURE
 	} else {
@@ -532,8 +532,13 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		key = ILLEGAL_REQUEST
 		asc = ASC_INVALID_FIELD_IN_CDB
+		dev = cmd.Device
+		scb = cmd.SCB.Bytes()
+		lba uint64
+		tl  uint32
+		err error
 	)
-	if cmd.Device.Attrs.Removable && !cmd.Device.Attrs.Online {
+	if dev.Attrs.Removable && !dev.Attrs.Online {
 		key = NOT_READY
 		asc = ASC_MEDIUM_NOT_PRESENT
 		goto sense
@@ -550,7 +555,36 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 		// no data compare with the media
 		return api.SAMStatGood
 	}
-	// TODO
+	lba = getSCSIReadWriteOffset(scb)
+	tl = getSCSIReadWriteCount(scb)
+
+	// Verify that we are not doing i/o beyond the end-of-lun
+	if tl != 0 {
+		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
+			goto sense
+		}
+	} else {
+		if lba >= dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			log.Warnf("sense")
+			goto sense
+		}
+	}
+
+	cmd.Offset = lba << dev.BlockShift
+	cmd.TL = tl << dev.BlockShift
+	err = bsPerformCommand(dev.Storage, cmd)
+	if err != nil {
+		log.Error(err)
+		key = HARDWARE_ERROR
+		asc = ASC_INTERNAL_TGT_FAILURE
+	} else {
+		return api.SAMStatGood
+	}
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, key, asc)
