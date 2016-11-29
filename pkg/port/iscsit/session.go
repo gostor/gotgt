@@ -18,9 +18,13 @@ package iscsit
 
 import (
 	"fmt"
-	"math/rand"
-	"time"
+	"strconv"
+	"strings"
+	"sync"
 
+	log "github.com/Sirupsen/logrus"
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/satori/go.uuid"
 )
 
@@ -73,8 +77,26 @@ const (
 )
 
 type ISCSISessionParam struct {
+	idx   uint
 	State int
 	Value uint
+}
+type ISCSISessionParamList []ISCSISessionParam
+
+func (list ISCSISessionParamList) Len() int {
+	return len(list)
+}
+
+func (list ISCSISessionParamList) Less(i, j int) bool {
+	if list[i].idx <= list[j].idx {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (list ISCSISessionParamList) Swap(i, j int) {
+	list[i], list[j] = list[j], list[i]
 }
 
 /*
@@ -86,63 +108,130 @@ type ISCSISessionParam struct {
  * to remember the RDSL of the initiator, which defaults to 8k if he has
  * not told us otherwise.
  */
+type KeyConvFunc func(value string) (uint, bool)
+type KeyInConvFunc func(value uint) string
+
 type iscsiSessionKeys struct {
-	name string
-	def  uint
-	min  uint
-	max  uint
+	idx        uint
+	constValue bool
+	def        uint
+	min        uint
+	max        uint
+	conv       KeyConvFunc
+	inConv     KeyInConvFunc
 }
 
-var sessionKeys []iscsiSessionKeys = []iscsiSessionKeys{
+func digestKeyConv(value string) (uint, bool) {
+	var crc uint
+	valueArray := strings.Split(value, ",")
+	if len(valueArray) == 0 {
+		return crc, false
+	}
+	for _, tmpV := range valueArray {
+		if strings.EqualFold(tmpV, "crc32c") {
+			crc |= DIGEST_CRC32C
+		} else if strings.EqualFold(tmpV, "none") {
+			crc |= DIGEST_NONE
+		} else {
+			return crc, false
+		}
+	}
+
+	return crc, true
+}
+
+func digestKeyInConv(value uint) string {
+	str := ""
+	switch value {
+	case DIGEST_NONE:
+		str = "None"
+	case DIGEST_CRC32C:
+		str = "CRC32C"
+	case DIGEST_ALL:
+		str = "None,CRC32C"
+	}
+	return str
+}
+
+func numberKeyConv(value string) (uint, bool) {
+	v, err := strconv.Atoi(value)
+	if err == nil {
+		return uint(v), true
+	}
+	return uint(v), false
+}
+
+func numberKeyInConv(value uint) string {
+	s := strconv.Itoa(int(value))
+	return s
+}
+
+func boolKeyConv(value string) (uint, bool) {
+	if strings.EqualFold(value, "yes") {
+		return 1, true
+	} else if strings.EqualFold(value, "no") {
+		return 0, true
+	}
+	return 0, false
+}
+
+func boolKeyInConv(value uint) string {
+	if value == 0 {
+		return "No"
+	}
+	return "Yes"
+}
+
+var sessionKeys map[string]*iscsiSessionKeys = map[string]*iscsiSessionKeys{
 	// ISCSI_PARAM_MAX_RECV_DLENGTH
-	{"MaxRecvDataSegmentLength", 8192, 512, 16777215},
+	"MaxRecvDataSegmentLength": {ISCSI_PARAM_MAX_RECV_DLENGTH, true, 32768, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_HDRDGST_EN
-	{"HeaderDigest", DIGEST_NONE, DIGEST_NONE, DIGEST_ALL},
+	"HeaderDigest": {ISCSI_PARAM_HDRDGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_DATADGST_EN
-	{"DataDigest", DIGEST_NONE, DIGEST_NONE, DIGEST_ALL},
+	"DataDigest": {ISCSI_PARAM_DATADGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_INITIAL_R2T_EN
-	{"InitialR2T", 1, 0, 1},
+	"InitialR2T": {ISCSI_PARAM_INITIAL_R2T_EN, false, 1, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_MAX_R2T
-	{"MaxOutstandingR2T", 1, 1, 65535},
+	"MaxOutstandingR2T": {ISCSI_PARAM_MAX_R2T, true, 1, 1, 65535, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_IMM_DATA_EN
-	{"ImmediateData", 1, 0, 1},
+	"ImmediateData": {ISCSI_PARAM_IMM_DATA_EN, true, 1, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_FIRST_BURST
-	{"FirstBurstLength", 65536, 512, 16777215},
+	"FirstBurstLength": {ISCSI_PARAM_FIRST_BURST, true, 65536, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_MAX_BURST
-	{"MaxBurstLength", 262144, 512, 16777215},
+	"MaxBurstLength": {ISCSI_PARAM_MAX_BURST, true, 262144, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_PDU_INORDER_EN
-	{"DataPDUInOrder", 1, 0, 1},
+	"DataPDUInOrder": {ISCSI_PARAM_PDU_INORDER_EN, true, 1, 0, 1, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_DATASEQ_INORDER_EN
-	{"DataSequenceInOrder", 1, 0, 1},
+	"DataSequenceInOrder": {ISCSI_PARAM_DATASEQ_INORDER_EN, true, 1, 0, 1, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_ERL
-	{"ErrorRecoveryLevel", 0, 0, 2},
+	"ErrorRecoveryLevel": {ISCSI_PARAM_ERL, true, 0, 0, 2, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_IFMARKER_EN
-	{"IFMarker", 0, 0, 1},
+	"IFMarker": {ISCSI_PARAM_IFMARKER_EN, true, 0, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_OFMARKER_EN
-	{"OFMarker", 0, 0, 1},
+	"OFMarker": {ISCSI_PARAM_OFMARKER_EN, true, 0, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_DEFAULTTIME2WAIT
-	{"DefaultTime2Wait", 2, 0, 3600},
+	"DefaultTime2Wait": {ISCSI_PARAM_DEFAULTTIME2WAIT, true, 2, 0, 3600, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_DEFAULTTIME2RETAIN
-	{"DefaultTime2Retain", 20, 0, 3600},
+	"DefaultTime2Retain": {ISCSI_PARAM_DEFAULTTIME2RETAIN, false, 20, 0, 3600, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_OFMARKINT
-	{"OFMarkInt", 2048, 1, 65535},
+	"OFMarkInt": {ISCSI_PARAM_OFMARKINT, true, 2048, 1, 65535, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_IFMARKINT
-	{"IFMarkInt", 2048, 1, 65535},
+	"IFMarkInt": {ISCSI_PARAM_IFMARKINT, true, 2048, 1, 65535, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_MAXCONNECTIONS
-	{"MaxConnections", 1, 1, 65535},
+	"MaxConnections": {ISCSI_PARAM_MAXCONNECTIONS, true, 1, 1, 65535, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_RDMA_EXTENSIONS
-	{"RDMAExtensions", 0, 0, 1},
+	"RDMAExtensions": {ISCSI_PARAM_RDMA_EXTENSIONS, true, 0, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_TARGET_RDSL
-	{"TargetRecvDataSegmentLength", 8192, 512, 16777215},
+	"TargetRecvDataSegmentLength": {ISCSI_PARAM_TARGET_RDSL, true, 8192, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_INITIATOR_RDSL
-	{"InitiatorRecvDataSegmentLength", 8192, 512, 16777215},
+	"InitiatorRecvDataSegmentLength": {ISCSI_PARAM_INITIATOR_RDSL, true, 8192, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_MAX_OUTST_PDU
-	{"MaxOutstandingUnexpectedPDUs", 0, 2, 4294967295},
+	"MaxOutstandingUnexpectedPDUs": {ISCSI_PARAM_MAX_OUTST_PDU, true, 0, 2, 4294967295, numberKeyConv, numberKeyInConv},
 	// "local" parmas, never sent to the initiator
 	// ISCSI_PARAM_MAX_XMIT_DLENGTH
-	{"MaxXmitDataSegmentLength", 8192, 512, 16777215},
+	"MaxXmitDataSegmentLength": {ISCSI_PARAM_MAX_XMIT_DLENGTH, true, 8192, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_MAX_QUEUE_CMD
-	{"MaxQueueCmd", MAX_QUEUE_CMD_DEF, MAX_QUEUE_CMD_MIN, MAX_QUEUE_CMD_MAX},
+	"MaxQueueCmd": {ISCSI_PARAM_MAX_QUEUE_CMD, true, MAX_QUEUE_CMD_DEF, MAX_QUEUE_CMD_MIN, MAX_QUEUE_CMD_MAX, numberKeyConv, numberKeyInConv},
 }
 
 // Session is an iSCSI session.
@@ -152,18 +241,22 @@ type ISCSISession struct {
 	InitiatorAlias string
 	Target         *ISCSITarget
 	ISID           uint64
-	TSIH           uint64
-	ITNexusID      uuid.UUID
+	TSIH           uint16
+	TPGT           uint16
+	SessionType    int
+	ITNexus        *api.ITNexus
 
 	ExpCmdSN uint32
-	// only one connection per session
-	Connections     []*iscsiConnection
-	Commands        []*ISCSICommand
-	PendingTasks    taskQueue
-	MaxQueueCommand uint32
-	SessionParam    []ISCSISessionParam
-	Info            string
-	Rdma            int
+	MaxCmdSN uint32
+	// currently, this is only one connection per session
+	Connections        map[uint16]*iscsiConnection
+	ConnectionsRWMutex sync.RWMutex
+	Commands           []*ISCSICommand
+	PendingTasks       taskQueue
+	MaxQueueCommand    uint32
+	SessionParam       ISCSISessionParamList
+	Info               string
+	Rdma               int
 }
 
 type taskQueue []*iscsiTask
@@ -192,11 +285,140 @@ func (tq *taskQueue) Pop() interface{} {
 	return item
 }
 
+func (s *ISCSITargetDriver) LookupISCSISession(tgtName string, iniName string, isid uint64, tsih uint16, tpgt uint16) *ISCSISession {
+	var (
+		tgt  *ISCSITarget
+		sess *ISCSISession
+		ok   bool
+	)
+	tgt, ok = s.iSCSITargets[tgtName]
+	if !ok {
+		return nil
+	}
+	tgt.SessionsRWMutex.RLock()
+	defer tgt.SessionsRWMutex.RUnlock()
+	sess, ok = tgt.Sessions[tsih]
+	if !ok {
+		return nil
+	}
+	if (sess.ISID == isid) && (sess.TPGT == tpgt) {
+		return sess
+	}
+	return nil
+}
+
+func (s *ISCSITargetDriver) UnBindISCSISession(sess *ISCSISession) {
+	target := sess.Target
+	target.SessionsRWMutex.Lock()
+	defer target.SessionsRWMutex.Unlock()
+	delete(target.Sessions, sess.TSIH)
+	scsi.RemoveITNexus(&sess.Target.SCSITarget, sess.ITNexus)
+}
+
+func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
+	var (
+		target    *ISCSITarget
+		existSess *ISCSISession
+		existConn *iscsiConnection
+		newSess   *ISCSISession
+		tpgt      uint16
+		err       error
+	)
+
+	//Find TPGT and Target ID
+	if conn.loginParam.sessionType == SESSION_DISCOVERY {
+		conn.tid = 0xffff
+	} else {
+		for _, t := range s.iSCSITargets {
+			if t.SCSITarget.Name == conn.loginParam.target {
+				target = t
+				break
+			}
+		}
+		if target == nil {
+			return fmt.Errorf("No target found with name(%s)", conn.loginParam.target)
+		}
+
+		tpgt, err = target.FindTPG(conn.conn.LocalAddr().String())
+		if err != nil {
+			return err
+		}
+		conn.loginParam.tpgt = tpgt
+		conn.tid = target.TID
+	}
+
+	existSess = s.LookupISCSISession(conn.loginParam.target, conn.loginParam.initiator,
+		conn.loginParam.isid, conn.loginParam.tsih, conn.loginParam.tpgt)
+	if existSess != nil {
+		existConn = existSess.LookupConnection(conn.cid)
+	}
+
+	if conn.loginParam.sessionType == SESSION_DISCOVERY &&
+		conn.loginParam.tsih != ISCSI_UNSPEC_TSIH &&
+		existSess != nil {
+		return fmt.Errorf("initiator err, invalid request")
+	}
+
+	if existSess == nil && conn.loginParam.tsih != 0 &&
+		existSess.TSIH != conn.loginParam.tsih {
+		return fmt.Errorf("initiator err, no session")
+	}
+
+	if existSess == nil {
+		newSess, err = s.NewISCSISession(conn)
+		if err != nil {
+			return err
+		}
+
+		if newSess.SessionType == SESSION_NORMAL {
+			log.Infof("New Session initiator name:%v,target name:%v,ISID:0x%x",
+				conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
+			//register normal session
+			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
+			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
+			newSess.ITNexus = itnexus
+			conn.session = newSess
+
+			newSess.Target.SessionsRWMutex.Lock()
+			newSess.Target.Sessions[newSess.TSIH] = newSess
+			newSess.Target.SessionsRWMutex.Unlock()
+		} else {
+			conn.session = newSess
+		}
+	} else {
+		if conn.loginParam.tsih == ISCSI_UNSPEC_TSIH {
+			log.Infof("Session Reinstatement initiator name:%v,target name:%v,ISID:0x%x",
+				conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
+			newSess, err = s.ReInstatement(existConn.session, conn)
+			if err != nil {
+				return err
+			}
+
+			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
+			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
+			newSess.ITNexus = itnexus
+			conn.session = newSess
+
+			newSess.Target.SessionsRWMutex.Lock()
+			newSess.Target.Sessions[newSess.TSIH] = newSess
+			newSess.Target.SessionsRWMutex.Unlock()
+		} else {
+			if existConn != nil {
+				log.Infof("Connection Reinstatement initiator name:%v,target name:%v,ISID:0x%x,CID:%v",
+					conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
+				existConn.ReInstatement(conn)
+			}
+		}
+	}
+
+	return nil
+}
+
 // New creates a new session.
-func (s *ISCSITargetDriver) NewISCSISession(conn *iscsiConnection, isid uint64) (*ISCSISession, error) {
+func (s *ISCSITargetDriver) NewISCSISession(conn *iscsiConnection) (*ISCSISession, error) {
 	var (
 		target *ISCSITarget
-		tsih   uint64
+		tsih   uint16
 	)
 
 	for _, t := range s.iSCSITargets {
@@ -205,38 +427,52 @@ func (s *ISCSITargetDriver) NewISCSISession(conn *iscsiConnection, isid uint64) 
 			break
 		}
 	}
-	if target == nil {
+	if target == nil && conn.tid != 0xffff {
 		return nil, fmt.Errorf("No target found with tid(%d)", conn.tid)
 	}
 
-	for {
-		rand.Seed(int64(time.Now().UTC().Nanosecond()))
-		tsih = uint64(rand.Uint32())
-		for _, s := range target.Sessions {
-			if s.TSIH == tsih {
-				tsih = 0
-				break
-			}
-		}
-		if tsih != 0 {
-			break
-		}
+	tsih = s.AllocTSIH()
+	if tsih == ISCSI_UNSPEC_TSIH {
+		return nil, fmt.Errorf("TSIH Pool exhausted tid(%d)", conn.tid)
 	}
 
 	sess := &ISCSISession{
 		TSIH:            tsih,
-		ISID:            isid,
-		Initiator:       conn.initiator,
-		InitiatorAlias:  conn.initiatorAlias,
+		ISID:            conn.loginParam.isid,
+		TPGT:            conn.loginParam.tpgt,
+		Initiator:       conn.loginParam.initiator,
+		InitiatorAlias:  conn.loginParam.initiatorAlias,
+		SessionType:     conn.loginParam.sessionType,
 		Target:          target,
-		Connections:     []*iscsiConnection{conn},
-		SessionParam:    conn.sessionParam,
-		MaxQueueCommand: uint32(conn.sessionParam[ISCSI_PARAM_MAX_QUEUE_CMD].Value),
+		Connections:     map[uint16]*iscsiConnection{conn.cid: conn},
+		SessionParam:    conn.loginParam.sessionParam,
+		MaxQueueCommand: uint32(conn.loginParam.sessionParam[ISCSI_PARAM_MAX_QUEUE_CMD].Value),
 		Rdma:            0,
 		ExpCmdSN:        conn.expCmdSN,
 	}
-	conn.session = sess
 	return sess, nil
+}
+
+func (sess *ISCSISession) LookupConnection(cid uint16) *iscsiConnection {
+	sess.ConnectionsRWMutex.RLock()
+	defer sess.ConnectionsRWMutex.RUnlock()
+	conn := sess.Connections[cid]
+	return conn
+}
+
+func (s *ISCSITargetDriver) ReInstatement(existSess *ISCSISession, conn *iscsiConnection) (*ISCSISession, error) {
+	newSess, err := s.NewISCSISession(conn)
+	if err != nil {
+		return nil, err
+	}
+	newSess.ExpCmdSN = existSess.ExpCmdSN
+	newSess.MaxCmdSN = existSess.MaxCmdSN + 1
+	s.UnBindISCSISession(existSess)
+	for _, tmpConn := range existSess.Connections {
+		tmpConn.close()
+	}
+	existSess.Connections = map[uint16]*iscsiConnection{}
+	return newSess, nil
 }
 
 /*
@@ -246,6 +482,6 @@ func GeniSCSIITNexusID(sess *ISCSISession) string {
 	strID := fmt.Sprintf("%si0x%12x,%st%d",
 		sess.Initiator, sess.ISID,
 		sess.Target.SCSITarget.Name,
-		sess.Connections[0].tpgt)
+		sess.TPGT)
 	return strID
 }

@@ -81,7 +81,7 @@ type ISCSICommand struct {
 	// Continue bit.
 	Cont bool
 	// Current Stage, Next Stage.
-	CSG, NSG Stage
+	CSG, NSG iSCSILoginStage
 	// Initiator part of the SSID.
 	ISID uint64
 	// Target-assigned Session Identifying Handle.
@@ -214,8 +214,8 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 			// rfc7143 11.12.2
 			return nil, fmt.Errorf("transit and continue bits set in same login request")
 		}
-		m.CSG = Stage(data[1]&0xc) >> 2
-		m.NSG = Stage(data[1] & 0x3)
+		m.CSG = iSCSILoginStage(data[1]&0xc) >> 2
+		m.NSG = iSCSILoginStage(data[1] & 0x3)
 		m.ISID = uint64(ParseUint(data[8:14]))
 		m.TSIH = uint16(ParseUint(data[14:16]))
 		m.ConnID = uint16(ParseUint(data[20:22]))
@@ -228,8 +228,8 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 			// rfc7143 11.12.2
 			return nil, fmt.Errorf("transit and continue bits set in same login request")
 		}
-		m.CSG = Stage(data[1]&0xc) >> 2
-		m.NSG = Stage(data[1] & 0x3)
+		m.CSG = iSCSILoginStage(data[1]&0xc) >> 2
+		m.NSG = iSCSILoginStage(data[1] & 0x3)
 		m.StatSN = uint32(ParseUint(data[24:28]))
 		m.ExpCmdSN = uint32(ParseUint(data[28:32]))
 		m.MaxCmdSN = uint32(ParseUint(data[32:36]))
@@ -421,6 +421,7 @@ func (m *ISCSICommand) scsiTMFRespBytes() []byte {
 }
 
 func (m *ISCSICommand) r2tRespBytes() []byte {
+
 	// rfc7143 11.8
 	buf := &bytes.Buffer{}
 	buf.WriteByte(byte(OpReady))

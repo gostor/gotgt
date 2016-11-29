@@ -181,7 +181,6 @@ verify:
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
 		}
 	}
-	log.Infof("io done %s", string(scb))
 	return nil
 sense:
 	if err != nil {

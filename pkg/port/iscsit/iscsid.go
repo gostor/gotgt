@@ -22,19 +22,26 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/satori/go.uuid"
+)
+
+const (
+	ISCSI_MAX_TSIH    = uint16(0xffff)
+	ISCSI_UNSPEC_TSIH = uint16(0)
 )
 
 type ISCSITargetDriver struct {
-	SCSI         *scsi.SCSITargetService
-	Name         string
-	iSCSITargets map[string]*ISCSITarget
+	SCSI          *scsi.SCSITargetService
+	Name          string
+	iSCSITargets  map[string]*ISCSITarget
+	TSIHPool      map[uint16]bool
+	TSIHPoolMutex sync.Mutex
 }
 
 func init() {
@@ -46,7 +53,29 @@ func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, 
 		Name:         "iscsi",
 		iSCSITargets: map[string]*ISCSITarget{},
 		SCSI:         base,
+		TSIHPool:     map[uint16]bool{0: true, 65535: true},
 	}, nil
+}
+
+func (s *ISCSITargetDriver) AllocTSIH() uint16 {
+	var i uint16
+	s.TSIHPoolMutex.Lock()
+	for i = uint16(0); i < ISCSI_MAX_TSIH; i++ {
+		exist := s.TSIHPool[i]
+		if !exist {
+			s.TSIHPool[i] = true
+			s.TSIHPoolMutex.Unlock()
+			return i
+		}
+	}
+	s.TSIHPoolMutex.Unlock()
+	return ISCSI_UNSPEC_TSIH
+}
+
+func (s *ISCSITargetDriver) ReleaseTSIH(tsih uint16) {
+	s.TSIHPoolMutex.Lock()
+	delete(s.TSIHPool, tsih)
+	s.TSIHPoolMutex.Unlock()
 }
 
 func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config) error {
@@ -138,7 +167,10 @@ func (s *ISCSITargetDriver) Run() error {
 		}
 		log.Info(conn.LocalAddr().String())
 		log.Info("Accepting ...")
-		iscsiConn := &iscsiConnection{conn: conn}
+
+		iscsiConn := &iscsiConnection{conn: conn,
+			loginParam: &iscsiLoginParam{}}
+
 		iscsiConn.init()
 		iscsiConn.rxIOState = IOSTATE_RX_BHS
 
@@ -160,7 +192,7 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 		s.txHandler(conn)
 	}
 	if conn.state == CONN_STATE_CLOSE {
-		log.Warningf("iscsi connection[%d] closed", conn.CID)
+		log.Warningf("iscsi connection[%d] closed", conn.cid)
 		conn.close()
 	}
 }
@@ -175,8 +207,8 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 	conn.readLock.Lock()
 	defer conn.readLock.Unlock()
 	if conn.state == CONN_STATE_SCSI {
-		hdigest = conn.sessionParam[ISCSI_PARAM_HDRDGST_EN].Value & DIGEST_CRC32C
-		ddigest = conn.sessionParam[ISCSI_PARAM_DATADGST_EN].Value & DIGEST_CRC32C
+		hdigest = conn.loginParam.sessionParam[ISCSI_PARAM_HDRDGST_EN].Value & DIGEST_CRC32C
+		ddigest = conn.loginParam.sessionParam[ISCSI_PARAM_DATADGST_EN].Value & DIGEST_CRC32C
 	}
 	for {
 		switch conn.rxIOState {
@@ -289,101 +321,62 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 
 func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	var (
-		target *ISCSITarget
-		cmd    = conn.req
-		TPGT   uint16
-		err    error
+		cmd      = conn.req
+		err      error
+		negoKeys []util.KeyValue
 	)
-	conn.resp = &ISCSICommand{
-		OpCode:   OpLoginResp,
-		Transit:  true,
-		CSG:      cmd.CSG,
-		NSG:      FullFeaturePhase,
-		StatSN:   cmd.ExpStatSN,
-		TaskTag:  cmd.TaskTag,
-		ExpCmdSN: cmd.CmdSN,
-		MaxCmdSN: cmd.CmdSN,
-		RawData: util.MarshalKVText([]util.KeyValue{
-			{"HeaderDigest", "None"},
-			{"DataDigest", "None"},
-			{"ImmediateData", "Yes"},
-			{"InitialR2T", "Yes"},
-			{"MaxBurstLength", "262144"},
-			{"FirstBurstLength", "65536"},
-			{"DefaultTime2Wait", "2"},
-			{"DefaultTime2Retain", "0"},
-			{"MaxOutstandingR2T", "1"},
-			{"IFMarker", "No"},
-			{"OFMarker", "No"},
-			{"DataPDUInOrder", "Yes"},
-			{"DataSequenceInOrder", "Yes"},
-		}),
-	}
-	conn.CID = cmd.ConnID
-	pairs := util.ParseKVText(cmd.RawData)
-	if initiatorName, ok := pairs["InitiatorName"]; ok {
-		conn.initiator = initiatorName
-	}
-	if alias, ok := pairs["InitiatorAlias"]; ok {
-		conn.initiatorAlias = alias
-	}
-	targetName := pairs["TargetName"]
-	if sessType, ok := pairs["SessionType"]; ok {
-		if sessType == "Normal" {
-			conn.sessionType = SESSION_NORMAL
-		} else {
-			conn.sessionType = SESSION_DISCOVERY
-		}
-	}
-	if conn.sessionType == SESSION_DISCOVERY {
-		conn.tid = 0xffff
-	} else {
-		for _, t := range s.iSCSITargets {
-			if t.SCSITarget.Name == targetName {
-				target = t
-				break
-			}
-		}
-		if target == nil {
-			conn.state = CONN_STATE_EXIT
-			return fmt.Errorf("No target found with name(%s)", targetName)
-		}
 
-		TPGT, err = target.FindTPG(conn.conn.LocalAddr().String())
+	conn.cid = cmd.ConnID
+	conn.loginParam.iniCSG = cmd.CSG
+	conn.loginParam.iniNSG = cmd.NSG
+	conn.loginParam.iniCont = cmd.Cont
+	conn.loginParam.iniTrans = cmd.Transit
+	conn.loginParam.isid = cmd.ISID
+	conn.loginParam.tsih = cmd.TSIH
+	conn.expCmdSN = cmd.CmdSN
+	conn.statSN += 1
+
+	if conn.loginParam.iniCSG == SecurityNegotiation {
+		conn.state = CONN_STATE_EXIT
+		return fmt.Errorf("Doesn't support Auth")
+	}
+
+	pairs := util.ParseKVText(cmd.RawData)
+
+	negoKeys, err = loginKVProcess(conn, pairs)
+	if err != nil {
+		return err
+	}
+	if !conn.loginParam.keyDeclared {
+		negoKeys = loginKVDeclare(conn, negoKeys)
+		conn.loginParam.keyDeclared = true
+	}
+
+	if !conn.loginParam.paramInit {
+		err = s.BindISCSISession(conn)
 		if err != nil {
 			conn.state = CONN_STATE_EXIT
 			return err
 		}
-		conn.tpgt = TPGT
-		conn.tid = target.TID
-
+		conn.loginParam.paramInit = true
 	}
-	switch conn.state {
-	case CONN_STATE_FREE:
-		conn.state = CONN_STATE_SECURITY
-	case CONN_STATE_SECURITY:
+	if conn.loginParam.tgtNSG == FullFeaturePhase &&
+		conn.loginParam.tgtTrans {
+		conn.state = CONN_STATE_LOGIN_FULL
+	} else {
+		conn.state = CONN_STATE_LOGIN
 	}
 
-	conn.state = CONN_STATE_LOGIN_FULL
-	conn.expCmdSN = cmd.CmdSN
-	conn.statSN += 1
-
-	switch conn.sessionType {
-	case SESSION_NORMAL:
-		if conn.session == nil {
-			// create a new session
-			sess, err := s.NewISCSISession(conn, cmd.ISID)
-			if err != nil {
-				log.Error(err)
-				return err
-			}
-			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(sess)}
-			scsi.AddITNexus(&sess.Target.SCSITarget, itnexus)
-			sess.ITNexusID = itnexus.ID
-			conn.session = sess
-		}
-	case SESSION_DISCOVERY:
-
+	conn.resp = &ISCSICommand{
+		OpCode:   OpLoginResp,
+		Transit:  conn.loginParam.tgtTrans,
+		CSG:      cmd.CSG,
+		NSG:      conn.loginParam.tgtNSG,
+		StatSN:   cmd.ExpStatSN,
+		TaskTag:  cmd.TaskTag,
+		ExpCmdSN: cmd.CmdSN,
+		MaxCmdSN: cmd.CmdSN,
+		RawData:  util.MarshalKVText(negoKeys),
 	}
 
 	return nil
@@ -476,14 +469,13 @@ func iscsiExecReject(conn *iscsiConnection) error {
 }
 
 func iscsiExecR2T(conn *iscsiConnection) error {
+	var val uint
 	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
 	conn.txIOState = IOSTATE_TX_BHS
 	conn.statSN += 1
 	task := conn.rxTask
 	resp := &ISCSICommand{
 		OpCode:        OpReady,
-		Immediate:     true,
-		Final:         true,
 		StatSN:        conn.req.ExpStatSN,
 		TaskTag:       conn.req.TaskTag,
 		ExpCmdSN:      conn.session.ExpCmdSN,
@@ -492,7 +484,8 @@ func iscsiExecR2T(conn *iscsiConnection) error {
 		BufferOffset:  uint32(task.offset),
 		DesiredLength: uint32(task.r2tCount),
 	}
-	if val := sessionKeys[ISCSI_PARAM_MAX_BURST].def; task.r2tCount > int(val) {
+
+	if val = conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
 		resp.DesiredLength = uint32(val)
 	}
 	conn.resp = resp
@@ -506,8 +499,8 @@ func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
 		final   bool = false
 	)
 	if conn.state == CONN_STATE_SCSI {
-		hdigest = conn.sessionParam[ISCSI_PARAM_HDRDGST_EN].Value & DIGEST_CRC32C
-		ddigest = conn.sessionParam[ISCSI_PARAM_DATADGST_EN].Value & DIGEST_CRC32C
+		hdigest = conn.loginParam.sessionParam[ISCSI_PARAM_HDRDGST_EN].Value & DIGEST_CRC32C
+		ddigest = conn.loginParam.sessionParam[ISCSI_PARAM_DATADGST_EN].Value & DIGEST_CRC32C
 	}
 	if conn.state == CONN_STATE_SCSI && conn.txTask == nil {
 		err := s.scsiCommandHandler(conn)
@@ -564,10 +557,14 @@ func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
 	case CONN_STATE_SECURITY_LOGIN:
 		conn.state = CONN_STATE_LOGIN
 		log.Debugf("CONN_STATE_LOGIN")
+	case CONN_STATE_LOGIN:
+		log.Debugf("CONN_STATE_LOGIN")
+		conn.rxIOState = IOSTATE_RX_BHS
+		s.handler(DATAIN, conn)
 	case CONN_STATE_SECURITY_FULL, CONN_STATE_LOGIN_FULL:
-		if conn.sessionType == SESSION_NORMAL {
+		if conn.session.SessionType == SESSION_NORMAL {
 			conn.state = CONN_STATE_KERNEL
-			log.Infof("CONN_STATE_KERNEL")
+			log.Debugf("CONN_STATE_KERNEL")
 			conn.state = CONN_STATE_SCSI
 			log.Debugf("CONN_STATE_SCSI")
 		} else {
@@ -583,7 +580,6 @@ func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
 		conn.rxIOState = IOSTATE_RX_BHS
 		s.handler(DATAIN, conn)
 	}
-	log.Infof("%d", conn.state)
 }
 
 func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error) {
@@ -604,15 +600,24 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 			if task.scmd.OutSDBBuffer.Buffer == nil {
 				task.scmd.OutSDBBuffer.Buffer = bytes.NewBuffer([]byte{})
 			}
-			task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
+			if conn.session.SessionParam[ISCSI_PARAM_IMM_DATA_EN].Value == 1 {
+				task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
+			}
 			if task.r2tCount > 0 {
 				// prepare to receive more data
 				conn.session.ExpCmdSN += 1
 				task.state = taskPending
 				conn.session.PendingTasks.Push(task)
 				conn.rxTask = task
-				iscsiExecR2T(conn)
-				break
+				if conn.session.SessionParam[ISCSI_PARAM_INITIAL_R2T_EN].Value == 1 {
+					iscsiExecR2T(conn)
+					break
+				} else {
+					log.Debugf("Not ready to exec the task")
+					conn.rxIOState = IOSTATE_RX_BHS
+					s.handler(DATAIN, conn)
+					return nil
+				}
 			}
 		}
 		task.offset = 0
@@ -691,7 +696,12 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 			return nil
 		} else if task.r2tCount > 0 {
 			// prepare to receive more data
-			task.r2tSN += 1
+			if task.unsolCount == 0 {
+				task.r2tSN += 1
+			} else {
+				task.r2tSN = 0
+				task.unsolCount = 0
+			}
 			conn.rxTask = task
 			iscsiExecR2T(conn)
 			break
@@ -803,12 +813,12 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 				task.scmd.Direction = api.SCSIDataWrite
 			}
 		}
-		task.scmd.ITNexusID = task.conn.session.ITNexusID
+		task.scmd.ITNexusID = task.conn.session.ITNexus.ID
 		task.scmd.SCB = bytes.NewBuffer(cmd.CDB)
 		task.scmd.SCBLength = len(cmd.CDB)
 		task.scmd.Lun = cmd.LUN
 		task.scmd.Tag = uint64(cmd.TaskTag)
-		task.scmd.RelTargetPortID = task.conn.tpgt
+		task.scmd.RelTargetPortID = task.conn.session.TPGT
 		task.state = taskSCSI
 		if task.scmd.OutSDBBuffer.Buffer == nil {
 			task.scmd.OutSDBBuffer.Buffer = bytes.NewBuffer(cmd.RawData)
