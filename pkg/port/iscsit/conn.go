@@ -18,6 +18,7 @@ package iscsit
 
 import (
 	"net"
+	"sort"
 	"sync"
 
 	"github.com/gostor/gotgt/pkg/api"
@@ -48,25 +49,22 @@ var (
 )
 
 type iscsiConnection struct {
-	state          int
-	authState      int
-	session        *ISCSISession
-	sessionType    int
-	sessionParam   []ISCSISessionParam
-	tid            int
-	CID            uint16
-	rxIOState      int
-	txIOState      int
-	refcount       int
-	conn           net.Conn
-	initiator      string
-	initiatorAlias string
-	tpgt           uint16
+	state     int
+	authState int
+	session   *ISCSISession
+	tid       int
+	cid       uint16
+	rxIOState int
+	txIOState int
+	refcount  int
+	conn      net.Conn
 
 	rxBuffer []byte
 	txBuffer []byte
 	req      *ISCSICommand
 	resp     *ISCSICommand
+
+	loginParam *iscsiLoginParam
 
 	// StatSN - the status sequence number on this connection
 	statSN uint32
@@ -81,8 +79,6 @@ type iscsiConnection struct {
 
 	rxTask *iscsiTask
 	txTask *iscsiTask
-
-	authMethod AuthMethod
 
 	readLock *sync.RWMutex
 }
@@ -113,10 +109,14 @@ func (c *iscsiConnection) init() {
 	c.state = CONN_STATE_FREE
 	c.refcount = 1
 	c.readLock = new(sync.RWMutex)
-	c.sessionParam = []ISCSISessionParam{}
+	c.loginParam.sessionParam = []ISCSISessionParam{}
+	c.loginParam.tgtCSG = LoginOperationalNegotiation
+	c.loginParam.tgtNSG = LoginOperationalNegotiation
 	for _, param := range sessionKeys {
-		c.sessionParam = append(c.sessionParam, ISCSISessionParam{Value: param.def})
+		c.loginParam.sessionParam = append(c.loginParam.sessionParam,
+			ISCSISessionParam{idx: param.idx, Value: param.def})
 	}
+	sort.Sort(c.loginParam.sessionParam)
 }
 
 func (c *iscsiConnection) readData(size int) ([]byte, int, error) {
@@ -134,4 +134,9 @@ func (c *iscsiConnection) write(resp []byte) (int, error) {
 
 func (c *iscsiConnection) close() {
 	c.conn.Close()
+}
+
+func (conn *iscsiConnection) ReInstatement(newConn *iscsiConnection) {
+	conn.close()
+	conn.conn = newConn.conn
 }

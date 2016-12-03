@@ -20,6 +20,7 @@ package iscsit
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/gostor/gotgt/pkg/api"
 )
@@ -81,15 +82,14 @@ type ISCSITarget struct {
 	// TPGT number is the key
 	TPGTs map[uint16]*iSCSITPGT
 	// TSIH is the key
-	Sessions     map[uint16]*ISCSISession
-	SessionParam []ISCSISessionParam
-	Alias        string
-	MaxSessions  int
-	RedirectInfo ISCSIRedirectInfo
-	Rdma         int
-	NopInterval  int
-	NopCount     int
-	TSIHCounter  uint16
+	Sessions        map[uint16]*ISCSISession
+	SessionsRWMutex sync.RWMutex
+	Alias           string
+	MaxSessions     int
+	RedirectInfo    ISCSIRedirectInfo
+	Rdma            int
+	NopInterval     int
+	NopCount        int
 }
 
 /*
@@ -121,10 +121,9 @@ func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
 
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {
 	return &ISCSITarget{
-		SCSITarget:  *target,
-		TPGTs:       make(map[uint16]*iSCSITPGT),
-		Sessions:    make(map[uint16]*ISCSISession),
-		TSIHCounter: 1,
+		SCSITarget: *target,
+		TPGTs:      make(map[uint16]*iSCSITPGT),
+		Sessions:   make(map[uint16]*ISCSISession),
 	}
 }
 
