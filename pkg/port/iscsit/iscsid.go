@@ -320,11 +320,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 }
 
 func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
-	var (
-		cmd      = conn.req
-		err      error
-		negoKeys []util.KeyValue
-	)
+	var cmd = conn.req
 
 	conn.cid = cmd.ConnID
 	conn.loginParam.iniCSG = cmd.CSG
@@ -334,22 +330,15 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	conn.loginParam.isid = cmd.ISID
 	conn.loginParam.tsih = cmd.TSIH
 	conn.expCmdSN = cmd.CmdSN
-	conn.statSN += 1
 
 	if conn.loginParam.iniCSG == SecurityNegotiation {
 		conn.state = CONN_STATE_EXIT
 		return fmt.Errorf("Doesn't support Auth")
 	}
 
-	pairs := util.ParseKVText(cmd.RawData)
-
-	negoKeys, err = loginKVProcess(conn, pairs)
+	_, err := conn.processLoginData()
 	if err != nil {
 		return err
-	}
-	if !conn.loginParam.keyDeclared {
-		negoKeys = loginKVDeclare(conn, negoKeys)
-		conn.loginParam.keyDeclared = true
 	}
 
 	if !conn.loginParam.paramInit {
@@ -367,19 +356,7 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 		conn.state = CONN_STATE_LOGIN
 	}
 
-	conn.resp = &ISCSICommand{
-		OpCode:   OpLoginResp,
-		Transit:  conn.loginParam.tgtTrans,
-		CSG:      cmd.CSG,
-		NSG:      conn.loginParam.tgtNSG,
-		StatSN:   cmd.ExpStatSN,
-		TaskTag:  cmd.TaskTag,
-		ExpCmdSN: cmd.CmdSN,
-		MaxCmdSN: cmd.CmdSN,
-		RawData:  util.MarshalKVText(negoKeys),
-	}
-
-	return nil
+	return conn.buildRespPackage(OpLoginResp)
 }
 
 func iscsiExecLogout(conn *iscsiConnection) error {
@@ -394,7 +371,7 @@ func iscsiExecLogout(conn *iscsiConnection) error {
 		conn.resp.MaxCmdSN = cmd.CmdSN
 	} else {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
-		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + 10
+		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
 	}
 	return nil
 }
@@ -434,62 +411,19 @@ func (s *ISCSITargetDriver) iscsiExecText(conn *iscsiConnection) error {
 }
 
 func iscsiExecNoopOut(conn *iscsiConnection) error {
-	cmd := conn.req
-	conn.resp = &ISCSICommand{
-		OpCode:   OpNoopIn,
-		Final:    true,
-		NSG:      FullFeaturePhase,
-		StatSN:   cmd.ExpStatSN,
-		TaskTag:  cmd.TaskTag,
-		ExpCmdSN: cmd.CmdSN + 1,
-		MaxCmdSN: cmd.CmdSN + 10,
-	}
-	return nil
+	return conn.buildRespPackage(OpNoopIn)
 }
 
 func iscsiExecTMFunction(conn *iscsiConnection) error {
-	cmd := conn.req
-	conn.resp = &ISCSICommand{
-		OpCode:   OpSCSITaskResp,
-		Final:    true,
-		NSG:      FullFeaturePhase,
-		StatSN:   cmd.ExpStatSN,
-		TaskTag:  cmd.TaskTag,
-		ExpCmdSN: cmd.CmdSN + 1,
-		MaxCmdSN: cmd.CmdSN + 10,
-	}
-	return nil
+	return conn.buildRespPackage(OpSCSITaskResp)
 }
 
 func iscsiExecReject(conn *iscsiConnection) error {
-	conn.resp = &ISCSICommand{
-		OpCode: OpReject,
-	}
-	return nil
+	return conn.buildRespPackage(OpReject)
 }
 
 func iscsiExecR2T(conn *iscsiConnection) error {
-	var val uint
-	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
-	conn.txIOState = IOSTATE_TX_BHS
-	conn.statSN += 1
-	task := conn.rxTask
-	resp := &ISCSICommand{
-		OpCode:        OpReady,
-		StatSN:        conn.req.ExpStatSN,
-		TaskTag:       conn.req.TaskTag,
-		ExpCmdSN:      conn.session.ExpCmdSN,
-		MaxCmdSN:      conn.session.ExpCmdSN + 10,
-		R2TSN:         task.r2tSN,
-		BufferOffset:  uint32(task.offset),
-		DesiredLength: uint32(task.r2tCount),
-	}
-
-	if val = conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
-		resp.DesiredLength = uint32(val)
-	}
-	conn.resp = resp
-	return nil
+	return conn.buildRespPackage(OpReady)
 }
 
 func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
@@ -625,46 +559,12 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		if err = s.iscsiTaskQueueHandler(task); err != nil {
 			return
 		} else {
+			if scmd.Direction == api.SCSIDataRead {
+				conn.buildRespPackage(OpSCSIIn)
+			} else {
+				conn.buildRespPackage(OpSCSIResp)
+			}
 			conn.rxTask = nil
-			conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
-			conn.txIOState = IOSTATE_TX_BHS
-			conn.statSN += 1
-			resp := &ISCSICommand{
-				Immediate:    true,
-				Final:        true,
-				StatSN:       req.ExpStatSN,
-				TaskTag:      req.TaskTag,
-				ExpCmdSN:     conn.session.ExpCmdSN,
-				MaxCmdSN:     conn.session.ExpCmdSN + 10,
-				Status:       scmd.Result,
-				SCSIResponse: 0x00,
-				HasStatus:    true,
-			}
-			switch scmd.Direction {
-			case api.SCSIDataRead:
-				resp.OpCode = OpSCSIIn
-				if scmd.InSDBBuffer.Buffer != nil {
-					buf := scmd.InSDBBuffer.Buffer.Bytes()
-					resp.RawData = buf
-				} else {
-					resp.RawData = []byte{}
-				}
-			case api.SCSIDataWrite:
-				resp.OpCode = OpSCSIResp
-				if scmd.InSDBBuffer.Buffer != nil {
-					buf := scmd.InSDBBuffer.Buffer.Bytes()
-					resp.RawData = buf
-				} else {
-					resp.RawData = []byte{}
-				}
-			case api.SCSIDataBidirection:
-			case api.SCSIDataNone:
-				resp.OpCode = OpSCSIResp
-			}
-			if scmd.Result != 0 && scmd.SenseBuffer != nil {
-				resp.RawData = scmd.SenseBuffer.Bytes()
-			}
-			conn.resp = resp
 		}
 	case OpSCSITaskReq:
 		// task management function
@@ -712,27 +612,10 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		if err = s.iscsiExecTask(task); err != nil {
 			return
 		} else {
+			conn.buildRespPackage(OpSCSIResp)
 			conn.rxTask = nil
-			conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}, state: taskSCSI}
-			conn.txIOState = IOSTATE_TX_BHS
-			conn.statSN += 1
-			resp := &ISCSICommand{
-				OpCode:       OpSCSIResp,
-				Immediate:    true,
-				Final:        true,
-				StatSN:       req.ExpStatSN,
-				TaskTag:      req.TaskTag,
-				ExpCmdSN:     conn.session.ExpCmdSN,
-				MaxCmdSN:     conn.session.ExpCmdSN + 10,
-				Status:       task.scmd.Result,
-				SCSIResponse: 0x00,
-				HasStatus:    true,
-			}
-			conn.resp = resp
 		}
 	case OpNoopOut:
-		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
-		conn.txIOState = IOSTATE_TX_BHS
 		iscsiExecNoopOut(conn)
 	case OpLogoutReq:
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
