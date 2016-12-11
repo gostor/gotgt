@@ -1,8 +1,22 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-Simple Golang SCSI Target framework, this includes only one binary, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
+gotgt is a simple SCSI Target framework implemented by golang, built for performance and density..
 
-## Build
+### What is SCSI?
+Small Computer System Interface (SCSI) is a set of standards for physically connecting and transferring data between computers and peripheral devices. The SCSI standards define commands, protocols, electrical and optical interfaces. SCSI is most commonly used for hard disk drives and tape drives, but it can connect a wide range of other devices, including scanners and CD drives, although not all controllers can handle all devices.
+
+### What is iSCSI?
+The iSCSI is an acronym for Internet Small Computer Systems Interface, an Internet Protocol (IP)-based storage networking standard for linking data storage facilities. In a nutshell, it provides block-level access to storage devices over a TCP/IP network.
+
+
+
+## Getting started
+Currently, the gotgt is under heavy development, so there is no any release binaries so far, you have to build it from source.
+
+There is a only on binary name `gotgt`, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
+
+### Build
+You will need to make sure that you have Go installed on your system and the `gotgt` repository is cloned in your $GOPATH.
 
 ```
 $ mkdir -p $GOPATH/src/github.com/gostor/
@@ -14,60 +28,22 @@ $ ./configure
 $ make
 ```
 
-## How to use
+### How to use
 
-Currenty, there is lack of commands to operate the target and LU, however you can init the target/LU with config file in `~/.gotgt/config.json`, such as:
+Now, there is lack of commands to operate the target and LU, however you can init the target/LU with config file in `~/.gotgt/config.json`, you may find a example at [here](./examples/config.json).
+Please note, if you want use that exmaple, you have to make sure file `/var/tmp/disk.img` is existed.
 
-```
-{
-  "storages":[
-    {
-      "deviceID":1000,
-      "path":"file:/var/tmp/disk.img",
-      "online":true
-    }
-  ],
-  "iscsiportals":[
-    {
-      "id":0,
-      "portal":"127.0.0.1:3260"
-    }
-  ],
-  "iscsitargets":{
-    "iqn.2016-09.com.gotgt.gostor:02:example-tgt-0":{
-      "tpgts":{
-        "1":[0]
-      },
-      "luns":{
-        "0":1000
-      }
-    }
-  }
-}
-
-```
-
-> Note: make sure file `/var/tmp/disk.img` is existed, you can use `dd` to create it.
-
-## Test
+### Test
 
 You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](https://github.com/gostor/libiscsi).
 
+## Performance
+
+TBD
+
 ## Roadmap
-* Auth (p3)
-* Login Process (orzhang, p2)
-* ACL (Access control) (p3)
-* SCSI Task Management (p3)
-* iSCSI Task Management (p3)
-* SCSI Command Queue (p2)
-* More SCSI commands (p2)
-* Refactor (carmark, p1)
-* Command Line (carmark, p1)
-* More Backstore Plugins(such as `ceph` and `raw device`) (orzhang, p1)
-* Redirect iSCSI Target (orzhang, p2)
-* Homepage (p3)
-* More test cases (p2)
-* IDM implementation (p3) https://tools.ietf.org/html/rfc5047
+
+The current roadmap and milestones for alpha and beta completion are in the github issues on this repository. Please refer to these issues for what is being worked on and completed for the various stages of development.
 
 ## Contributing
 

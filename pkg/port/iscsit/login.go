@@ -54,7 +54,7 @@ func loginKVDeclare(conn *iscsiConnection, negoKV []util.KeyValue) []util.KeyVal
 	return negoKV
 
 }
-func loginKVProcess(conn *iscsiConnection, loginKV map[string]string) ([]util.KeyValue, error) {
+func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 	var (
 		uintVal    uint
 		ok         bool
@@ -62,6 +62,7 @@ func loginKVProcess(conn *iscsiConnection, loginKV map[string]string) ([]util.Ke
 		negoKV     []util.KeyValue
 		kvChanges  int
 	)
+	loginKV := util.ParseKVText(conn.req.RawData)
 
 	for key, val := range loginKV {
 		// The MaxRecvDataSegmentLength of initiator

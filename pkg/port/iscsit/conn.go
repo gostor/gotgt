@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/util"
 )
 
 const (
@@ -139,4 +140,71 @@ func (c *iscsiConnection) close() {
 func (conn *iscsiConnection) ReInstatement(newConn *iscsiConnection) {
 	conn.close()
 	conn.conn = newConn.conn
+}
+
+func (conn *iscsiConnection) buildRespPackage(oc OpCode) error {
+	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
+	conn.txIOState = IOSTATE_TX_BHS
+	conn.statSN += 1
+	task := conn.rxTask
+	resp := &ISCSICommand{
+		StatSN:   conn.req.ExpStatSN,
+		TaskTag:  conn.req.TaskTag,
+		ExpCmdSN: conn.session.ExpCmdSN,
+		MaxCmdSN: conn.session.ExpCmdSN + conn.session.MaxQueueCommand,
+	}
+	switch oc {
+	case OpReady:
+		resp.OpCode = OpReady
+		resp.R2TSN = task.r2tSN
+		resp.BufferOffset = uint32(task.offset)
+		resp.DesiredLength = uint32(task.r2tCount)
+		if val := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
+			resp.DesiredLength = uint32(val)
+		}
+	case OpSCSIIn, OpSCSIResp:
+		resp.OpCode = oc
+		resp.Immediate = true
+		resp.Final = true
+		resp.SCSIResponse = 0x00
+		resp.HasStatus = true
+		scmd := task.scmd
+		resp.Status = scmd.Result
+		if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
+			if scmd.InSDBBuffer.Buffer != nil {
+				buf := scmd.InSDBBuffer.Buffer.Bytes()
+				resp.RawData = buf
+			} else {
+				resp.RawData = []byte{}
+			}
+		}
+		if scmd.Result != 0 && scmd.SenseBuffer != nil {
+			resp.RawData = scmd.SenseBuffer.Bytes()
+		}
+	case OpNoopIn, OpSCSITaskResp, OpReject:
+		resp.OpCode = oc
+		resp.Final = true
+		resp.NSG = FullFeaturePhase
+		resp.ExpCmdSN = conn.req.CmdSN + 1
+	case OpLoginResp:
+		resp.OpCode = OpLoginResp
+		resp.Transit = conn.loginParam.tgtTrans
+		resp.CSG = conn.req.CSG
+		resp.NSG = conn.loginParam.tgtNSG
+		resp.ExpCmdSN = conn.req.CmdSN
+		resp.MaxCmdSN = conn.req.CmdSN
+		negoKeys, err := conn.processLoginData()
+		if err != nil {
+			return err
+		}
+		if !conn.loginParam.keyDeclared {
+			negoKeys = loginKVDeclare(conn, negoKeys)
+			conn.loginParam.keyDeclared = true
+		}
+		resp.RawData = util.MarshalKVText(negoKeys)
+		conn.txTask = nil
+	}
+
+	conn.resp = resp
+	return nil
 }

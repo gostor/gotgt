@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime"
 	"strings"
 	"syscall"
 
@@ -89,7 +88,8 @@ func createDaemon(host, driver, level string) error {
 		targetDriver.NewTarget(tgtname, config)
 	}
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	// comment this to avoid concurrent issue
+	// runtime.GOMAXPROCS(runtime.NumCPU())
 	// run a service
 	go targetDriver.Run()
 

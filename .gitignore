@@ -44,5 +44,4 @@ _testmain.go
 .idea
 /gotgt
 *.out
-examples/*
 *.bak
