@@ -1,6 +1,6 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-gotgt is a simple SCSI Target framework implemented by golang, built for performance and density..
+gotgt is a simple SCSI Target framework implemented in golang, built for performance and density..
 
 ### What is SCSI?
 Small Computer System Interface (SCSI) is a set of standards for physically connecting and transferring data between computers and peripheral devices. The SCSI standards define commands, protocols, electrical and optical interfaces. SCSI is most commonly used for hard disk drives and tape drives, but it can connect a wide range of other devices, including scanners and CD drives, although not all controllers can handle all devices.
