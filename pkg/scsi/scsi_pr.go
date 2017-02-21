@@ -215,6 +215,7 @@ func (op *SCSISimpleReservationOperator) DeleteAndRemoveReservation(tgtName stri
 		resArray[i] = resArray[len(resArray)-1]
 		resArray[len(resArray)-1] = nil
 		resArray = resArray[:len(resArray)-1]
+		LURes.Reservations = resArray
 	}
 
 	if curRes == nil {
@@ -255,11 +256,19 @@ func (op *SCSISimpleReservationOperator) DeleteAndRemoveReservation(tgtName stri
 
 func (op *SCSISimpleReservationOperator) RemoveReservation(tgtName string, devUUID uint64, res *api.SCSIReservation) {
 	var (
-		i      int = -1
-		tmpRes *api.SCSIReservation
+		LURes     *SCSILUReservation
+		targetRes SCSILUReservationMap
+		tmpRes    *api.SCSIReservation
+		i         int = -1
+		ok        bool
 	)
-
-	resArray := op.GetReservationList(tgtName, devUUID)
+	if targetRes, ok = op.targetReservations[tgtName]; !ok {
+		return
+	}
+	if LURes, ok = targetRes[devUUID]; !ok {
+		return
+	}
+	resArray := LURes.Reservations
 
 	for i, tmpRes = range resArray {
 		if tmpRes == res {
@@ -271,6 +280,7 @@ func (op *SCSISimpleReservationOperator) RemoveReservation(tgtName string, devUU
 		resArray[i] = resArray[len(resArray)-1]
 		resArray[len(resArray)-1] = nil
 		resArray = resArray[:len(resArray)-1]
+		LURes.Reservations = resArray
 	}
 }
 
