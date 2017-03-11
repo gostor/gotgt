@@ -16,6 +16,7 @@ var (
 		{"InitialR2T", "Yes"},
 		{"MaxBurstLength", "262144"},
 		{"FirstBurstLength", "65536"},
+		{"MaxRecvDataSegmentLength", "65536"},
 		{"DefaultTime2Wait", "2"},
 		{"DefaultTime2Retain", "0"},
 		{"MaxOutstandingR2T", "1"},
