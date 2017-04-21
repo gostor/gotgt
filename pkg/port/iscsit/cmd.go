@@ -33,6 +33,11 @@ const (
 	OpReject              = 0x3f
 )
 
+const (
+	MaxBurstLength           uint32 = 262144
+	MaxRecvDataSegmentLength uint32 = 65536
+)
+
 var opCodeMap = map[OpCode]string{
 	OpNoopOut:      "NOP-Out",
 	OpSCSICmd:      "SCSI Command",

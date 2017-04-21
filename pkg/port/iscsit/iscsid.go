@@ -330,8 +330,8 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	conn.loginParam.isid = cmd.ISID
 	conn.loginParam.tsih = cmd.TSIH
 	conn.expCmdSN = cmd.CmdSN
-	conn.maxBurstLength = 262144
-	conn.maxRecvDataSegmentLength = 65536
+	conn.maxBurstLength = MaxBurstLength
+	conn.maxRecvDataSegmentLength = MaxRecvDataSegmentLength
 	conn.maxSeqCount = conn.maxBurstLength / conn.maxRecvDataSegmentLength
 
 	if conn.loginParam.iniCSG == SecurityNegotiation {
