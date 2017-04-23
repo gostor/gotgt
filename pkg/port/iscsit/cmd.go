@@ -33,6 +33,11 @@ const (
 	OpReject              = 0x3f
 )
 
+const (
+	MaxBurstLength           uint32 = 262144
+	MaxRecvDataSegmentLength uint32 = 65536
+)
+
 var opCodeMap = map[OpCode]string{
 	OpNoopOut:      "NOP-Out",
 	OpSCSICmd:      "SCSI Command",
@@ -62,6 +67,7 @@ type ISCSICommand struct {
 	DataLen            int
 	RawData            []byte
 	Final              bool
+	FinalInSeq         bool
 	Immediate          bool
 	TaskTag            uint32
 	ExpCmdSN, MaxCmdSN uint32
@@ -276,23 +282,26 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	buf := &bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSIIn))
 	var b byte
-	b = 0x80
-	if m.HasStatus {
+	b = 0x0
+	if m.FinalInSeq || m.Final == true {
+		b |= 0x80
+	}
+	if m.HasStatus && m.Final == true {
 		b |= 0x01
 	}
 	buf.WriteByte(b)
 	buf.WriteByte(0x00)
-	if m.HasStatus {
+	if m.HasStatus && m.Final == true {
 		b = byte(m.Status)
 	}
 	buf.WriteByte(b)
 
 	buf.WriteByte(0x00) // 4
 
-	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
-	// Skip through to byte 16
+	buf.Write(util.MarshalUint64(uint64(m.DataLen))[5:]) // 5-8
+	// Skip through to byte 16 Since A bit is not set 11.7.4
 	for i := 0; i < 8; i++ {
-		buf.WriteByte(byte(m.LUN[i]))
+		buf.WriteByte(0x00)
 	}
 	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
 	for i := 0; i < 4; i++ {
@@ -307,8 +316,8 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	for i := 0; i < 4; i++ {
 		buf.WriteByte(0x00)
 	}
-	buf.Write(m.RawData)
-	dl := len(m.RawData)
+	buf.Write(m.RawData[m.BufferOffset : m.BufferOffset+uint32(m.DataLen)])
+	dl := m.DataLen
 	for dl%4 > 0 {
 		dl++
 		buf.WriteByte(0x00)

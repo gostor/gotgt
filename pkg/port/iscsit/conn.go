@@ -77,7 +77,10 @@ type iscsiConnection struct {
 	// ExpCmdSN - the next expected command sequence number at the target
 	expCmdSN uint32
 	// MaxCmdSN - the maximum CmdSN acceptable at the target from this initiator
-	maxCmdSN uint32
+	maxCmdSN                 uint32
+	maxRecvDataSegmentLength uint32
+	maxBurstLength           uint32
+	maxSeqCount              uint32
 
 	rxTask *iscsiTask
 	txTask *iscsiTask
