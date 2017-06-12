@@ -151,11 +151,20 @@ type SCSIDataBuffer struct {
 	Resid          int32
 }
 
+type SCSICommandState uint64
+
+var (
+	SCSICommandQueued    SCSICommandState = 1
+	SCSICommandProcessed SCSICommandState = 2
+	SCSICommandAsync     SCSICommandState = 3
+	SCSICommandNotLast   SCSICommandState = 4
+)
+
 type SCSICommand struct {
 	Target          *SCSITarget
 	DeviceID        uint64
 	Device          *SCSILu
-	State           uint64
+	State           SCSICommandState
 	Direction       SCSIDataDirection
 	InSDBBuffer     SCSIDataBuffer
 	OutSDBBuffer    SCSIDataBuffer

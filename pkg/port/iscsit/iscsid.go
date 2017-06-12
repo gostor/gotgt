@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,12 +45,12 @@ type ISCSITargetDriver struct {
 }
 
 func init() {
-	scsi.RegisterTargetDriver("iscsi", NewISCSITargetDriver)
+	scsi.RegisterTargetDriver(iSCSIDriverName, NewISCSITargetDriver)
 }
 
 func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, error) {
 	return &ISCSITargetDriver{
-		Name:         "iscsi",
+		Name:         iSCSIDriverName,
 		iSCSITargets: map[string]*ISCSITarget{},
 		SCSI:         base,
 		TSIHPool:     map[uint16]bool{0: true, 65535: true},
@@ -111,11 +111,11 @@ func (s *ISCSITargetDriver) AddiSCSIPortal(tgtName string, tpgt uint16, portal s
 	)
 
 	if target, ok = s.iSCSITargets[tgtName]; !ok {
-		return fmt.Errorf("no target %s", tgtName)
+		return fmt.Errorf("No such target: %s", tgtName)
 	}
 
 	if tpgtInfo, ok = target.TPGTs[tpgt]; !ok {
-		return fmt.Errorf("no tpgt %d", tpgt)
+		return fmt.Errorf("No such TPGT: %d", tpgt)
 	}
 	tgtPortals := tpgtInfo.Portals
 
@@ -356,7 +356,7 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 		conn.state = CONN_STATE_LOGIN
 	}
 
-	return conn.buildRespPackage(OpLoginResp)
+	return conn.buildRespPackage(OpLoginResp, nil)
 }
 
 func iscsiExecLogout(conn *iscsiConnection) error {
@@ -411,19 +411,15 @@ func (s *ISCSITargetDriver) iscsiExecText(conn *iscsiConnection) error {
 }
 
 func iscsiExecNoopOut(conn *iscsiConnection) error {
-	return conn.buildRespPackage(OpNoopIn)
-}
-
-func iscsiExecTMFunction(conn *iscsiConnection) error {
-	return conn.buildRespPackage(OpSCSITaskResp)
+	return conn.buildRespPackage(OpNoopIn, nil)
 }
 
 func iscsiExecReject(conn *iscsiConnection) error {
-	return conn.buildRespPackage(OpReject)
+	return conn.buildRespPackage(OpReject, nil)
 }
 
 func iscsiExecR2T(conn *iscsiConnection) error {
-	return conn.buildRespPackage(OpReady)
+	return conn.buildRespPackage(OpReady, nil)
 }
 
 func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
@@ -483,27 +479,21 @@ func (s *ISCSITargetDriver) txHandler(conn *iscsiConnection) {
 		}
 	}
 
-	log.Debugf("connection state: %d", conn.state)
+	log.Debugf("connection state: %v", conn.State())
 	switch conn.state {
 	case CONN_STATE_CLOSE, CONN_STATE_EXIT:
-		log.Warnf("set connection to close")
 		conn.state = CONN_STATE_CLOSE
 	case CONN_STATE_SECURITY_LOGIN:
 		conn.state = CONN_STATE_LOGIN
-		log.Debugf("CONN_STATE_LOGIN")
 	case CONN_STATE_LOGIN:
-		log.Debugf("CONN_STATE_LOGIN")
 		conn.rxIOState = IOSTATE_RX_BHS
 		s.handler(DATAIN, conn)
 	case CONN_STATE_SECURITY_FULL, CONN_STATE_LOGIN_FULL:
 		if conn.session.SessionType == SESSION_NORMAL {
 			conn.state = CONN_STATE_KERNEL
-			log.Debugf("CONN_STATE_KERNEL")
 			conn.state = CONN_STATE_SCSI
-			log.Debugf("CONN_STATE_SCSI")
 		} else {
 			conn.state = CONN_STATE_FULL
-			log.Debugf("CONN_STATE_FULL")
 		}
 		conn.rxIOState = IOSTATE_RX_BHS
 		s.handler(DATAIN, conn)
@@ -560,17 +550,19 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 			return
 		} else {
 			if scmd.Direction == api.SCSIDataRead {
-				conn.buildRespPackage(OpSCSIIn)
+				conn.buildRespPackage(OpSCSIIn, task)
 			} else {
-				conn.buildRespPackage(OpSCSIResp)
+				conn.buildRespPackage(OpSCSIResp, task)
 			}
 			conn.rxTask = nil
 		}
 	case OpSCSITaskReq:
 		// task management function
-		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, state: taskPending}
-		conn.txIOState = IOSTATE_TX_BHS
-		iscsiExecTMFunction(conn)
+		task := &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: nil}
+		conn.rxTask = task
+		if err = s.iscsiTaskQueueHandler(task); err != nil {
+			return
+		}
 	case OpSCSIOut:
 		log.Debugf("iSCSI Data-out processing...")
 		var task *iscsiTask
@@ -612,7 +604,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		if err = s.iscsiExecTask(task); err != nil {
 			return
 		} else {
-			conn.buildRespPackage(OpSCSIResp)
+			conn.buildRespPackage(OpSCSIResp, task)
 			conn.rxTask = nil
 		}
 	case OpNoopOut:
@@ -657,13 +649,16 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		if len(sess.PendingTasks) == 0 {
 			return nil
 		}
+		sess.PendingTasksMutex.Lock()
 		task = sess.PendingTasks.Pop().(*iscsiTask)
 		cmd = task.cmd
 		if cmd.CmdSN != cmdsn {
 			sess.PendingTasks.Push(task)
+			sess.PendingTasksMutex.Unlock()
 			return nil
 		}
 		task.state = taskSCSI
+		sess.PendingTasksMutex.Unlock()
 		goto retry
 	} else {
 		if cmd.CmdSN < sess.ExpCmdSN {
@@ -673,8 +668,10 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		}
 		log.Debugf("add task(%d) into task queue", task.cmd.CmdSN)
 		// add this connection into queue and set this task as pending task
+		sess.PendingTasksMutex.Lock()
 		task.state = taskPending
 		sess.PendingTasks.Push(task)
+		sess.PendingTasksMutex.Unlock()
 		return fmt.Errorf("pending")
 	}
 
@@ -716,6 +713,46 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 
 	case OpNoopOut:
 		// just do it in iscsi layer
+	case OpSCSITaskReq:
+		sess := task.conn.session
+		switch cmd.TaskFunc {
+		case ISCSI_TM_FUNC_ABORT_TASK:
+			stask := &iscsiTask{}
+			sess.PendingTasksMutex.Lock()
+			for i, t := range sess.PendingTasks {
+				if cmd.ReferencedTaskTag == t.tag {
+					stask = sess.PendingTasks[i]
+					sess.PendingTasks = append(sess.PendingTasks[:i], sess.PendingTasks[i+1:]...)
+					break
+				}
+			}
+			sess.PendingTasksMutex.Unlock()
+			if stask == nil {
+				task.result = ISCSI_TMF_RSP_NO_TASK
+			} else {
+				// abort this task
+				log.Debugf("abort the task[%v]", stask.tag)
+				stask.scmd.Result = api.SAM_STAT_TASK_ABORTED
+				stask.conn.buildRespPackage(OpSCSIResp, stask)
+				stask.conn.rxTask = nil
+				s.handler(DATAOUT, stask.conn)
+				task.result = ISCSI_TMF_RSP_COMPLETE
+			}
+		case ISCSI_TM_FUNC_ABORT_TASK_SET:
+		case ISCSI_TM_FUNC_LOGICAL_UNIT_RESET:
+		case ISCSI_TM_FUNC_CLEAR_ACA:
+			fallthrough
+		case ISCSI_TM_FUNC_CLEAR_TASK_SET:
+			fallthrough
+		case ISCSI_TM_FUNC_TARGET_WARM_RESET, ISCSI_TM_FUNC_TARGET_COLD_RESET, ISCSI_TM_FUNC_TASK_REASSIGN:
+			task.result = ISCSI_TMF_RSP_NOT_SUPPORTED
+			return fmt.Errorf("The task function is not supported")
+		default:
+			task.result = ISCSI_TMF_RSP_REJECTED
+			return fmt.Errorf("Unknown task function")
+		}
+		// return response to initiator
+		return task.conn.buildRespPackage(OpSCSITaskResp, task)
 	}
 	return nil
 }

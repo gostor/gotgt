@@ -89,6 +89,7 @@ func luPerformCommand(tid int, cmd *api.SCSICommand) api.SAMStat {
 		fnop := fn.(SCSIDeviceOperation)
 		// TODO host := cmd.ITNexus.Host
 		host := 0
+		cmd.State = api.SCSICommandProcessed
 		return fnop.CommandPerformFunc(host, cmd)
 	}
 	return api.SAMStatGood
