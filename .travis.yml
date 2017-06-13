@@ -34,8 +34,8 @@ script:
    - cd ${HOME}/libiscsi
    - export ISCSITEST=yes
    - ./autogen.sh
-   - ./configure
-   - make
+   - ./configure 2>&1 >/dev/null
+   - make 2>&1 >/dev/null
    - ./test-tool/iscsi-test-cu -d -A -V --test=iSCSI.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=SCSI.TestUnitReady iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=SCSI.ReadCapacity10 iscsi://127.0.0.1:3260/${TARGET}/0
