@@ -549,7 +549,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		if err = s.iscsiTaskQueueHandler(task); err != nil {
 			return
 		} else {
-			if scmd.Direction == api.SCSIDataRead {
+			if scmd.Direction == api.SCSIDataRead && scmd.SenseBuffer == nil {
 				conn.buildRespPackage(OpSCSIIn, task)
 			} else {
 				conn.buildRespPackage(OpSCSIResp, task)
@@ -667,7 +667,7 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 			return err
 		}
 		log.Debugf("add task(%d) into task queue", task.cmd.CmdSN)
-		// add this connection into queue and set this task as pending task
+		// add this task into queue and set it as a pending task
 		sess.PendingTasksMutex.Lock()
 		task.state = taskPending
 		sess.PendingTasks.Push(task)
@@ -732,7 +732,11 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 			} else {
 				// abort this task
 				log.Debugf("abort the task[%v]", stask.tag)
-				stask.scmd.Result = api.SAM_STAT_TASK_ABORTED
+				if stask.scmd == nil {
+					stask.scmd = &api.SCSICommand{Result: api.SAM_STAT_TASK_ABORTED}
+				}
+				stask.conn = task.conn
+				log.Debugf("stask.conn: %#v", stask.conn)
 				stask.conn.buildRespPackage(OpSCSIResp, stask)
 				stask.conn.rxTask = nil
 				s.handler(DATAOUT, stask.conn)

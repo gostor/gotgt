@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -174,7 +174,10 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		resp.HasStatus = true
 		scmd := task.scmd
 		resp.Status = scmd.Result
-		if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
+		if scmd.Result != 0 && scmd.SenseBuffer != nil {
+			length := util.MarshalUint32(uint32(scmd.SenseLength))
+			resp.RawData = append(length[2:4], scmd.SenseBuffer.Bytes()...)
+		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
 			if scmd.InSDBBuffer.Buffer != nil {
 				buf := scmd.InSDBBuffer.Buffer.Bytes()
 				resp.RawData = buf
@@ -182,9 +185,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 				resp.RawData = []byte{}
 			}
 		}
-		if scmd.Result != 0 && scmd.SenseBuffer != nil {
-			resp.RawData = scmd.SenseBuffer.Bytes()
-		}
+
 	case OpNoopIn, OpReject:
 		resp.OpCode = oc
 		resp.Final = true

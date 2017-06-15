@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -151,10 +151,9 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		}
 		senseBuffer.WriteByte((byte(asc) >> 8) & 0xff)
 		senseBuffer.WriteByte(byte(asc) & 0xff)
-		senseBuffer.WriteByte(0x00)
-		senseBuffer.WriteByte(0x00)
-		senseBuffer.WriteByte(0x00)
-		senseBuffer.WriteByte(0x00)
+		for i := 0; i < 4; i++ {
+			senseBuffer.WriteByte(0x00)
+		}
 		cmd.SenseLength = length + 8
 	}
 	if ok {
