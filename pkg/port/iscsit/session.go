@@ -253,6 +253,7 @@ type ISCSISession struct {
 	ConnectionsRWMutex sync.RWMutex
 	Commands           []*ISCSICommand
 	PendingTasks       taskQueue
+	PendingTasksMutex  sync.RWMutex
 	MaxQueueCommand    uint32
 	SessionParam       ISCSISessionParamList
 	Info               string

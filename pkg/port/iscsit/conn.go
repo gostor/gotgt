@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -96,11 +96,12 @@ const (
 )
 
 type iscsiTask struct {
-	tag   uint32
-	conn  *iscsiConnection
-	cmd   *ISCSICommand
-	scmd  *api.SCSICommand
-	state taskState
+	tag    uint32
+	conn   *iscsiConnection
+	cmd    *ISCSICommand
+	scmd   *api.SCSICommand
+	state  taskState
+	result byte
 
 	offset     int
 	r2tCount   int
@@ -146,11 +147,13 @@ func (conn *iscsiConnection) ReInstatement(newConn *iscsiConnection) {
 	conn.conn = newConn.conn
 }
 
-func (conn *iscsiConnection) buildRespPackage(oc OpCode) error {
+func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error {
 	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
 	conn.txIOState = IOSTATE_TX_BHS
 	conn.statSN += 1
-	task := conn.rxTask
+	if task == nil {
+		task = conn.rxTask
+	}
 	resp := &ISCSICommand{
 		StatSN:   conn.req.ExpStatSN,
 		TaskTag:  conn.req.TaskTag,
@@ -174,7 +177,10 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode) error {
 		resp.HasStatus = true
 		scmd := task.scmd
 		resp.Status = scmd.Result
-		if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
+		if scmd.Result != 0 && scmd.SenseBuffer != nil {
+			length := util.MarshalUint32(uint32(scmd.SenseLength))
+			resp.RawData = append(length[2:4], scmd.SenseBuffer.Bytes()...)
+		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
 			if scmd.InSDBBuffer.Buffer != nil {
 				buf := scmd.InSDBBuffer.Buffer.Bytes()
 				resp.RawData = buf
@@ -182,14 +188,18 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode) error {
 				resp.RawData = []byte{}
 			}
 		}
-		if scmd.Result != 0 && scmd.SenseBuffer != nil {
-			resp.RawData = scmd.SenseBuffer.Bytes()
-		}
-	case OpNoopIn, OpSCSITaskResp, OpReject:
+
+	case OpNoopIn, OpReject:
 		resp.OpCode = oc
 		resp.Final = true
 		resp.NSG = FullFeaturePhase
 		resp.ExpCmdSN = conn.req.CmdSN + 1
+	case OpSCSITaskResp:
+		resp.OpCode = oc
+		resp.Final = true
+		resp.NSG = FullFeaturePhase
+		resp.ExpCmdSN = conn.req.CmdSN + 1
+		resp.Result = task.result
 	case OpLoginResp:
 		resp.OpCode = OpLoginResp
 		resp.Transit = conn.loginParam.tgtTrans
@@ -211,4 +221,42 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode) error {
 
 	conn.resp = resp
 	return nil
+}
+
+func (conn *iscsiConnection) State() string {
+	switch conn.state {
+	case CONN_STATE_FREE:
+		return "free"
+	case CONN_STATE_SECURITY:
+		return "begin security"
+	case CONN_STATE_SECURITY_AUTH:
+		return "security auth"
+	case CONN_STATE_SECURITY_DONE:
+		return "done security"
+	case CONN_STATE_SECURITY_LOGIN:
+		return "security login"
+	case CONN_STATE_SECURITY_FULL:
+		return "security full"
+	case CONN_STATE_LOGIN:
+		return "begin login"
+	case CONN_STATE_LOGIN_FULL:
+		return "done login"
+	case CONN_STATE_FULL:
+		return "full feature"
+	case CONN_STATE_KERNEL:
+		return "kernel"
+	case CONN_STATE_CLOSE:
+		return "close"
+	case CONN_STATE_EXIT:
+		return "exit"
+	case CONN_STATE_SCSI:
+		return "scsi"
+	case CONN_STATE_INIT:
+		return "init"
+	case CONN_STATE_START:
+		return "start"
+	case CONN_STATE_READY:
+		return "ready"
+	}
+	return ""
 }

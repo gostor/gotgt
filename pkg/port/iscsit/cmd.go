@@ -1,3 +1,19 @@
+/*
+Copyright 2017 The GoStor Authors All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package iscsit
 
 import (
@@ -61,6 +77,12 @@ var opCodeMap = map[OpCode]string{
 
 const DataPadding = 4
 
+type ISCSITaskManagementFunc struct {
+	Result            byte
+	TaskFunc          uint32
+	ReferencedTaskTag uint32
+}
+
 type ISCSICommand struct {
 	OpCode             OpCode
 	RawHeader          []byte
@@ -104,6 +126,9 @@ type ISCSICommand struct {
 	CDB             []byte
 	Status          byte
 	SCSIResponse    byte
+
+	// Task request
+	ISCSITaskManagementFunc
 
 	// R2T
 	R2TSN         uint32
@@ -193,13 +218,13 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 	// TODO: sync.Pool
 	m := &ISCSICommand{}
 	m.Immediate = 0x40&data[0] == 0x40
-	m.OpCode = OpCode(data[0] & 0x3f)
+	m.OpCode = OpCode(data[0] & ISCSI_OPCODE_MASK)
 	m.Final = 0x80&data[1] == 0x80
 	m.AHSLen = int(data[4]) * 4
 	m.DataLen = int(ParseUint(data[5:8]))
 	m.TaskTag = uint32(ParseUint(data[16:20]))
 	switch m.OpCode {
-	case OpSCSICmd, OpSCSITaskReq:
+	case OpSCSICmd:
 		m.LUN = [8]byte{data[9]}
 		m.ExpectedDataLen = uint32(ParseUint(data[20:24]))
 		m.CmdSN = uint32(ParseUint(data[24:28]))
@@ -207,6 +232,10 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.Write = data[1]&0x20 == 0x20
 		m.CDB = data[32:48]
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
+		fallthrough
+	case OpSCSITaskReq:
+		m.ReferencedTaskTag = uint32(ParseUint(data[20:24]))
+		m.TaskFunc = uint32(data[1] & ISCSI_FLAG_TM_FUNC_MASK)
 	case OpSCSIResp:
 	case OpSCSIOut:
 		m.LUN = [8]byte{data[9]}
@@ -253,8 +282,10 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	buf.WriteByte(byte(m.SCSIResponse))
 	buf.WriteByte(byte(m.Status))
 
+	buf.WriteByte(0x00)
+	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
 	// Skip through to byte 16
-	for i := 0; i < 3*4; i++ {
+	for i := 0; i < 8; i++ {
 		buf.WriteByte(0x00)
 	}
 	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
@@ -408,7 +439,7 @@ func (m *ISCSICommand) scsiTMFRespBytes() []byte {
 	buf := &bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSITaskResp))
 	buf.WriteByte(0x80)
-	buf.WriteByte(0x00)
+	buf.WriteByte(m.Result)
 	buf.WriteByte(0x00)
 
 	// Skip through to byte 16
