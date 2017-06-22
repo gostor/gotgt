@@ -756,7 +756,7 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 		sess := task.conn.session
 		switch cmd.TaskFunc {
 		case ISCSI_TM_FUNC_ABORT_TASK:
-			stask := &iscsiTask{}
+			var stask *iscsiTask
 			sess.PendingTasksMutex.Lock()
 			for i, t := range sess.PendingTasks {
 				if cmd.ReferencedTaskTag == t.tag {
