@@ -6,6 +6,8 @@ env:
 language: go
 go:
     - 1.6
+    - 1.7
+    - 1.8
 
 install:
    - true
@@ -36,8 +38,7 @@ script:
    - ./autogen.sh
    - ./configure 2>&1 >/dev/null
    - make 2>&1 >/dev/null
-   # This case will be failed, because the gotgt does not support async mode now.
-   #- ./test-tool/iscsi-test-cu -d -A -V --test=iSCSI.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A -V --test=iSCSI.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=SCSI.TestUnitReady iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=SCSI.ReadCapacity10 iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=SCSI.ReadCapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
