@@ -149,8 +149,8 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		for i := 0; i < 4; i++ {
 			senseBuffer.WriteByte(0x00)
 		}
-		senseBuffer.WriteByte((byte(asc) >> 8) & 0xff)
-		senseBuffer.WriteByte(byte(asc) & 0xff)
+		senseBuffer.WriteByte(byte((uint16(asc) >> 8) & 0xff))
+		senseBuffer.WriteByte(byte(asc & 0x00ff))
 		for i := 0; i < 4; i++ {
 			senseBuffer.WriteByte(0x00)
 		}
