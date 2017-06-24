@@ -38,22 +38,44 @@ script:
    - ./autogen.sh
    - ./configure 2>&1 >/dev/null
    - make 2>&1 >/dev/null
-   - ./test-tool/iscsi-test-cu -d -A -V --test=iSCSI.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.TestUnitReady iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.ReadCapacity10 iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.ReadCapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Read10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Write10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Read16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Write16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Read32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Write32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.WriteVerify10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.WriteVerify16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.WriteVerify32.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Verify10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Verify12.Simple iscsi://127.0.0.1:3260/${TARGET}/0
-   - ./test-tool/iscsi-test-cu -d -A --test=SCSI.Verify16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.Standard iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.AllocLength iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.MandatoryVPDSBC iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.SupportedVPD iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.VersionDescriptors iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Mandatory iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.NoMedia iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Prefetch10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Prefetch16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.PreventAllow iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadCapacity10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadCapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Read6 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Read10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Read12 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Read16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadOnly iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Reserve6.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.StartStopUnit iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.TestUnitReady iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Write10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Write16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Write12 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify12 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteAtomic16.BeyondEol iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteAtomic16.ZeroBlocks iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteAtomic16.WriteProtect iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteAtomic16.DpoFua iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteSame10.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteSame16.Simple iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify10 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify12 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify16 iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
+
    - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/${TARGET}
    - ./utils/iscsi-inq iscsi://127.0.0.1:3260/${TARGET}/0
    - ./utils/iscsi-readcapacity16 iscsi://127.0.0.1:3260/${TARGET}/0
