@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,14 +51,12 @@ func NewBackingStore(name string) (api.BackingStore, error) {
 	return f()
 }
 
-func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error) {
+func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key byte, asc SCSISubError) {
 	var (
 		scb             = cmd.SCB.Bytes()
 		offset          = cmd.Offset
 		opcode          = api.SCSICommandType(scb[0])
 		lu              = cmd.Device
-		key             = ILLEGAL_REQUEST
-		asc             = ASC_INVALID_FIELD_IN_CDB
 		wbuf     []byte = []byte{}
 		tl       int64  = int64(cmd.TL)
 		rbuf            = make([]byte, tl)
@@ -66,6 +64,8 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error) {
 		doVerify bool = false
 		doWrite  bool = false
 	)
+	key = HARDWARE_ERROR
+	asc = ASC_INTERNAL_TGT_FAILURE
 	switch opcode {
 	case api.ORWRITE_16:
 		tmpbuf := []byte{}
@@ -181,13 +181,13 @@ verify:
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_WILLNEED)
 		}
 	}
-	return nil
+	return nil, key, asc
 sense:
 	if err != nil {
 		log.Error(err)
-		return err
+		return err, key, asc
 	}
 
 	err = fmt.Errorf("sense data encounter, key: %v, asc: %v", key, asc)
-	return err
+	return err, key, asc
 }

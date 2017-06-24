@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -339,14 +339,12 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 	case api.READ_10, api.READ_12, api.READ_16, api.WRITE_10, api.WRITE_12, api.WRITE_16, api.ORWRITE_16,
 		api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16, api.COMPARE_AND_WRITE:
 		// We only support protection information type 0
-		/*
-			if scb[1]&0xe0 != 0 {
-				key = ILLEGAL_REQUEST
-				asc = ASC_INVALID_FIELD_IN_CDB
-				log.Warnf("sense")
-				goto sense
-			}
-		*/
+		if scb[1]&0xe0 != 0 {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_INVALID_FIELD_IN_CDB) encounter")
+			goto sense
+		}
 		if cmd.OutSDBBuffer.Buffer == nil {
 			cmd.OutSDBBuffer.Buffer = &bytes.Buffer{}
 		}
@@ -384,7 +382,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			api.PRE_FETCH_10, api.PRE_FETCH_16, api.COMPARE_AND_WRITE:
 			key = DATA_PROTECT
 			asc = ASC_WRITE_PROTECT
-			log.Warnf("sense")
+			log.Warnf("sense data(data protect) and asc(ASC_WRITE_PROTECT) encounter")
 			goto sense
 		}
 	}
@@ -397,14 +395,14 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
 			key = ILLEGAL_REQUEST
 			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
+			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_LBA_OUT_OF_RANGE) encounter: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
 			goto sense
 		}
 	} else {
 		if lba >= dev.Size>>dev.BlockShift {
 			key = ILLEGAL_REQUEST
 			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense")
+			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_LBA_OUT_OF_RANGE) encounter: lba: %d, size: %d", lba, dev.Size>>dev.BlockShift)
 			goto sense
 		}
 	}
@@ -435,11 +433,9 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		*/
 	}
 
-	err = bsPerformCommand(dev.Storage, cmd)
+	err, key, asc = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
-		log.Error(err)
-		key = HARDWARE_ERROR
-		asc = ASC_INTERNAL_TGT_FAILURE
+		goto sense
 	} else {
 		return api.SAMStatGood
 	}
@@ -577,14 +573,11 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	cmd.Offset = lba << dev.BlockShift
 	cmd.TL = tl << dev.BlockShift
-	err = bsPerformCommand(dev.Storage, cmd)
+	err, key, asc = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
-		log.Error(err)
-		key = HARDWARE_ERROR
-		asc = ASC_INTERNAL_TGT_FAILURE
-	} else {
-		return api.SAMStatGood
+		goto sense
 	}
+	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, key, asc)
@@ -616,7 +609,54 @@ func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		key = ILLEGAL_REQUEST
+		asc = ASC_INVALID_FIELD_IN_CDB
+		dev = cmd.Device
+		scb = cmd.SCB.Bytes()
+		lba uint64
+		tl  uint32
+	)
+	if dev.Attrs.Removable && !dev.Attrs.Online {
+		key = NOT_READY
+		asc = ASC_MEDIUM_NOT_PRESENT
+		goto sense
+	}
+
+	if cmd.SCB.Bytes()[1]&0xe0 != 0 {
+		// We only support protection information type 0
+		key = ILLEGAL_REQUEST
+		asc = ASC_INVALID_FIELD_IN_CDB
+		goto sense
+	}
+
+	if cmd.SCB.Bytes()[1]&0x02 == 0 {
+		// no data compare with the media
+		return api.SAMStatGood
+	}
+	lba = getSCSIReadWriteOffset(scb)
+	tl = getSCSIReadWriteCount(scb)
+	// Verify that we are not doing i/o beyond the end-of-lun
+	if tl != 0 {
+		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
+			goto sense
+		}
+	} else {
+		if lba >= dev.Size>>dev.BlockShift {
+			key = ILLEGAL_REQUEST
+			asc = ASC_LBA_OUT_OF_RANGE
+			log.Warnf("sense")
+			goto sense
+		}
+	}
 	return api.SAMStatGood
+sense:
+	cmd.InSDBBuffer.Resid = 0
+	BuildSenseData(cmd, key, asc)
+	return api.SAMStatCheckCondition
 }
 
 func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -626,6 +666,8 @@ func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
 		return SBCReadCapacity(host, cmd)
 	case api.SAI_READ_CAPACITY_16:
 		return SBCReadCapacity16(host, cmd)
+	case api.SAI_GET_LBA_STATUS:
+		return SBCGetLbaStatus(host, cmd)
 	}
 	return api.SAMStatGood
 }

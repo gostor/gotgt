@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -566,7 +566,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 }
 
 func reportOpcodeOne(cmd *api.SCSICommand, rctd int, opcode byte, rsa uint16, serviceAction bool) error {
-	return nil
+	return fmt.Errorf("non support")
 }
 
 func SPCReportSupportedOperationCodes(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -731,7 +731,7 @@ func SPCPRReportCapabilities(host int, cmd *api.SCSICommand) api.SAMStat {
 		actualLength uint32        = 0
 		data         *bytes.Buffer = cmd.InSDBBuffer.Buffer
 	)
-	allocationLength := util.GetUnalignedUint32(cmd.SCB.Bytes()[7:9])
+	allocationLength := uint32(util.GetUnalignedUint16(cmd.SCB.Bytes()[7:9]))
 	if allocationLength < 8 {
 		goto sense
 	}
