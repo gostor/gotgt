@@ -75,6 +75,7 @@ script:
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify12 iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify16 iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSITMF iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSIcmdsn iscsi://127.0.0.1:3260/${TARGET}/0
 
    - ./utils/iscsi-ls -s iscsi://127.0.0.1:3260/${TARGET}
    - ./utils/iscsi-inq iscsi://127.0.0.1:3260/${TARGET}/0
