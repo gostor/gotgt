@@ -586,6 +586,10 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		task.offset = 0
 		conn.rxTask = task
 		if err = s.iscsiTaskQueueHandler(task); err != nil {
+			if task.state == taskPending {
+				s.handler(DATAIN, conn)
+				err = nil
+			}
 			return
 		} else {
 			if scmd.Direction == api.SCSIDataRead && scmd.SenseBuffer == nil {
