@@ -94,6 +94,7 @@ type ISCSICommand struct {
 	TaskTag            uint32
 	ExpCmdSN, MaxCmdSN uint32
 	AHSLen             int
+	Resid              uint32
 
 	// Connection ID.
 	ConnID uint16
@@ -278,7 +279,11 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	// rfc7143 11.4
 	buf := &bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSIResp))
-	buf.WriteByte(0x80) // 11.4.1 = wtf
+	var flag byte = 0x80
+	if m.Resid > 0 {
+		flag |= 0x02
+	}
+	buf.WriteByte(flag)
 	buf.WriteByte(byte(m.SCSIResponse))
 	buf.WriteByte(byte(m.Status))
 
@@ -295,9 +300,10 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
 	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
 	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 0; i < 3*4; i++ {
+	for i := 0; i < 2*4; i++ {
 		buf.WriteByte(0x00)
 	}
+	buf.Write(util.MarshalUint64(uint64(m.Resid))[4:])
 	buf.Write(m.RawData)
 	dl := len(m.RawData)
 	for dl%4 > 0 {
@@ -312,20 +318,22 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	// rfc7143 11.7
 	buf := &bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSIIn))
-	var b byte
-	b = 0x0
+	var flag byte
 	if m.FinalInSeq || m.Final == true {
-		b |= 0x80
+		flag |= 0x80
 	}
 	if m.HasStatus && m.Final == true {
-		b |= 0x01
+		flag |= 0x01
 	}
-	buf.WriteByte(b)
+	if m.Resid > 0 {
+		flag |= 0x02
+	}
+	buf.WriteByte(flag)
 	buf.WriteByte(0x00)
 	if m.HasStatus && m.Final == true {
-		b = byte(m.Status)
+		flag = byte(m.Status)
 	}
-	buf.WriteByte(b)
+	buf.WriteByte(flag)
 
 	buf.WriteByte(0x00) // 4
 
@@ -344,9 +352,7 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
 	buf.Write(util.MarshalUint64(uint64(m.DataSN))[4:])
 	buf.Write(util.MarshalUint64(uint64(m.BufferOffset))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0x00)
-	}
+	buf.Write(util.MarshalUint64(uint64(m.Resid))[4:])
 	buf.Write(m.RawData[m.BufferOffset : m.BufferOffset+uint32(m.DataLen)])
 	dl := m.DataLen
 	for dl%4 > 0 {

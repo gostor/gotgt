@@ -678,7 +678,7 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		return s.iscsiExecTask(task)
 	}
 	cmdsn := cmd.CmdSN
-	log.Debugf("CmdSN of command is %d, ExpCmdSN of session is %d", cmdsn, sess.ExpCmdSN)
+	log.Debugf("CmdSN of command is %d", cmdsn)
 	if cmdsn == sess.ExpCmdSN {
 	retry:
 		cmdsn += 1

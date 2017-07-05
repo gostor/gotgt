@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ type SCSIDataBuffer struct {
 	Buffer         *bytes.Buffer
 	Length         uint32
 	TransferLength uint32
-	Resid          int32
+	Resid          uint32
 }
 
 type SCSICommandState uint64
@@ -364,6 +364,7 @@ type ModePage struct {
 	PageCode uint8
 	// Sub page code
 	SubPageCode uint8
+	Size        uint8
 	// Rest of mode page info
 	Data []byte
 }
@@ -378,17 +379,18 @@ type SCSIReservation struct {
 }
 
 type SCSILu struct {
-	Address        uint64
-	Size           uint64
-	UUID           uint64
-	Path           string
-	BsoFlags       int
-	BlockShift     uint
-	ReserveID      uuid.UUID
-	Attrs          SCSILuPhyAttribute
-	ModePages      []ModePage
-	Storage        BackingStore
-	DeviceProtocol SCSIDeviceProtocol
+	Address             uint64
+	Size                uint64
+	UUID                uint64
+	Path                string
+	BsoFlags            int
+	BlockShift          uint
+	ReserveID           uuid.UUID
+	Attrs               SCSILuPhyAttribute
+	ModePages           []ModePage
+	Storage             BackingStore
+	DeviceProtocol      SCSIDeviceProtocol
+	ModeBlockDescriptor []byte
 
 	PerformCommand CommandFunc
 	FinishCommand  func(*SCSITarget, *SCSICommand)

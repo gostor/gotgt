@@ -182,6 +182,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 			resp.RawData = append(length[2:4], scmd.SenseBuffer.Bytes()...)
 		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
 			if scmd.InSDBBuffer.Buffer != nil {
+				resp.Resid = scmd.InSDBBuffer.Resid
 				buf := scmd.InSDBBuffer.Buffer.Bytes()
 				resp.RawData = buf
 			} else {

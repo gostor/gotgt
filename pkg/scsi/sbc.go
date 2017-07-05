@@ -96,20 +96,25 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	}
 	pages := []api.ModePage{}
 	// Vendor uniq - However most apps seem to call for mode page 0
-	pages = append(pages, api.ModePage{0, 0, []byte{}})
+	//pages = append(pages, api.ModePage{0, 0, []byte{}})
 	// Disconnect page
-	pages = append(pages, api.ModePage{2, 0, []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{2, 0, 14, []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	// Caching Page
-	pages = append(pages, api.ModePage{8, 0, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{8, 0, 18, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0, 0x4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 
 	// Control page
-	pages = append(pages, api.ModePage{0x0a, 0, []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0}})
+	pages = append(pages, api.ModePage{0x0a, 0, 10, []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0, 0x08, 0, 0, 0, 0, 0, 0, 0}})
 
 	// Control Extensions mode page:  TCMOS:1
-	pages = append(pages, api.ModePage{0x0a, 1, []byte{0x04, 0x00, 0x00}})
+	pages = append(pages, api.ModePage{0x0a, 1, 0x1c, []byte{0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	// Informational Exceptions Control page
-	pages = append(pages, api.ModePage{0x1c, 0, []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{0x1c, 0, 10, []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	lu.ModePages = pages
+	mbd := util.MarshalUint32(uint32(0xffffffff))
+	if size := lu.Size >> lu.BlockShift; size>>32 == 0 {
+		mbd = util.MarshalUint32(uint32(size))
+	}
+	lu.ModeBlockDescriptor = append(mbd, util.MarshalUint32(uint32(1<<lu.BlockShift))...)
 	return nil
 }
 
