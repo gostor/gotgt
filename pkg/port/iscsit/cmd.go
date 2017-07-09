@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/util"
 )
 
@@ -186,7 +187,7 @@ func (m *ISCSICommand) String() string {
 		s = append(s, fmt.Sprintf("Next Stage = %v", m.NSG))
 		s = append(s, fmt.Sprintf("Status Class = %d", m.StatusClass))
 		s = append(s, fmt.Sprintf("Status Detail = %d", m.StatusDetail))
-	case OpSCSICmd, OpSCSIOut:
+	case OpSCSICmd, OpSCSIOut, OpSCSIIn:
 		s = append(s, fmt.Sprintf("LUN = %d", m.LUN))
 		s = append(s, fmt.Sprintf("ExpectedDataLen = %d", m.ExpectedDataLen))
 		s = append(s, fmt.Sprintf("CmdSN = %d", m.CmdSN))
@@ -281,7 +282,11 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	buf.WriteByte(byte(OpSCSIResp))
 	var flag byte = 0x80
 	if m.Resid > 0 {
-		flag |= 0x02
+		if m.Resid > m.ExpectedDataLen {
+			flag |= 0x04
+		} else {
+			flag |= 0x02
+		}
 	}
 	buf.WriteByte(flag)
 	buf.WriteByte(byte(m.SCSIResponse))
@@ -325,8 +330,13 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	if m.HasStatus && m.Final == true {
 		flag |= 0x01
 	}
+	log.Debugf("resid: %v, ExpectedDataLen: %v", m.Resid, m.ExpectedDataLen)
 	if m.Resid > 0 {
-		flag |= 0x02
+		if m.Resid > m.ExpectedDataLen {
+			flag |= 0x04
+		} else {
+			flag |= 0x02
+		}
 	}
 	buf.WriteByte(flag)
 	buf.WriteByte(0x00)

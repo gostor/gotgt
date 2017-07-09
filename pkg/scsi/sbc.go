@@ -20,6 +20,7 @@ package scsi
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"unsafe"
 
 	log "github.com/Sirupsen/logrus"
@@ -67,6 +68,8 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	lu.Attrs.VendorID = SCSIVendorID
 	lu.Attrs.ProductID = SCSIProductID
 	lu.Attrs.ProductRev = version.SCSIVersion
+	lu.Attrs.SCSIID = fmt.Sprintf("gotgt-scsi-%d%d", 0, lu.UUID)
+	lu.Attrs.SCSISN = fmt.Sprintf("gotgt-beaf-%d%d", 0, lu.UUID)
 
 	/*
 		SCSIID for PAGE83 T10 VENDOR IDENTIFICATION field

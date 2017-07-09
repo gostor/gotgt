@@ -158,6 +158,7 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	}
 	if ok {
 		if int64(len(senseBuffer.Bytes())) > inBufLen {
+			log.Warnf("sense buffer is bigger than in buffer")
 			senseBuffer.Truncate(int(inBufLen))
 		}
 	} else {

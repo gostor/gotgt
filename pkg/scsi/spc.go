@@ -86,18 +86,9 @@ func InquiryPage0x00(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 func InquiryPage0x80(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	var (
 		buf               = &bytes.Buffer{}
-		descBuf           = &bytes.Buffer{}
-		data       []byte = []byte{}
-		pageLength uint16 = 0
+		pageLength uint16 = 36
+		scsisn            = make([]byte, pageLength)
 	)
-
-	descBuf.WriteByte(0x20)
-	descBuf.WriteByte(0x20)
-	descBuf.WriteByte(0x20)
-	descBuf.WriteByte(0x20)
-
-	data = descBuf.Bytes()
-	pageLength = uint16(len(data))
 
 	//byte 0
 	if cmd.Device.Attrs.Online {
@@ -105,12 +96,13 @@ func InquiryPage0x80(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	} else {
 		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
 	}
-	//byte 1
-	//PAGE CODE
+	//byte 1: PAGE CODE
 	buf.WriteByte(0x80)
-	//PAGE LENGTH
-	binary.Write(buf, binary.BigEndian, pageLength)
-	buf.Write(data)
+	//byte 2-3: PAGE LENGTH
+	buf.WriteByte(uint8(pageLength >> 8))
+	buf.WriteByte(uint8(pageLength & 0xff))
+	copy(scsisn, []byte(fmt.Sprintf("gotgt-%-36v", cmd.Device.UUID)))
+	buf.Write(scsisn)
 	return buf, pageLength
 }
 
@@ -206,7 +198,6 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		allocationLength uint16
-		pageLength       uint16
 		additionLength   byte
 		buf                     = &bytes.Buffer{}
 		data             []byte = []byte{}
@@ -235,24 +226,28 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 	if evpd {
 		switch pcode {
 		case 0x00:
-			buf, pageLength = InquiryPage0x00(host, cmd)
+			buf, _ = InquiryPage0x00(host, cmd)
 
 		case 0x80:
-			buf, pageLength = InquiryPage0x80(host, cmd)
+			buf, _ = InquiryPage0x80(host, cmd)
 
 		case 0x83:
-			buf, pageLength = InquiryPage0x83(host, cmd)
+			buf, _ = InquiryPage0x83(host, cmd)
 
 		default:
 			goto sense
 		}
 		data = buf.Bytes()
-		if allocationLength < pageLength {
+		if int(allocationLength) < len(data) {
 			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:allocationLength])
+			cmd.InSDBBuffer.Resid = uint32(len(data))
 		} else {
 			cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data[0:])
 		}
 	} else {
+		if pcode != 0 {
+			goto sense
+		}
 		//byte 5
 		//SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
 		addBuf.WriteByte(INQUIRY_TPGS_IMPLICIT)
@@ -576,7 +571,9 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		data[6] = uint8(blkDesctionLen >> 8)
 		data[7] = uint8(blkDesctionLen)
 	}
-	cmd.InSDBBuffer.Resid = uint32(len(data))
+	if rlen := uint32(len(data)); rlen < allocLen {
+		cmd.InSDBBuffer.Resid = rlen
+	}
 	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
 	return api.SAMStatGood
 sense:

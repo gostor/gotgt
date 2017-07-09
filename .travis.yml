@@ -43,6 +43,7 @@ script:
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.MandatoryVPDSBC iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.SupportedVPD iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.VersionDescriptors iscsi://127.0.0.1:3260/${TARGET}/0
+   - ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.EVPD iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.Mandatory iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.ModeSense6 iscsi://127.0.0.1:3260/${TARGET}/0
    - ./test-tool/iscsi-test-cu -d -A --test=ALL.NoMedia iscsi://127.0.0.1:3260/${TARGET}/0
