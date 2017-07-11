@@ -313,8 +313,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		default:
 			iscsiExecReject(conn)
 		}
-		log.Debugf("connection state is %v", conn.state)
-		log.Debugf("%#v", conn.resp.String())
+		log.Debugf("connection state is %v", conn.State())
 		s.handler(DATAOUT, conn)
 	}
 }
@@ -476,9 +475,7 @@ SendRemainingData:
 		switch conn.txIOState {
 		case IOSTATE_TX_BHS:
 			log.Debug("ready to write response")
-			log.Debugf("%s", resp.String())
-			log.Debugf("length of RawData is %d", len(resp.RawData))
-			log.Debugf("length of resp is %d", len(resp.Bytes()))
+			log.Debugf("response is %s", resp.String())
 			if l, err := conn.write(resp.Bytes()); err != nil {
 				log.Error(err)
 				return
@@ -678,7 +675,7 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		return s.iscsiExecTask(task)
 	}
 	cmdsn := cmd.CmdSN
-	log.Debugf("CmdSN of command is %d, ExpCmdSN of session is %d", cmdsn, sess.ExpCmdSN)
+	log.Debugf("CmdSN of command is %d", cmdsn)
 	if cmdsn == sess.ExpCmdSN {
 	retry:
 		cmdsn += 1
