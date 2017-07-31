@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2017 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,26 +35,28 @@ func TestSPCReportLuns(t *testing.T) {
 	target := new(api.SCSITarget)
 	target.Devices = map[uint64]*api.SCSILu{0: lu}
 	cmd.Target = target
-	cmd.SCB = &bytes.Buffer{}
-	cmd.SenseBuffer = &bytes.Buffer{}
+	scb := &bytes.Buffer{}
+	cmd.InSDBBuffer = &api.SCSIDataBuffer{}
 	cmd.InSDBBuffer.Length = 16
-	cmd.InSDBBuffer.Buffer = &bytes.Buffer{}
-	cmd.SCB.WriteByte(byte(api.REPORT_LUNS))
+	cmd.InSDBBuffer.Buffer = []byte{}
+	scb.WriteByte(byte(api.REPORT_LUNS))
 	for i := 0; i < 5; i++ {
-		cmd.SCB.WriteByte(0x00)
+		scb.WriteByte(0x00)
 	}
-	binary.Write(cmd.SCB, binary.BigEndian, uint32(16))
+	binary.Write(scb, binary.BigEndian, uint32(16))
+	cmd.SCB = scb.Bytes()
 
 	if err := SPCReportLuns(0, cmd); err.Err != nil {
 		t.Errorf("Expected not error, but got %v", err)
 	}
 
-	cmd.SCB = &bytes.Buffer{}
-	cmd.SCB.WriteByte(byte(api.REPORT_LUNS))
+	scb = &bytes.Buffer{}
+	scb.WriteByte(byte(api.REPORT_LUNS))
 	for i := 0; i < 5; i++ {
-		cmd.SCB.WriteByte(0x00)
+		scb.WriteByte(0x00)
 	}
-	binary.Write(cmd.SCB, binary.BigEndian, uint32(10))
+	binary.Write(scb, binary.BigEndian, uint32(10))
+	cmd.SCB = scb.Bytes()
 	if err := SPCReportLuns(0, cmd); err.Err == nil {
 		t.Error("Expected error, but got nothing")
 	}

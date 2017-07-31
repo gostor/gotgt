@@ -334,7 +334,7 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	if m.Resid > 0 {
 		if m.Resid > m.ExpectedDataLen {
 			flag |= 0x04
-		} else {
+		} else if m.Resid < m.ExpectedDataLen {
 			flag |= 0x02
 		}
 	}

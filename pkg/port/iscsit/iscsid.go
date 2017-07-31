@@ -17,7 +17,6 @@ limitations under the License.
 package iscsit
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -29,6 +28,7 @@ import (
 	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/gostor/gotgt/pkg/util/pool"
 )
 
 const (
@@ -203,6 +203,9 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		ddigest uint = 0
 		final   bool = false
 		cmd     *ISCSICommand
+		buf     []byte = make([]byte, BHS_SIZE)
+		length  int
+		err     error
 	)
 	conn.readLock.Lock()
 	defer conn.readLock.Unlock()
@@ -214,7 +217,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		switch conn.rxIOState {
 		case IOSTATE_RX_BHS:
 			log.Debug("rx handler: IOSTATE_RX_BHS")
-			buf, length, err := conn.readData(BHS_SIZE)
+			buf, length, err = conn.readData(BHS_SIZE)
 			if err != nil {
 				log.Error(err)
 				return
@@ -224,7 +227,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
-			conn.rxBuffer = buf
+			//conn.rxBuffer = buf
 			cmd, err = parseHeader(buf)
 			if err != nil {
 				log.Error(err)
@@ -237,8 +240,10 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				conn.rxIOState = IOSTATE_RX_INIT_AHS
 				break
 			}
-			log.Debugf("got command: \n%s", cmd.String())
-			log.Debugf("got buffer: %v", buf)
+			if log.GetLevel() == log.DebugLevel {
+				log.Debugf("got command: \n%s", cmd.String())
+				log.Debugf("got buffer: %v", buf)
+			}
 			final = true
 		case IOSTATE_RX_INIT_AHS:
 			conn.rxIOState = IOSTATE_RX_DATA
@@ -254,7 +259,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				return
 			}
 			dl := ((cmd.DataLen + DataPadding - 1) / DataPadding) * DataPadding
-			buf := []byte{}
+			cmd.RawData = pool.NewBuffer(dl)
 			length := 0
 			for length < dl {
 				b, l, err := conn.readData(dl - length)
@@ -262,8 +267,8 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 					log.Error(err)
 					return
 				}
+				copy(cmd.RawData[length:], b)
 				length += l
-				buf = append(buf, b...)
 			}
 			if length != dl {
 				log.Debugf("get length is %d, but expected %d", length, dl)
@@ -271,10 +276,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
-			cmd.RawData = buf[:length]
-			conn.rxBuffer = append(conn.rxBuffer, buf...)
 			final = true
-			log.Debugf("got command: \n%s", cmd.String())
 		default:
 			log.Errorf("error %d %d\n", conn.state, conn.rxIOState)
 			return
@@ -547,21 +549,48 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 	switch req.OpCode {
 	case OpSCSICmd:
 		log.Debugf("SCSI Command processing...")
-		scmd := &api.SCSICommand{}
+		scmd := &api.SCSICommand{
+			ITNexusID:       conn.session.ITNexus.ID,
+			SCB:             req.CDB,
+			SCBLength:       len(req.CDB),
+			Lun:             req.LUN,
+			Tag:             uint64(req.TaskTag),
+			RelTargetPortID: conn.session.TPGT,
+		}
+		if req.Read {
+			if req.Write {
+				scmd.Direction = api.SCSIDataBidirection
+			} else {
+				scmd.Direction = api.SCSIDataRead
+			}
+		} else {
+			if req.Write {
+				scmd.Direction = api.SCSIDataWrite
+			}
+		}
+
 		task := &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: scmd}
 		if req.Write {
-			task.offset = req.DataLen
 			task.r2tCount = int(req.ExpectedDataLen) - req.DataLen
 			if !req.Final {
 				task.unsolCount = 1
 			}
+			// new buffer for the data out
+			if scmd.OutSDBBuffer == nil {
+				blen := int(req.ExpectedDataLen)
+				if blen == 0 {
+					blen = int(req.DataLen)
+				}
+				scmd.OutSDBBuffer = &api.SCSIDataBuffer{
+					Length: uint32(blen),
+					Buffer: pool.NewBuffer(blen),
+				}
+			}
 			log.Debugf("SCSI write, R2T count: %d, unsol Count: %d, offset: %d", task.r2tCount, task.unsolCount, task.offset)
 
-			if task.scmd.OutSDBBuffer.Buffer == nil {
-				task.scmd.OutSDBBuffer.Buffer = bytes.NewBuffer([]byte{})
-			}
 			if conn.session.SessionParam[ISCSI_PARAM_IMM_DATA_EN].Value == 1 {
-				task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
+				copy(scmd.OutSDBBuffer.Buffer[task.offset:], conn.req.RawData)
+				task.offset += conn.req.DataLen
 			}
 			if task.r2tCount > 0 {
 				// prepare to receive more data
@@ -578,6 +607,11 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 					s.handler(DATAIN, conn)
 					return nil
 				}
+			}
+		} else if scmd.InSDBBuffer == nil {
+			scmd.InSDBBuffer = &api.SCSIDataBuffer{
+				Length: uint32(req.ExpectedDataLen),
+				Buffer: pool.NewBuffer(int(req.ExpectedDataLen)),
 			}
 		}
 		task.offset = 0
@@ -616,9 +650,9 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 			log.Error(err)
 			return
 		}
-		task.offset = task.offset + conn.req.DataLen
+		copy(task.scmd.OutSDBBuffer.Buffer[task.offset:], conn.req.RawData)
+		task.offset += conn.req.DataLen
 		task.r2tCount = task.r2tCount - conn.req.DataLen
-		task.scmd.OutSDBBuffer.Buffer.Write(conn.req.RawData)
 		log.Debugf("Final: %v", conn.req.Final)
 		log.Debugf("r2tCount: %v", task.r2tCount)
 		if !conn.req.Final {
@@ -722,27 +756,7 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 	cmd := task.cmd
 	switch cmd.OpCode {
 	case OpSCSICmd, OpSCSIOut:
-		if cmd.Read {
-			if cmd.Write {
-				task.scmd.Direction = api.SCSIDataBidirection
-			} else {
-				task.scmd.Direction = api.SCSIDataRead
-			}
-		} else {
-			if cmd.Write {
-				task.scmd.Direction = api.SCSIDataWrite
-			}
-		}
-		task.scmd.ITNexusID = task.conn.session.ITNexus.ID
-		task.scmd.SCB = bytes.NewBuffer(cmd.CDB)
-		task.scmd.SCBLength = len(cmd.CDB)
-		task.scmd.Lun = cmd.LUN
-		task.scmd.Tag = uint64(cmd.TaskTag)
-		task.scmd.RelTargetPortID = task.conn.session.TPGT
 		task.state = taskSCSI
-		if task.scmd.OutSDBBuffer.Buffer == nil {
-			task.scmd.OutSDBBuffer.Buffer = bytes.NewBuffer(cmd.RawData)
-		}
 		// add scsi target process queue
 		err := s.SCSI.AddCommandQueue(task.conn.session.Target.SCSITarget.TID, task.scmd)
 		if err != nil {

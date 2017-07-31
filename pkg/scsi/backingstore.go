@@ -24,6 +24,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/gostor/gotgt/pkg/util/pool"
 )
 
 type BaseBackingStore struct {
@@ -53,16 +54,16 @@ func NewBackingStore(name string) (api.BackingStore, error) {
 
 func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key byte, asc SCSISubError) {
 	var (
-		scb             = cmd.SCB.Bytes()
-		offset          = cmd.Offset
-		opcode          = api.SCSICommandType(scb[0])
-		lu              = cmd.Device
-		wbuf     []byte = []byte{}
-		tl       int64  = int64(cmd.TL)
-		rbuf            = make([]byte, tl)
+		scb      = cmd.SCB
+		offset   = cmd.Offset
+		opcode   = api.SCSICommandType(scb[0])
+		lu       = cmd.Device
 		length   int
 		doVerify bool = false
 		doWrite  bool = false
+		wbuf     []byte
+		tl       int64  = int64(cmd.TL)
+		rbuf     []byte = pool.NewBuffer(int(tl))
 	)
 	key = HARDWARE_ERROR
 	asc = ASC_INTERNAL_TGT_FAILURE
@@ -75,9 +76,10 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			asc = ASC_READ_ERROR
 			break
 		}
-		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(tmpbuf)
-
-		wbuf = cmd.OutSDBBuffer.Buffer.Bytes()
+		copy(cmd.InSDBBuffer.Buffer, tmpbuf)
+		if cmd.OutSDBBuffer != nil {
+			wbuf = cmd.OutSDBBuffer.Buffer
+		}
 		doWrite = true
 		goto write
 	case api.COMPARE_AND_WRITE:
@@ -91,8 +93,12 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		break
 	case api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
 		doVerify = true
+		fallthrough
 	case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16:
-		wbuf = cmd.OutSDBBuffer.Buffer.Bytes()
+		// For stupid client which does not set WRITE flag
+		if cmd.OutSDBBuffer != nil {
+			wbuf = cmd.OutSDBBuffer.Buffer
+		}
 		doWrite = true
 		goto write
 	case api.WRITE_SAME, api.WRITE_SAME_16:
@@ -113,7 +119,8 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
 		}
-		cmd.InSDBBuffer.Buffer = bytes.NewBuffer(rbuf)
+		cmd.InSDBBuffer.Resid = uint32(length)
+		copy(cmd.InSDBBuffer.Buffer, rbuf)
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
 		err = bs.DataAdvise(int64(offset), tl, util.POSIX_FADV_WILLNEED)
 		if err != nil {
@@ -121,6 +128,10 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			asc = ASC_READ_ERROR
 		}
 	case api.VERIFY_10, api.VERIFY_12, api.VERIFY_16:
+		// For stupid client which does not set WRITE flag
+		if cmd.OutSDBBuffer != nil {
+			wbuf = cmd.OutSDBBuffer.Buffer
+		}
 		doVerify = true
 		goto verify
 	case api.UNMAP:
@@ -138,7 +149,7 @@ write:
 			asc = ASC_READ_ERROR
 			goto sense
 		}
-		log.Debugf("write data at %d for length %d", offset, len(wbuf))
+		log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
 		var pg *api.ModePage
 		for _, p := range lu.ModePages {
 			if p.PageCode == 0x08 && p.SubPageCode == 0 {
@@ -171,11 +182,14 @@ verify:
 			asc = ASC_READ_ERROR
 			goto sense
 		}
-		if !bytes.Equal(cmd.OutSDBBuffer.Buffer.Bytes(), rbuf) {
-			err = fmt.Errorf("verify fail between out buffer and read buffer")
+		if !bytes.Equal(wbuf, rbuf) {
+			err = fmt.Errorf("verify fail between out buffer[length=%d] and read buffer[length=%d]", len(wbuf), len(rbuf))
 			key = MISCOMPARE
 			asc = ASC_MISCOMPARE_DURING_VERIFY_OPERATION
 			goto sense
+		} else {
+			log.Warnf("%v", wbuf)
+			log.Warnf("%v", rbuf)
 		}
 		if scb[1]&0x10 != 0 {
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_WILLNEED)

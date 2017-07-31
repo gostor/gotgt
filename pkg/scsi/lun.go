@@ -83,7 +83,7 @@ func GetReservation(dev *api.SCSILu, nexusID uint64) *api.SCSIReservation {
 }
 
 func luPerformCommand(tid int, cmd *api.SCSICommand) api.SAMStat {
-	op := int(cmd.SCB.Bytes()[0])
+	op := int(cmd.SCB[0])
 	fn := cmd.Device.DeviceProtocol.PerformCommand(op)
 	if fn != nil {
 		fnop := fn.(SCSIDeviceOperation)

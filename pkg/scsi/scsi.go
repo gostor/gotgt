@@ -80,7 +80,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	lun := *(*uint64)(unsafe.Pointer(&scmd.Lun))
 	scmd.Device = target.Devices[lun]
 
-	log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB.Bytes()[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
+	log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
 
 	if scmd.Device == nil {
 		scmd.Device = target.LUN0
@@ -91,6 +91,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 			return nil
 		}
 	}
+
 	result := scmd.Device.PerformCommand(tid, scmd)
 	if result != api.SAMStatGood {
 		scmd.Result = result.Stat
@@ -125,7 +126,8 @@ func NewSCSIDeviceOperation(fn api.CommandFunc, sa []*SCSIServiceAction, pr uint
 
 func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	senseBuffer := &bytes.Buffer{}
-	inBufLen, ok := SCSICDBBufXLength(cmd.SCB.Bytes())
+	inBufLen, ok := SCSICDBBufXLength(cmd.SCB)
+	var length uint32 = 0xa
 
 	if cmd.Device.Attrs.SenseFormat {
 		// descriptor format
@@ -134,10 +136,9 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		senseBuffer.WriteByte(key)
 		senseBuffer.WriteByte((byte(asc) >> 8) & 0xff)
 		senseBuffer.WriteByte(byte(asc) & 0xff)
-		cmd.SenseLength = 8
+		length = 8
 	} else {
 		// fixed format
-		var length uint32 = 0xa
 		// current, not deferred
 		senseBuffer.WriteByte(0x70)
 		senseBuffer.WriteByte(0x00)
@@ -154,10 +155,10 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		for i := 0; i < 4; i++ {
 			senseBuffer.WriteByte(0x00)
 		}
-		cmd.SenseLength = length + 8
+		length += 8
 	}
 	if ok {
-		if int64(len(senseBuffer.Bytes())) > inBufLen {
+		if int64(length) > inBufLen {
 			log.Warnf("sense buffer is bigger than in buffer")
 			senseBuffer.Truncate(int(inBufLen))
 		}
@@ -165,7 +166,7 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		log.Debugf("cannot calc cbd alloc length. truncate failed")
 	}
 	cmd.Result = key
-	cmd.SenseBuffer = senseBuffer
+	cmd.SenseBuffer = &api.SenseBuffer{senseBuffer.Bytes(), length}
 }
 
 func getSCSIReadWriteOffset(scb []byte) uint64 {

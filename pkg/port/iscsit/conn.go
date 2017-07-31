@@ -24,6 +24,7 @@ import (
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/gostor/gotgt/pkg/util/pool"
 )
 
 const (
@@ -126,7 +127,7 @@ func (c *iscsiConnection) init() {
 }
 
 func (c *iscsiConnection) readData(size int) ([]byte, int, error) {
-	var buf = make([]byte, size)
+	var buf = pool.NewBuffer(size)
 	length, err := io.ReadFull(c.conn, buf)
 	if err != nil {
 		return nil, -1, err
@@ -179,13 +180,16 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		scmd := task.scmd
 		resp.Status = scmd.Result
 		if scmd.Result != 0 && scmd.SenseBuffer != nil {
-			length := util.MarshalUint32(uint32(scmd.SenseLength))
-			resp.RawData = append(length[2:4], scmd.SenseBuffer.Bytes()...)
+			length := util.MarshalUint32(scmd.SenseBuffer.Length)
+			resp.RawData = append(length[2:4], scmd.SenseBuffer.Buffer...)
 		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
-			if scmd.InSDBBuffer.Buffer != nil {
+			if scmd.InSDBBuffer != nil {
 				resp.Resid = scmd.InSDBBuffer.Resid
-				buf := scmd.InSDBBuffer.Buffer.Bytes()
-				resp.RawData = buf
+				if resp.Resid != 0 && resp.Resid < scmd.InSDBBuffer.Length {
+					resp.RawData = scmd.InSDBBuffer.Buffer[:resp.Resid]
+				} else {
+					resp.RawData = scmd.InSDBBuffer.Buffer
+				}
 			} else {
 				resp.RawData = []byte{}
 			}

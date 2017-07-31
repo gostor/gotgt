@@ -16,7 +16,6 @@ limitations under the License.
 package api
 
 import (
-	"bytes"
 	"errors"
 	"sync"
 
@@ -144,8 +143,13 @@ const (
 	SCSIDataBidirection
 )
 
+type SenseBuffer struct {
+	Buffer []byte
+	Length uint32
+}
+
 type SCSIDataBuffer struct {
-	Buffer         *bytes.Buffer
+	Buffer         []byte
 	Length         uint32
 	TransferLength uint32
 	Resid          uint32
@@ -166,21 +170,20 @@ type SCSICommand struct {
 	Device          *SCSILu
 	State           SCSICommandState
 	Direction       SCSIDataDirection
-	InSDBBuffer     SCSIDataBuffer
-	OutSDBBuffer    SCSIDataBuffer
+	InSDBBuffer     *SCSIDataBuffer
+	OutSDBBuffer    *SCSIDataBuffer
 	RelTargetPortID uint16
 	// Command ITN ID
 	ITNexusID     uuid.UUID
 	Offset        uint64
 	TL            uint32
-	SCB           *bytes.Buffer
+	SCB           []byte
 	SCBLength     int
 	Lun           [8]uint8
 	Attribute     int
 	Tag           uint64
 	Result        byte
-	SenseBuffer   *bytes.Buffer
-	SenseLength   uint32
+	SenseBuffer   *SenseBuffer
 	ITNexus       *ITNexus
 	ITNexusLuInfo *ITNexusLuInfo
 }

@@ -73,6 +73,15 @@ func MarshalKVText(kv []KeyValue) []byte {
 	return data
 }
 
+func MarshalUint16(i uint16) []byte {
+	var data []byte
+	for j := 8; j >= 0; j -= 8 {
+		b := byte(i >> uint16(j))
+		data = append(data, b)
+	}
+	return data
+}
+
 func MarshalUint32(i uint32) []byte {
 	var data []byte
 	for j := 24; j >= 0; j -= 8 {
