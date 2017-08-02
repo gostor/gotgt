@@ -217,7 +217,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		switch conn.rxIOState {
 		case IOSTATE_RX_BHS:
 			log.Debug("rx handler: IOSTATE_RX_BHS")
-			buf, length, err = conn.readData(BHS_SIZE)
+			length, err = conn.readData(buf)
 			if err != nil {
 				log.Error(err)
 				return
@@ -227,7 +227,6 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				conn.state = CONN_STATE_CLOSE
 				return
 			}
-			//conn.rxBuffer = buf
 			cmd, err = parseHeader(buf)
 			if err != nil {
 				log.Error(err)
@@ -262,12 +261,11 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			cmd.RawData = pool.NewBuffer(dl)
 			length := 0
 			for length < dl {
-				b, l, err := conn.readData(dl - length)
+				l, err := conn.readData(cmd.RawData[length:])
 				if err != nil {
 					log.Error(err)
 					return
 				}
-				copy(cmd.RawData[length:], b)
 				length += l
 			}
 			if length != dl {

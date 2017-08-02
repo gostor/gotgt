@@ -24,7 +24,6 @@ import (
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/gostor/gotgt/pkg/util/pool"
 )
 
 const (
@@ -126,13 +125,12 @@ func (c *iscsiConnection) init() {
 	sort.Sort(c.loginParam.sessionParam)
 }
 
-func (c *iscsiConnection) readData(size int) ([]byte, int, error) {
-	var buf = pool.NewBuffer(size)
+func (c *iscsiConnection) readData(buf []byte) (int, error) {
 	length, err := io.ReadFull(c.conn, buf)
 	if err != nil {
-		return nil, -1, err
+		return -1, err
 	}
-	return buf, length, nil
+	return length, nil
 }
 
 func (c *iscsiConnection) write(resp []byte) (int, error) {
