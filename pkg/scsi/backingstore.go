@@ -54,16 +54,15 @@ func NewBackingStore(name string) (api.BackingStore, error) {
 
 func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key byte, asc SCSISubError) {
 	var (
-		scb      = cmd.SCB
-		offset   = cmd.Offset
-		opcode   = api.SCSICommandType(scb[0])
-		lu       = cmd.Device
-		length   int
-		doVerify bool = false
-		doWrite  bool = false
-		wbuf     []byte
-		tl       int64  = int64(cmd.TL)
-		rbuf     []byte = pool.NewBuffer(int(tl))
+		scb        = cmd.SCB
+		offset     = cmd.Offset
+		opcode     = api.SCSICommandType(scb[0])
+		lu         = cmd.Device
+		length     int
+		doVerify   bool = false
+		doWrite    bool = false
+		rbuf, wbuf []byte
+		tl         int64 = int64(cmd.TL)
 	)
 	key = HARDWARE_ERROR
 	asc = ASC_INTERNAL_TGT_FAILURE
@@ -105,6 +104,7 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
+		rbuf = pool.NewBuffer(int(tl))
 		rbuf, err = bs.Read(int64(offset), tl)
 		if err != nil && err != io.EOF {
 			key = MEDIUM_ERROR
@@ -141,7 +141,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 	}
 write:
 	if doWrite {
-		// hack: wbuf = []byte("hello world!")
 		err = bs.Write(wbuf, int64(offset))
 		if err != nil {
 			log.Error(err)
@@ -176,6 +175,7 @@ write:
 	}
 verify:
 	if doVerify {
+		rbuf = pool.NewBuffer(int(tl))
 		rbuf, err = bs.Read(int64(offset), tl)
 		if err != nil {
 			key = MEDIUM_ERROR
@@ -187,9 +187,6 @@ verify:
 			key = MISCOMPARE
 			asc = ASC_MISCOMPARE_DURING_VERIFY_OPERATION
 			goto sense
-		} else {
-			log.Warnf("%v", wbuf)
-			log.Warnf("%v", rbuf)
 		}
 		if scb[1]&0x10 != 0 {
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_WILLNEED)

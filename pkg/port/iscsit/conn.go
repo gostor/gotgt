@@ -155,7 +155,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 	if task == nil {
 		task = conn.rxTask
 	}
-	resp := &ISCSICommand{
+	conn.resp = &ISCSICommand{
 		StatSN:          conn.req.ExpStatSN,
 		TaskTag:         conn.req.TaskTag,
 		ExpCmdSN:        conn.session.ExpCmdSN,
@@ -164,55 +164,55 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 	}
 	switch oc {
 	case OpReady:
-		resp.OpCode = OpReady
-		resp.R2TSN = task.r2tSN
-		resp.BufferOffset = uint32(task.offset)
-		resp.DesiredLength = uint32(task.r2tCount)
+		conn.resp.OpCode = OpReady
+		conn.resp.R2TSN = task.r2tSN
+		conn.resp.BufferOffset = uint32(task.offset)
+		conn.resp.DesiredLength = uint32(task.r2tCount)
 		if val := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
-			resp.DesiredLength = uint32(val)
+			conn.resp.DesiredLength = uint32(val)
 		}
 	case OpSCSIIn, OpSCSIResp:
-		resp.OpCode = oc
-		resp.Immediate = true
-		resp.Final = true
-		resp.SCSIResponse = 0x00
-		resp.HasStatus = true
+		conn.resp.OpCode = oc
+		conn.resp.Immediate = true
+		conn.resp.Final = true
+		conn.resp.SCSIResponse = 0x00
+		conn.resp.HasStatus = true
 		scmd := task.scmd
-		resp.Status = scmd.Result
+		conn.resp.Status = scmd.Result
 		if scmd.Result != 0 && scmd.SenseBuffer != nil {
 			length := util.MarshalUint32(scmd.SenseBuffer.Length)
-			resp.RawData = append(length[2:4], scmd.SenseBuffer.Buffer...)
+			conn.resp.RawData = append(length[2:4], scmd.SenseBuffer.Buffer...)
 		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
 			if scmd.InSDBBuffer != nil {
-				resp.Resid = scmd.InSDBBuffer.Resid
-				if resp.Resid != 0 && resp.Resid < scmd.InSDBBuffer.Length {
-					resp.RawData = scmd.InSDBBuffer.Buffer[:resp.Resid]
+				conn.resp.Resid = scmd.InSDBBuffer.Resid
+				if conn.resp.Resid != 0 && conn.resp.Resid < scmd.InSDBBuffer.Length {
+					conn.resp.RawData = scmd.InSDBBuffer.Buffer[:conn.resp.Resid]
 				} else {
-					resp.RawData = scmd.InSDBBuffer.Buffer
+					conn.resp.RawData = scmd.InSDBBuffer.Buffer
 				}
 			} else {
-				resp.RawData = []byte{}
+				conn.resp.RawData = []byte{}
 			}
 		}
 
 	case OpNoopIn, OpReject:
-		resp.OpCode = oc
-		resp.Final = true
-		resp.NSG = FullFeaturePhase
-		resp.ExpCmdSN = conn.req.CmdSN + 1
+		conn.resp.OpCode = oc
+		conn.resp.Final = true
+		conn.resp.NSG = FullFeaturePhase
+		conn.resp.ExpCmdSN = conn.req.CmdSN + 1
 	case OpSCSITaskResp:
-		resp.OpCode = oc
-		resp.Final = true
-		resp.NSG = FullFeaturePhase
-		resp.ExpCmdSN = conn.req.CmdSN + 1
-		resp.Result = task.result
+		conn.resp.OpCode = oc
+		conn.resp.Final = true
+		conn.resp.NSG = FullFeaturePhase
+		conn.resp.ExpCmdSN = conn.req.CmdSN + 1
+		conn.resp.Result = task.result
 	case OpLoginResp:
-		resp.OpCode = OpLoginResp
-		resp.Transit = conn.loginParam.tgtTrans
-		resp.CSG = conn.req.CSG
-		resp.NSG = conn.loginParam.tgtNSG
-		resp.ExpCmdSN = conn.req.CmdSN
-		resp.MaxCmdSN = conn.req.CmdSN
+		conn.resp.OpCode = OpLoginResp
+		conn.resp.Transit = conn.loginParam.tgtTrans
+		conn.resp.CSG = conn.req.CSG
+		conn.resp.NSG = conn.loginParam.tgtNSG
+		conn.resp.ExpCmdSN = conn.req.CmdSN
+		conn.resp.MaxCmdSN = conn.req.CmdSN
 		negoKeys, err := conn.processLoginData()
 		if err != nil {
 			return err
@@ -221,11 +221,10 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 			negoKeys = loginKVDeclare(conn, negoKeys)
 			conn.loginParam.keyDeclared = true
 		}
-		resp.RawData = util.MarshalKVText(negoKeys)
+		conn.resp.RawData = util.MarshalKVText(negoKeys)
 		conn.txTask = nil
 	}
 
-	conn.resp = resp
 	return nil
 }
 

@@ -19,12 +19,16 @@ package pool
 
 import "sync"
 
+var bytePool sync.Pool = sync.Pool{}
+
 func NewBuffer(size int) []byte {
-	var bytePool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, size)
-		},
+	bytePool.New = func() interface{} {
+		return make([]byte, size)
 	}
 
 	return bytePool.Get().([]byte)
+}
+
+func ReleaseBuffer(b []byte) {
+	bytePool.Put(b)
 }

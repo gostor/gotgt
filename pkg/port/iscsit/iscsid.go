@@ -156,7 +156,6 @@ func (s *ISCSITargetDriver) Run() error {
 		log.Error(err)
 		os.Exit(1)
 	}
-	defer l.Close()
 
 	for {
 		log.Info("Listening ...")
@@ -178,6 +177,7 @@ func (s *ISCSITargetDriver) Run() error {
 		// start a new thread to do with this command
 		go s.handler(DATAIN, iscsiConn)
 	}
+	l.Close()
 	return nil
 }
 
@@ -476,10 +476,12 @@ SendRemainingData:
 	for {
 		switch conn.txIOState {
 		case IOSTATE_TX_BHS:
-			log.Debug("ready to write response")
-			log.Debugf("response is %s", resp.String())
+			if log.GetLevel() == log.DebugLevel {
+				log.Debug("ready to write response")
+				log.Debugf("response is %s", resp.String())
+			}
 			if l, err := conn.write(resp.Bytes()); err != nil {
-				log.Error(err)
+				log.Errorf("failed to write data to client: %v", err)
 				return
 			} else {
 				conn.txIOState = IOSTATE_TX_INIT_AHS
@@ -538,7 +540,7 @@ SendRemainingData:
 	case CONN_STATE_SCSI:
 		conn.txTask = nil
 	default:
-		log.Warnf("unexpected connection state: %d", conn.state)
+		log.Warnf("unexpected connection state: %v", conn.State())
 		conn.rxIOState = IOSTATE_RX_BHS
 		s.handler(DATAIN, conn)
 	}
