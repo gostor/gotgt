@@ -278,7 +278,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 
 func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 	// rfc7143 11.4
-	buf := &bytes.Buffer{}
+	buf := bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSIResp))
 	var flag byte = 0x80
 	if m.Resid > 0 {
@@ -321,8 +321,12 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 
 func (m *ISCSICommand) dataInBytes() []byte {
 	// rfc7143 11.7
-	buf := &bytes.Buffer{}
-	buf.WriteByte(byte(OpSCSIIn))
+	dl := m.DataLen
+	for dl%4 > 0 {
+		dl++
+	}
+	var buf = make([]byte, (48 + dl))
+	buf[0] = byte(OpSCSIIn)
 	var flag byte
 	if m.FinalInSeq || m.Final == true {
 		flag |= 0x80
@@ -334,48 +338,33 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	if m.Resid > 0 {
 		if m.Resid > m.ExpectedDataLen {
 			flag |= 0x04
-		} else {
+		} else if m.Resid < m.ExpectedDataLen {
 			flag |= 0x02
 		}
 	}
-	buf.WriteByte(flag)
-	buf.WriteByte(0x00)
+	buf[1] = flag
+	//buf.WriteByte(0x00)
 	if m.HasStatus && m.Final == true {
 		flag = byte(m.Status)
 	}
-	buf.WriteByte(flag)
-
-	buf.WriteByte(0x00) // 4
-
-	buf.Write(util.MarshalUint64(uint64(m.DataLen))[5:]) // 5-8
+	//buf.WriteByte(flag)
+	buf[3] = flag
+	copy(buf[5:], util.MarshalUint64(uint64(m.DataLen))[5:])
 	// Skip through to byte 16 Since A bit is not set 11.7.4
-	for i := 0; i < 8; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		// 11.7.4
-		buf.WriteByte(0xff)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.DataSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.BufferOffset))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.Resid))[4:])
-	buf.Write(m.RawData[m.BufferOffset : m.BufferOffset+uint32(m.DataLen)])
-	dl := m.DataLen
-	for dl%4 > 0 {
-		dl++
-		buf.WriteByte(0x00)
-	}
+	copy(buf[16:], util.MarshalUint32(m.TaskTag))
+	copy(buf[24:], util.MarshalUint32(m.StatSN))
+	copy(buf[28:], util.MarshalUint32(m.ExpCmdSN))
+	copy(buf[32:], util.MarshalUint32(m.MaxCmdSN))
+	copy(buf[36:], util.MarshalUint32(m.DataSN))
+	copy(buf[40:], util.MarshalUint32(m.BufferOffset))
+	copy(buf[44:], util.MarshalUint32(m.Resid))
+	copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
 
-	return buf.Bytes()
+	return buf
 }
 
 func (m *ISCSICommand) textRespBytes() []byte {
-	buf := &bytes.Buffer{}
-
+	buf := bytes.Buffer{}
 	buf.WriteByte(byte(OpTextResp))
 	var b byte
 	if m.Final {
@@ -415,8 +404,7 @@ func (m *ISCSICommand) textRespBytes() []byte {
 }
 
 func (m *ISCSICommand) noopInBytes() []byte {
-	buf := &bytes.Buffer{}
-
+	buf := bytes.Buffer{}
 	buf.WriteByte(byte(OpNoopIn))
 	var b byte
 	b |= 0x80
@@ -452,7 +440,7 @@ func (m *ISCSICommand) noopInBytes() []byte {
 
 func (m *ISCSICommand) scsiTMFRespBytes() []byte {
 	// rfc7143 11.6
-	buf := &bytes.Buffer{}
+	buf := bytes.Buffer{}
 	buf.WriteByte(byte(OpSCSITaskResp))
 	buf.WriteByte(0x80)
 	buf.WriteByte(m.Result)
@@ -477,9 +465,8 @@ func (m *ISCSICommand) scsiTMFRespBytes() []byte {
 }
 
 func (m *ISCSICommand) r2tRespBytes() []byte {
-
 	// rfc7143 11.8
-	buf := &bytes.Buffer{}
+	buf := bytes.Buffer{}
 	buf.WriteByte(byte(OpReady))
 	var b byte
 	if m.Final {

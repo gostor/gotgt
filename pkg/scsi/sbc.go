@@ -18,8 +18,6 @@ limitations under the License.
 package scsi
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"unsafe"
 
@@ -235,18 +233,11 @@ func SBCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		deviceSpecific |= 0x80
 	}
 
-	buf := cmd.InSDBBuffer.Buffer
-	data := []byte{0x00, 0x00, 0x00, 0x00}
-	if buf != nil {
-		data = buf.Bytes()
-	}
-
-	if cmd.SCB.Bytes()[0] == 0x1a {
-		data[2] = deviceSpecific
+	if cmd.SCB[0] == 0x1a {
+		cmd.InSDBBuffer.Buffer[2] = deviceSpecific
 	} else {
-		data[3] = deviceSpecific
+		cmd.InSDBBuffer.Buffer[3] = deviceSpecific
 	}
-	cmd.InSDBBuffer.Buffer = bytes.NewBuffer(data)
 
 	return api.SAMStatGood
 }
@@ -284,15 +275,15 @@ func SBCFormatUnit(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	if cmd.SCB.Bytes()[1]&0x80 != 0 {
+	if cmd.SCB[1]&0x80 != 0 {
 		// we dont support format protection information
 		goto sense
 	}
-	if cmd.SCB.Bytes()[1]&0x10 != 0 {
+	if cmd.SCB[1]&0x10 != 0 {
 		// we dont support format data
 		goto sense
 	}
-	if cmd.SCB.Bytes()[1]&0x07 != 0 {
+	if cmd.SCB[1]&0x07 != 0 {
 		// defect list format must be 0
 		goto sense
 	}
@@ -330,7 +321,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 		key    = ILLEGAL_REQUEST
 		asc    = ASC_INVALID_FIELD_IN_CDB
 		dev    = cmd.Device
-		scb    = cmd.SCB.Bytes()
+		scb    = cmd.SCB
 		opcode = api.SCSICommandType(scb[0])
 		lba    uint64
 		tl     uint32
@@ -352,9 +343,6 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			asc = ASC_INVALID_FIELD_IN_CDB
 			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_INVALID_FIELD_IN_CDB) encounter")
 			goto sense
-		}
-		if cmd.OutSDBBuffer.Buffer == nil {
-			cmd.OutSDBBuffer.Buffer = &bytes.Buffer{}
 		}
 	case api.WRITE_SAME, api.WRITE_SAME_16:
 		// We dont support resource-provisioning so ANCHOR bit == 1 is an error.
@@ -482,10 +470,9 @@ func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
  */
 func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		scb    = cmd.SCB.Bytes()
+		scb    = cmd.SCB
 		key    = ILLEGAL_REQUEST
 		asc    = ASC_LUN_NOT_SUPPORTED
-		data   = &bytes.Buffer{}
 		bshift = cmd.Device.BlockShift
 		size   = cmd.Device.Size >> bshift
 	)
@@ -501,24 +488,21 @@ func SBCReadCapacity(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	/*
-		if cmd.InSDBBuffer.Length < 8 {
-			goto overflow
-		}
-	*/
+	if cmd.InSDBBuffer.Length < 8 {
+		goto overflow
+	}
 
 	// data[0] = (size >> 32) ? __cpu_to_be32(0xffffffff) : __cpu_to_be32(size - 1);
 	if size>>32 != 0 {
-		binary.Write(data, binary.BigEndian, uint32(0xffffffff))
+		copy(cmd.InSDBBuffer.Buffer, util.MarshalUint32(uint32(0xffffffff)))
 	} else {
-		binary.Write(data, binary.BigEndian, uint32(size-1))
+		copy(cmd.InSDBBuffer.Buffer, util.MarshalUint32(uint32(size-1)))
 	}
 
 	// data[1] = __cpu_to_be32(1U << bshift);
-	binary.Write(data, binary.BigEndian, uint32(1<<bshift))
-	//overflow:
+	copy(cmd.InSDBBuffer.Buffer[4:], util.MarshalUint32(uint32(1<<bshift)))
+overflow:
 	cmd.InSDBBuffer.Resid = 8
-	cmd.InSDBBuffer.Buffer = data
 	return api.SAMStatGood
 sense:
 	cmd.InSDBBuffer.Resid = 0
@@ -537,7 +521,7 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 		key = ILLEGAL_REQUEST
 		asc = ASC_INVALID_FIELD_IN_CDB
 		dev = cmd.Device
-		scb = cmd.SCB.Bytes()
+		scb = cmd.SCB
 		lba uint64
 		tl  uint32
 		err error
@@ -548,14 +532,14 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	if cmd.SCB.Bytes()[1]&0xe0 != 0 {
+	if scb[1]&0xe0 != 0 {
 		// We only support protection information type 0
 		key = ILLEGAL_REQUEST
 		asc = ASC_INVALID_FIELD_IN_CDB
 		goto sense
 	}
 
-	if cmd.SCB.Bytes()[1]&0x02 == 0 {
+	if scb[1]&0x02 == 0 {
 		// no data compare with the media
 		return api.SAMStatGood
 	}
@@ -587,7 +571,6 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 	return api.SAMStatGood
 sense:
-	cmd.InSDBBuffer.Resid = 0
 	BuildSenseData(cmd, key, asc)
 	return api.SAMStatCheckCondition
 }
@@ -602,17 +585,19 @@ sense:
  */
 func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		data   = &bytes.Buffer{}
-		bshift = cmd.Device.BlockShift
-		size   = cmd.Device.Size >> bshift
+		bshift           = cmd.Device.BlockShift
+		size             = cmd.Device.Size >> bshift
+		allocationLength uint32
 	)
-	data.Write(util.MarshalUint64(uint64(size - 1)))
-	binary.Write(data, binary.BigEndian, uint32(1<<bshift))
-	val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
-	data.Write(util.MarshalUint32(uint32(val)))
-	binary.Write(data, binary.BigEndian, uint64(0))
-	binary.Write(data, binary.BigEndian, uint64(0))
-	cmd.InSDBBuffer.Buffer = data
+	allocationLength = util.GetUnalignedUint32(cmd.SCB[10:14])
+	copy(cmd.InSDBBuffer.Buffer, util.MarshalUint64(uint64(size-1)))
+	if allocationLength > 12 {
+		copy(cmd.InSDBBuffer.Buffer[8:], util.MarshalUint32(uint32(1<<bshift)))
+		if allocationLength > 16 {
+			val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
+			copy(cmd.InSDBBuffer.Buffer[12:], util.MarshalUint32(uint32(val)))
+		}
+	}
 	return api.SAMStatGood
 }
 
@@ -621,7 +606,7 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 		key = ILLEGAL_REQUEST
 		asc = ASC_INVALID_FIELD_IN_CDB
 		dev = cmd.Device
-		scb = cmd.SCB.Bytes()
+		scb = cmd.SCB
 		lba uint64
 		tl  uint32
 	)
@@ -631,14 +616,14 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	if cmd.SCB.Bytes()[1]&0xe0 != 0 {
+	if scb[1]&0xe0 != 0 {
 		// We only support protection information type 0
 		key = ILLEGAL_REQUEST
 		asc = ASC_INVALID_FIELD_IN_CDB
 		goto sense
 	}
 
-	if cmd.SCB.Bytes()[1]&0x02 == 0 {
+	if scb[1]&0x02 == 0 {
 		// no data compare with the media
 		return api.SAMStatGood
 	}
@@ -668,7 +653,7 @@ sense:
 }
 
 func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
-	opcode := api.SCSICommandType(cmd.SCB.Bytes()[1] & 0x1f)
+	opcode := api.SCSICommandType(cmd.SCB[1] & 0x1f)
 	switch opcode {
 	case api.READ_CAPACITY:
 		return SBCReadCapacity(host, cmd)
