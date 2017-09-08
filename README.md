@@ -1,6 +1,7 @@
 ## gotgt [![Build Status](https://travis-ci.org/gostor/gotgt.svg)](https://travis-ci.org/gostor/gotgt)
 
-gotgt is a simple SCSI Target framework implemented in golang, built for performance and density..
+The gotgt project is a simple SCSI Target framework implemented in golang built for performance and density.
+Very briefly, this iSCSI/SCSI target Go implementation can be included/imported as a library to allow upper layer iSCSI clients to communicate to the actual SCSI devices. The target configuration is static with a json file for the time being. The core functionality of this target library provides the iSCSI/SCSI protocol services. A simple flat file based LUN target implementation is provided with plug-in interface. In the future, a formal plugin mechanism will be provided and supported to work with more sophisticated backend storage arrays.
 
 ### What is SCSI?
 Small Computer System Interface (SCSI) is a set of standards for physically connecting and transferring data between computers and peripheral devices. The SCSI standards define commands, protocols, electrical and optical interfaces. SCSI is most commonly used for hard disk drives and tape drives, but it can connect a wide range of other devices, including scanners and CD drives, although not all controllers can handle all devices.
@@ -16,7 +17,7 @@ Currently, the gotgt is under heavy development, so there is no any release bina
 There is a only on binary name `gotgt`, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
 
 ### Build
-You will need to make sure that you have Go installed on your system and the `gotgt` repository is cloned in your $GOPATH.
+You will need to make sure that you have Go installed on your system and the automake package is installed also. The `gotgt` repository should be cloned in your $GOPATH.
 
 ```
 $ mkdir -p $GOPATH/src/github.com/gostor/
@@ -31,7 +32,18 @@ $ make
 ### How to use
 
 Now, there is lack of commands to operate the target and LU, however you can init the target/LU with config file in `~/.gotgt/config.json`, you may find a example at [here](./examples/config.json).
-Please note, if you want use that exmaple, you have to make sure file `/var/tmp/disk.img` is existed.
+Please note, if you want use that example, you have to make sure file `/var/tmp/disk.img` exists.
+
+### A quick overview of the source code
+
+The source code repository is right now organized into two main portions, i.e., the cmd and the pkg directories.
+
+The cmd directory implementation is intended to manage targets, LUNs and TPGTs, which includes create, remove and list actions. It provides these functionalities through a daemon. In the future, when fully enhanced and implemented, it would take RESTful syntax as well.
+
+The pkg directory has three main pieces, i.e., the API interface, the SCSI layer and the iSCSI target layer. The API interface provides management services such as create and remove targets. The iSCSI target layer implements the protocol required to receive and transmit iSCSI PDU's, and communicates with the SCSI layer to carry out SCSI commands and processing.
+The SCSI layer implements the SCSI SPC and SBC standards that talks to the SCSI devices attached to the target library.
+
+Note that the examples directory is intended to show static configurations that serve as the backend storage. The simplest configuration has one LUN and one flat file behind the LUN in question. This json configuration file is read once at the beginning of the iSCSI target library instantiation.
 
 ### Test
 
