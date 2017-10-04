@@ -48,6 +48,7 @@ Note that the examples directory is intended to show static configurations that 
 ### Test
 
 You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](https://github.com/gostor/libiscsi).
+For more information and example test scripts, please refer to the [test directory](./test).
 
 ## Performance
 
