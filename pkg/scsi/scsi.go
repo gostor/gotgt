@@ -134,7 +134,7 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		// current, not deferred
 		senseBuffer.WriteByte(0x72)
 		senseBuffer.WriteByte(key)
-		senseBuffer.WriteByte((byte(asc) >> 8) & 0xff)
+		senseBuffer.WriteByte(byte(asc>>8) & 0xff)
 		senseBuffer.WriteByte(byte(asc) & 0xff)
 		length = 8
 	} else {
@@ -150,8 +150,8 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 		for i := 0; i < 4; i++ {
 			senseBuffer.WriteByte(0x00)
 		}
-		senseBuffer.WriteByte(byte((uint16(asc) >> 8) & 0xff))
-		senseBuffer.WriteByte(byte(asc & 0x00ff))
+		senseBuffer.WriteByte(byte(asc>>8) & 0xff)
+		senseBuffer.WriteByte(byte(asc) & 0xff)
 		for i := 0; i < 4; i++ {
 			senseBuffer.WriteByte(0x00)
 		}
