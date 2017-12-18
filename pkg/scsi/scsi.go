@@ -34,11 +34,12 @@ type SCSITargetService struct {
 }
 
 var _instance *SCSITargetService
+var service sync.Once
 
 func NewSCSITargetService() *SCSITargetService {
-	if _instance == nil {
+	service.Do(func() {
 		_instance = &SCSITargetService{Targets: []*api.SCSITarget{}}
-	}
+	})
 	return _instance
 }
 
