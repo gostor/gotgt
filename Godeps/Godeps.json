@@ -58,6 +58,11 @@
 		{
 			"ImportPath": "golang.org/x/net/proxy",
 			"Rev": "d9558e5c97f85372afee28cf2b6059d7d3818919"
+		},
+		{
+			"ImportPath": "github.com/ceph/go-ceph",
+			"Rev": "bd5bc6d4cb3e3d3441f2ec4e9f89899178edfc71"
 		}
+
 	]
 }
