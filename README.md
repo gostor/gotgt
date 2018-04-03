@@ -14,7 +14,7 @@ The iSCSI is an acronym for Internet Small Computer Systems Interface, an Intern
 ## Getting started
 Currently, the gotgt is under heavy development, so there is no any release binaries so far, you have to build it from source.
 
-There is a only on binary name `gotgt`, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
+There is a only one binary name `gotgt`, you can start a daemon via `gotgt daemon` and control it via `gotgt list/create/rm`.
 
 ### Build
 You will need to make sure that you have Go installed on your system and the automake package is installed also. The `gotgt` repository should be cloned in your $GOPATH.
