@@ -97,7 +97,7 @@ func deviceReserve(cmd *api.SCSICommand) error {
 		}
 	}
 	if lu == nil {
-		log.Errorf("invalid target and lun %d %s", cmd.Target.TID, lun)
+		log.Errorf("invalid target and lun %d %d", cmd.Target.TID, lun)
 		return nil
 	}
 

@@ -148,7 +148,7 @@ func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 			conn.loginParam.tgtTrans = true
 		} else {
 			//Currently, we just reject these kind of cases
-			return negoKV, fmt.Errorf("reject CSG=%d,NSG=%d,trans",
+			return negoKV, fmt.Errorf("reject CSG=%d,NSG=%d,trans=%t",
 				conn.loginParam.iniCSG, conn.loginParam.iniNSG, conn.loginParam.iniTrans)
 		}
 	} else {
