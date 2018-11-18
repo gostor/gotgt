@@ -24,8 +24,6 @@ $ mkdir -p $GOPATH/src/github.com/gostor/
 $ cd $GOPATH/src/github.com/gostor/
 $ git clone https://github.com/gostor/gotgt gotgt
 $ cd gotgt
-$ ./autogen.sh
-$ ./configure
 $ make
 ```
 
