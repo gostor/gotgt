@@ -12,11 +12,7 @@ CEPH_RELEASE=jewel
 mkdir $WORKDIR
 pushd $WORKDIR
 
-ssh-keygen -f $HOME/.ssh/id_rsa -t rsa -N ''
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-
-git clone git://github.com/ceph/ceph-deploy
+git clone -b "v2.0.0" --single-branch --depth 1 https://github.com/ceph/ceph-deploy
 pushd ceph-deploy
 ./bootstrap
 ./ceph-deploy install --release ${CEPH_RELEASE} `hostname`
