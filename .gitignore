@@ -11,8 +11,6 @@ _test
 aclocal.m4
 .deps
 autom4te.cache
-Makefile
-Makefile.in
 ar-lib
 compile
 config.log
@@ -42,6 +40,6 @@ _testmain.go
 
 # intellij idea configure
 .idea
-/gotgt
 *.out
 *.bak
+_output
