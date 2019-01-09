@@ -23,9 +23,9 @@ import (
 	"sync"
 	"unsafe"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 type SCSITargetService struct {

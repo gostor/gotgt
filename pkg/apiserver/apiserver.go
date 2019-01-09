@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	systemdActivation "github.com/coreos/go-systemd/activation"
 	"github.com/docker/go-connections/sockets"
 	"github.com/gorilla/mux"
@@ -34,6 +33,7 @@ import (
 	"github.com/gostor/gotgt/pkg/apiserver/router/discovery"
 	"github.com/gostor/gotgt/pkg/apiserver/router/lu"
 	"github.com/gostor/gotgt/pkg/apiserver/router/target"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

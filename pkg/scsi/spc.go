@@ -22,10 +22,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {

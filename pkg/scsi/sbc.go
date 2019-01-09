@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"unsafe"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/gostor/gotgt/pkg/version"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

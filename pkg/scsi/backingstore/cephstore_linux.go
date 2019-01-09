@@ -22,9 +22,9 @@ import (
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/ceph/go-ceph/rados"
 	"github.com/ceph/go-ceph/rbd"
+	log "github.com/sirupsen/logrus"
 )
 
 // This ceph-rbd plugin is only for linux

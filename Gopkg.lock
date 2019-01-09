@@ -10,13 +10,6 @@
   version = "v0.1.0"
 
 [[projects]]
-  digest = "1:8f09ad7fe61704c7ed549f70d6709e7bf59cad64bd64b0eb4be79b3305fb257c"
-  name = "github.com/Sirupsen/logrus"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "f3cfb454f4c209e6668c95216c4744b8fddb2356"
-
-[[projects]]
   digest = "1:30f50828e5a6aa9257130334f34425a1bcba4e19b9f531f1da7747fbdc3235be"
   name = "github.com/ceph/go-ceph"
   packages = [
@@ -35,12 +28,12 @@
   version = "v9"
 
 [[projects]]
-  digest = "1:42a694aa820ffbb565bcb52ae1f2d1c11b341c1fadc447d05db2a66a68581bcc"
+  digest = "1:5a900d94d96d41ea116d7e6c46717fdf330f35d8bdd116798e2bc0c319f66565"
   name = "github.com/docker/go-connections"
   packages = ["sockets"]
   pruneopts = "UT"
-  revision = "990a1a1a70b0da4c4cb70e117971a4f0babfbf1a"
-  version = "v0.2.1"
+  revision = "7395e3f8aa162843a74ed6d48e79627d9792ac55"
+  version = "v0.4.0"
 
 [[projects]]
   digest = "1:874ca00e54068a78ce555979489511ec62cd4682bf068134dc4355753827895c"
@@ -65,11 +58,12 @@
   version = "v1.0"
 
 [[projects]]
-  digest = "1:1cff1ec506a4e1660095f349326b13b365dd4457fa666ed9e159b9d29694a360"
-  name = "github.com/opencontainers/runc"
-  packages = ["libcontainer/user"]
+  digest = "1:0a69a1c0db3591fcefb47f115b224592c8dfa4368b7ba9fae509d5e16cdc95c8"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
   pruneopts = "UT"
-  revision = "47e3f834d73e76bc2a6a585b48d2a93325b34979"
+  revision = "5c8c8bd35d3832f5d134ae1e1e375b69a4d25242"
+  version = "v1.0.1"
 
 [[projects]]
   digest = "1:274f67cb6fed9588ea2521ecdac05a6d62a8c51c074c1fccc6a49a40ba80e925"
@@ -78,6 +72,14 @@
   pruneopts = "UT"
   revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
   version = "v1.2.0"
+
+[[projects]]
+  digest = "1:87c2e02fb01c27060ccc5ba7c5a407cc91147726f8f40b70cceeedbc52b1f3a8"
+  name = "github.com/sirupsen/logrus"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e1e72e9de974bd926e5c56f83753fba2df402ce5"
+  version = "v1.3.0"
 
 [[projects]]
   digest = "1:bcc9aae4fb6d8d13ad94762090d9fe03a4d082f6682949e4a19180843afcc301"
@@ -94,6 +96,14 @@
   revision = "367864438f1b1a3c7db4da06a2f55b144e6784e0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:38f553aff0273ad6f367cb0a0f8b6eecbaef8dc6cb8b50e57b6a81c1d5b1e332"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  pruneopts = "UT"
+  revision = "ff983b9c42bc9fbf91556e191cc8efb585c16908"
+
+[[projects]]
   digest = "1:007c759d6b90bf206d4628e4ff501c20bcc3967fb15baec2e95f6e9af9c7b14d"
   name = "golang.org/x/net"
   packages = [
@@ -105,9 +115,12 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:466e5917ea5f69d435d0ab3015dc4b57b80d34a6caf1104097ac82ab462b86e4"
+  digest = "1:d3e0b1b48b36298893e7667f91bce04d1b6996e5eb93b898db926cad94ce9514"
   name = "golang.org/x/sys"
-  packages = ["unix"]
+  packages = [
+    "unix",
+    "windows",
+  ]
   pruneopts = "UT"
   revision = "7e31e0c00fa05cb5fbf4347b585621d6709e19a4"
 
@@ -115,13 +128,13 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/Sirupsen/logrus",
     "github.com/ceph/go-ceph/rados",
     "github.com/ceph/go-ceph/rbd",
     "github.com/coreos/go-systemd/activation",
     "github.com/docker/go-connections/sockets",
     "github.com/gorilla/mux",
     "github.com/satori/go.uuid",
+    "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "golang.org/x/net/context",
   ]
