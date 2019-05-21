@@ -594,7 +594,11 @@ func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 	if allocationLength > 12 {
 		copy(cmd.InSDBBuffer.Buffer[8:], util.MarshalUint32(uint32(1<<bshift)))
 		if allocationLength > 16 {
-			val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
+			var lbpme int
+			if cmd.Device.Attrs.Thinprovisioning {
+				lbpme = 1
+			}
+			val := (cmd.Device.Attrs.Lbppbe << 16) | (lbpme << 15) | cmd.Device.Attrs.LowestAlignedLBA
 			copy(cmd.InSDBBuffer.Buffer[12:], util.MarshalUint32(uint32(val)))
 		}
 	}
