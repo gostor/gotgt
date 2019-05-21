@@ -58,6 +58,7 @@ func InquiryPage0x00(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	descBuf.WriteByte(0x00)
 	descBuf.WriteByte(0x80)
 	descBuf.WriteByte(0x83)
+	descBuf.WriteByte(0xB0)
 	/*
 		TODO:
 			descBuf.WriteByte(0x86)
@@ -188,6 +189,42 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	return buf, pageLength
 }
 
+func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf                                 = &bytes.Buffer{}
+		pageLength                   uint16 = 0x3C
+		maxUnmapLbaCount             uint32 = 0
+		maxUnmapBlockDescriptorCount uint32 = 0
+	)
+
+	if cmd.Device.Attrs.Thinprovisioning {
+		maxUnmapLbaCount = 0xFFFFFFFF
+		maxUnmapBlockDescriptorCount = 0xFFFFFFFF
+	}
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//PAGE CODE
+	buf.WriteByte(0xB0)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+
+	buf.Write(make([]byte, 16))
+
+	//MAXIMUM UNMAP LBA COUNT
+	binary.Write(buf, binary.BigEndian, maxUnmapLbaCount)
+
+	//MAXIMUM UNMAP BLOCK DESCRIPTOR COUNT
+	binary.Write(buf, binary.BigEndian, maxUnmapBlockDescriptorCount)
+
+	buf.Write(make([]byte, 36))
+	return buf, pageLength
+}
+
 /*
  * SPCInquiry Implements SCSI INQUIRY command
  * The INQUIRY command requests the device server to return information regarding the logical unit and SCSI target device.
@@ -231,6 +268,8 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 			buf, _ = InquiryPage0x80(host, cmd)
 		case 0x83:
 			buf, _ = InquiryPage0x83(host, cmd)
+		case 0xB0:
+			buf, _ = InquiryPage0xB0(host, cmd)
 		default:
 			goto sense
 		}
