@@ -25,7 +25,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -649,7 +649,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 	var (
 		data = []byte{0x00, 0x00, 0x00, 0x00}
 	)
-	for _, i := range []api.SCSICommandType{api.TEST_UNIT_READY, api.WRITE_6, api.INQUIRY, api.READ_CAPACITY, api.WRITE_10, api.WRITE_16, api.REPORT_LUNS, api.WRITE_12} {
+	for _, i := range []api.SCSICommandType{api.TEST_UNIT_READY, api.WRITE_6, api.INQUIRY, api.READ_CAPACITY, api.WRITE_10, api.WRITE_16, api.REPORT_LUNS, api.WRITE_12, api.UNMAP} {
 		data = append(data, byte(i))
 		// reserved
 		data = append(data, 0x00)
@@ -666,7 +666,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 		}
 		// cdb length
 		length := getSCSICmdSize(i)
-		data = append(data, (length>>8)&0xff)
+		data = append(data, 0)
 		data = append(data, length&0xff)
 		// timeout descriptor
 		if rctd != 0 {
