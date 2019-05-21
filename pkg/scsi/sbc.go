@@ -58,7 +58,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// init LU's phy attribute
 	lu.Attrs.DeviceType = sbc.DeviceType
 	lu.Attrs.Qualifier = false
-	lu.Attrs.Thinprovisioning = false
+	lu.Attrs.Thinprovisioning = true
 	lu.Attrs.Removable = false
 	lu.Attrs.Readonly = false
 	lu.Attrs.SWP = false
