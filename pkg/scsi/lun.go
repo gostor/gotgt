@@ -20,13 +20,13 @@ import (
 	"strings"
 
 	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/config"
 )
 
 // NewSCSILu: create a new SCSI LU
 // path format <protocol>:/absolute/file/path
-func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error) {
-
-	pathinfo := strings.SplitN(path, ":", 2)
+func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
+	pathinfo := strings.SplitN(bs.Path, ":", 2)
 	if len(pathinfo) < 2 {
 		return nil, errors.New("invalid device path string")
 	}
@@ -43,8 +43,8 @@ func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error
 		PerformCommand: luPerformCommand,
 		DeviceProtocol: sbc,
 		Storage:        backing,
-		BlockShift:     api.DefaultBlockShift,
-		UUID:           device_uuid,
+		BlockShift:     bs.BlockShift,
+		UUID:           bs.DeviceID,
 	}
 
 	err = backing.Open(lu, backendPath)
@@ -53,7 +53,8 @@ func NewSCSILu(device_uuid uint64, path string, online bool) (*api.SCSILu, error
 	}
 	lu.Size = backing.Size(lu)
 	lu.DeviceProtocol.InitLu(lu)
-	lu.Attrs.Online = online
+	lu.Attrs.Thinprovisioning = bs.Thinprovisioning
+	lu.Attrs.Online = bs.Online
 	lu.Attrs.Lbppbe = 3
 	return lu, nil
 }

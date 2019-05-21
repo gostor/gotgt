@@ -135,7 +135,11 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		doVerify = true
 		goto verify
 	case api.UNMAP:
-		// TODO
+		err = bs.Unmap()
+		if err != nil {
+			key = MEDIUM_ERROR
+			asc = NO_ADDITIONAL_SENSE
+		}
 	default:
 		break
 	}

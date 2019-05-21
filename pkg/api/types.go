@@ -19,7 +19,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type SCSICommandType byte
@@ -351,6 +351,7 @@ type BackingStore interface {
 	Write([]byte, int64) error
 	DataSync() error
 	DataAdvise(int64, int64, uint32) error
+	Unmap() error
 }
 
 type SCSIDeviceProtocol interface {

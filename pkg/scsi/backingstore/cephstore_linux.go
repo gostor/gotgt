@@ -149,3 +149,7 @@ func (bs *CephBackingStore) DataSync() error {
 func (bs *CephBackingStore) DataAdvise(offset, length int64, advise uint32) error {
 	return nil
 }
+
+func (bs *CephBackingStore) Unmap() error {
+	return nil
+}

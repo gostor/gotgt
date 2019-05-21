@@ -101,9 +101,11 @@ var (
 )
 
 type BackendStorage struct {
-	DeviceID uint64 `json:"deviceID"`
-	Path     string `json:"path"`
-	Online   bool   `json:"online"`
+	DeviceID         uint64 `json:"deviceID"`
+	Path             string `json:"path"`
+	Online           bool   `json:"online"`
+	Thinprovisioning bool   `json:"thinprovisioning"`
+	BlockShift       uint   `json:"blockShift"`
 }
 
 type ISCSIPortalInfo struct {

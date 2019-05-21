@@ -73,7 +73,7 @@ func InitSCSILUMap(config *config.Config) error {
 	defer globalSCSILUMap.mutex.Unlock()
 
 	for _, bs := range config.Storages {
-		lu, err := NewSCSILu(bs.DeviceID, bs.Path, bs.Online)
+		lu, err := NewSCSILu(&bs)
 		if err != nil {
 			return fmt.Errorf("Init SCSI LU map error: %v", err)
 		}
