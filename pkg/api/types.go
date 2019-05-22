@@ -19,7 +19,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type SCSICommandType byte
@@ -278,7 +278,7 @@ type SCSILuPhyAttribute struct {
 }
 
 var (
-	DefaultBlockShift      uint = 9
+	DefaultBlockShift      uint = 12
 	DefaultSenseBufferSize int  = 252
 )
 
