@@ -75,6 +75,6 @@ func (bs *NullBackingStore) DataAdvise(offset, length int64, advise uint32) erro
 	return nil
 }
 
-func (bs *NullBackingStore) Unmap() error {
+func (bs *NullBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
 	return nil
 }

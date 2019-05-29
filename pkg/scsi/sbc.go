@@ -18,6 +18,7 @@ limitations under the License.
 package scsi
 
 import (
+	"encoding/binary"
 	"fmt"
 	"unsafe"
 
@@ -295,13 +296,34 @@ sense:
 }
 
 func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
-	err, key, asc := bsPerformCommand(cmd.Device.Storage, cmd)
-	if err == nil {
+	// check ANCHOR
+	if cmd.SCB[1]&0x01 != 0 {
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+		return api.SAMStatCheckCondition
+	}
+
+	const blockDescLen = 16
+
+	var blockDescs []api.UnmapBlockDescriptor
+	for off := 8; uint32(off+blockDescLen) <= cmd.OutSDBBuffer.Length; off += blockDescLen {
+		lba := binary.BigEndian.Uint64(cmd.OutSDBBuffer.Buffer[off : off+8])
+		num := binary.BigEndian.Uint32(cmd.OutSDBBuffer.Buffer[off+8 : off+12])
+		blockDescs = append(blockDescs, api.UnmapBlockDescriptor{
+			Offset: lba << cmd.Device.BlockShift,
+			TL:     num << cmd.Device.BlockShift,
+		})
+	}
+
+	if len(blockDescs) == 0 {
 		return api.SAMStatGood
 	}
 
-	BuildSenseData(cmd, key, asc)
-	return api.SAMStatCheckCondition
+	if err := cmd.Device.Storage.Unmap(blockDescs); err != nil {
+		BuildSenseData(cmd, MEDIUM_ERROR, NO_ADDITIONAL_SENSE)
+		return api.SAMStatCheckCondition
+	}
+
+	return api.SAMStatGood
 }
 
 /*

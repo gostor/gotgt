@@ -114,6 +114,6 @@ func (bs *FileBackingStore) DataAdvise(offset, length int64, advise uint32) erro
 	return util.Fadvise(bs.file, offset, length, advise)
 }
 
-func (bs *FileBackingStore) Unmap() error {
+func (bs *FileBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
 	return nil
 }

@@ -351,7 +351,7 @@ type BackingStore interface {
 	Write([]byte, int64) error
 	DataSync() error
 	DataAdvise(int64, int64, uint32) error
-	Unmap() error
+	Unmap([]UnmapBlockDescriptor) error
 }
 
 type SCSIDeviceProtocol interface {
@@ -401,3 +401,8 @@ type SCSILu struct {
 }
 
 type LUNMap map[uint64]*SCSILu
+
+type UnmapBlockDescriptor struct {
+	Offset uint64
+	TL     uint32
+}

@@ -150,6 +150,6 @@ func (bs *CephBackingStore) DataAdvise(offset, length int64, advise uint32) erro
 	return nil
 }
 
-func (bs *CephBackingStore) Unmap() error {
+func (bs *CephBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
 	return nil
 }
