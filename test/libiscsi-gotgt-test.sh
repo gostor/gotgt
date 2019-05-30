@@ -31,6 +31,7 @@ TESTCASES="ALL.Inquiry.Standard\
 	   ALL.WriteSame10.Simple ALL.WriteSame16.Simple \
            ALL.Verify10 ALL.Verify12 ALL.Verify16 \
            ALL.iSCSITMF ALL.iSCSIcmdsn \
+           ALL.Unmap.Simple ALL.Unmap.VPD ALL.Unmap.ZeroBlocks \
 	   "
 
 #for i in $NEWCASES
