@@ -59,11 +59,10 @@ func InquiryPage0x00(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	descBuf.WriteByte(0x80)
 	descBuf.WriteByte(0x83)
 	descBuf.WriteByte(0xB0)
+	descBuf.WriteByte(0xB2)
 	/*
 		TODO:
 			descBuf.WriteByte(0x86)
-			descBuf.WriteByte(0xB0)
-			descBuf.WriteByte(0xB2)
 	*/
 
 	data = descBuf.Bytes()
@@ -225,6 +224,44 @@ func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	return buf, pageLength
 }
 
+func InquiryPage0xB2(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		pageLength uint16 = 0x4
+	)
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//PAGE CODE
+	buf.WriteByte(0xB2)
+
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+
+	var lbpu byte
+	if cmd.Device.Attrs.Thinprovisioning {
+		lbpu = 1 << 7
+	}
+
+	// THRESHOLD EXPONENT
+	buf.WriteByte(0)
+
+	// LBPU | LBPWS | LBPWS10 | LBPRZ | ANC_SUP | DP
+	buf.WriteByte(lbpu)
+
+	// MINIMUM PERCENTAGE | PROVISIONING TYPE
+	buf.WriteByte(0)
+
+	// THRESHOLD PERCENTAGE
+	buf.WriteByte(0)
+
+	return buf, pageLength
+}
+
 /*
  * SPCInquiry Implements SCSI INQUIRY command
  * The INQUIRY command requests the device server to return information regarding the logical unit and SCSI target device.
@@ -270,6 +307,8 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 			buf, _ = InquiryPage0x83(host, cmd)
 		case 0xB0:
 			buf, _ = InquiryPage0xB0(host, cmd)
+		case 0xB2:
+			buf, _ = InquiryPage0xB2(host, cmd)
 		default:
 			goto sense
 		}
