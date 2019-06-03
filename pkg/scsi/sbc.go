@@ -101,7 +101,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// Disconnect page
 	pages = append(pages, api.ModePage{2, 0, 14, []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	// Caching Page
-	pages = append(pages, api.ModePage{8, 0, 18, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0, 0x4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{8, 0, 18, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0}})
 
 	// Control page
 	pages = append(pages, api.ModePage{0x0a, 0, 10, []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0, 0x08, 0, 0, 0, 0, 0, 0, 0}})
