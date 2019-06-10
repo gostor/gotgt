@@ -104,7 +104,7 @@ type BackendStorage struct {
 	DeviceID         uint64 `json:"deviceID"`
 	Path             string `json:"path"`
 	Online           bool   `json:"online"`
-	Thinprovisioning bool   `json:"thinprovisioning"`
+	ThinProvisioning bool   `json:"thinProvisioning"`
 	BlockShift       uint   `json:"blockShift"`
 }
 

@@ -53,7 +53,7 @@ func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
 	}
 	lu.Size = backing.Size(lu)
 	lu.DeviceProtocol.InitLu(lu)
-	lu.Attrs.Thinprovisioning = bs.Thinprovisioning
+	lu.Attrs.ThinProvisioning = bs.ThinProvisioning
 	lu.Attrs.Online = bs.Online
 	lu.Attrs.Lbppbe = 3
 	return lu, nil

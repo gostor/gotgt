@@ -3,7 +3,9 @@
     {
       "deviceID":1000,
       "path":"file:/var/tmp/disk.img",
-      "online":true
+      "online":true,
+      "thinProvisioning":false,
+      "blockShift": 9,
     }
   ],
   "iscsiportals":[

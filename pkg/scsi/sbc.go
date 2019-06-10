@@ -59,7 +59,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// init LU's phy attribute
 	lu.Attrs.DeviceType = sbc.DeviceType
 	lu.Attrs.Qualifier = false
-	lu.Attrs.Thinprovisioning = false
+	lu.Attrs.ThinProvisioning = false
 	lu.Attrs.Removable = false
 	lu.Attrs.Readonly = false
 	lu.Attrs.SWP = false
@@ -380,7 +380,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			goto sense
 		}
 		// We only support unmap for thin provisioned LUNS
-		if (scb[1]&0x08 != 0) && !dev.Attrs.Thinprovisioning {
+		if (scb[1]&0x08 != 0) && !dev.Attrs.ThinProvisioning {
 			key = ILLEGAL_REQUEST
 			asc = ASC_INVALID_FIELD_IN_CDB
 			goto sense
@@ -623,7 +623,7 @@ func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 		copy(cmd.InSDBBuffer.Buffer[8:], util.MarshalUint32(uint32(1<<bshift)))
 		if allocationLength > 16 {
 			var lbpme int
-			if cmd.Device.Attrs.Thinprovisioning {
+			if cmd.Device.Attrs.ThinProvisioning {
 				lbpme = 1
 			}
 			val := (cmd.Device.Attrs.Lbppbe << 16) | (lbpme << 15) | cmd.Device.Attrs.LowestAlignedLBA

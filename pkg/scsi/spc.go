@@ -196,7 +196,7 @@ func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 		maxUnmapBlockDescriptorCount uint32 = 0
 	)
 
-	if cmd.Device.Attrs.Thinprovisioning {
+	if cmd.Device.Attrs.ThinProvisioning {
 		maxUnmapLbaCount = 0xFFFFFFFF
 		maxUnmapBlockDescriptorCount = 0xFFFFFFFF
 	}
@@ -243,7 +243,7 @@ func InquiryPage0xB2(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	binary.Write(buf, binary.BigEndian, pageLength)
 
 	var lbpu byte
-	if cmd.Device.Attrs.Thinprovisioning {
+	if cmd.Device.Attrs.ThinProvisioning {
 		lbpu = 1 << 7
 	}
 

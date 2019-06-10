@@ -264,7 +264,7 @@ type SCSILuPhyAttribute struct {
 	// Software Write Protect
 	SWP bool
 	// Use thin-provisioning for this LUN
-	Thinprovisioning bool
+	ThinProvisioning bool
 	// Logical Unit online
 	Online bool
 	// Descrptor format sense data supported
