@@ -64,6 +64,7 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		rbuf, wbuf []byte
 		tl         int64 = int64(cmd.TL)
 	)
+
 	key = HARDWARE_ERROR
 	asc = ASC_INTERNAL_TGT_FAILURE
 	switch opcode {
@@ -134,8 +135,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		}
 		doVerify = true
 		goto verify
-	case api.UNMAP:
-		// TODO
 	default:
 		break
 	}

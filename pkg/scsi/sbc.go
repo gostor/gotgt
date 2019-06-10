@@ -18,6 +18,7 @@ limitations under the License.
 package scsi
 
 import (
+	"encoding/binary"
 	"fmt"
 	"unsafe"
 
@@ -58,7 +59,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// init LU's phy attribute
 	lu.Attrs.DeviceType = sbc.DeviceType
 	lu.Attrs.Qualifier = false
-	lu.Attrs.Thinprovisioning = false
+	lu.Attrs.ThinProvisioning = false
 	lu.Attrs.Removable = false
 	lu.Attrs.Readonly = false
 	lu.Attrs.SWP = false
@@ -295,6 +296,33 @@ sense:
 }
 
 func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
+	// check ANCHOR
+	if cmd.SCB[1]&0x01 != 0 {
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+		return api.SAMStatCheckCondition
+	}
+
+	const blockDescLen = 16
+
+	var blockDescs []api.UnmapBlockDescriptor
+	for off := 8; uint32(off+blockDescLen) <= cmd.OutSDBBuffer.Length; off += blockDescLen {
+		lba := binary.BigEndian.Uint64(cmd.OutSDBBuffer.Buffer[off : off+8])
+		num := binary.BigEndian.Uint32(cmd.OutSDBBuffer.Buffer[off+8 : off+12])
+		blockDescs = append(blockDescs, api.UnmapBlockDescriptor{
+			Offset: lba << cmd.Device.BlockShift,
+			TL:     num << cmd.Device.BlockShift,
+		})
+	}
+
+	if len(blockDescs) == 0 {
+		return api.SAMStatGood
+	}
+
+	if err := cmd.Device.Storage.Unmap(blockDescs); err != nil {
+		BuildSenseData(cmd, MEDIUM_ERROR, NO_ADDITIONAL_SENSE)
+		return api.SAMStatCheckCondition
+	}
+
 	return api.SAMStatGood
 }
 
@@ -352,7 +380,7 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 			goto sense
 		}
 		// We only support unmap for thin provisioned LUNS
-		if (scb[1]&0x08 != 0) && !dev.Attrs.Thinprovisioning {
+		if (scb[1]&0x08 != 0) && !dev.Attrs.ThinProvisioning {
 			key = ILLEGAL_REQUEST
 			asc = ASC_INVALID_FIELD_IN_CDB
 			goto sense
@@ -594,7 +622,11 @@ func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 	if allocationLength > 12 {
 		copy(cmd.InSDBBuffer.Buffer[8:], util.MarshalUint32(uint32(1<<bshift)))
 		if allocationLength > 16 {
-			val := (cmd.Device.Attrs.Lbppbe << 16) | cmd.Device.Attrs.LowestAlignedLBA
+			var lbpme int
+			if cmd.Device.Attrs.ThinProvisioning {
+				lbpme = 1
+			}
+			val := (cmd.Device.Attrs.Lbppbe << 16) | (lbpme << 15) | cmd.Device.Attrs.LowestAlignedLBA
 			copy(cmd.InSDBBuffer.Buffer[12:], util.MarshalUint32(uint32(val)))
 		}
 	}

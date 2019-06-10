@@ -25,12 +25,11 @@ TESTCASES="ALL.Inquiry.Standard\
            ALL.ReportSupportedOpcodes.Simple ALL.Reserve6.Simple \
            ALL.StartStopUnit ALL.TestUnitReady \
            ALL.Write10 ALL.Write16 ALL.Write12 ALL.WriteVerify10 \
-           ALL.WriteVerify16 ALL.WriteVerify12 ALL.WriteAtomic16.BeyondEol \
-           ALL.WriteAtomic16.ZeroBlocks ALL.WriteAtomic16.WriteProtect \
-           ALL.WriteAtomic16.DpoFua \
+           ALL.WriteVerify16 ALL.WriteVerify12 \
 	   ALL.WriteSame10.Simple ALL.WriteSame16.Simple \
            ALL.Verify10 ALL.Verify12 ALL.Verify16 \
            ALL.iSCSITMF ALL.iSCSIcmdsn \
+           ALL.Unmap.Simple ALL.Unmap.VPD ALL.Unmap.ZeroBlocks \
 	   "
 
 #for i in $NEWCASES

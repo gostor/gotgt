@@ -74,3 +74,7 @@ func (bs *NullBackingStore) DataSync() error {
 func (bs *NullBackingStore) DataAdvise(offset, length int64, advise uint32) error {
 	return nil
 }
+
+func (bs *NullBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
+	return nil
+}

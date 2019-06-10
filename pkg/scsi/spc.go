@@ -25,7 +25,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -58,11 +58,11 @@ func InquiryPage0x00(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	descBuf.WriteByte(0x00)
 	descBuf.WriteByte(0x80)
 	descBuf.WriteByte(0x83)
+	descBuf.WriteByte(0xB0)
+	descBuf.WriteByte(0xB2)
 	/*
 		TODO:
 			descBuf.WriteByte(0x86)
-			descBuf.WriteByte(0xB0)
-			descBuf.WriteByte(0xB2)
 	*/
 
 	data = descBuf.Bytes()
@@ -188,6 +188,80 @@ func InquiryPage0x83(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	return buf, pageLength
 }
 
+func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf                                 = &bytes.Buffer{}
+		pageLength                   uint16 = 0x3C
+		maxUnmapLbaCount             uint32 = 0
+		maxUnmapBlockDescriptorCount uint32 = 0
+	)
+
+	if cmd.Device.Attrs.ThinProvisioning {
+		maxUnmapLbaCount = 0xFFFFFFFF
+		maxUnmapBlockDescriptorCount = 0xFFFFFFFF
+	}
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//PAGE CODE
+	buf.WriteByte(0xB0)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+
+	buf.Write(make([]byte, 16))
+
+	//MAXIMUM UNMAP LBA COUNT
+	binary.Write(buf, binary.BigEndian, maxUnmapLbaCount)
+
+	//MAXIMUM UNMAP BLOCK DESCRIPTOR COUNT
+	binary.Write(buf, binary.BigEndian, maxUnmapBlockDescriptorCount)
+
+	buf.Write(make([]byte, 36))
+	return buf, pageLength
+}
+
+func InquiryPage0xB2(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		pageLength uint16 = 0x4
+	)
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//PAGE CODE
+	buf.WriteByte(0xB2)
+
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+
+	var lbpu byte
+	if cmd.Device.Attrs.ThinProvisioning {
+		lbpu = 1 << 7
+	}
+
+	// THRESHOLD EXPONENT
+	buf.WriteByte(0)
+
+	// LBPU | LBPWS | LBPWS10 | LBPRZ | ANC_SUP | DP
+	buf.WriteByte(lbpu)
+
+	// MINIMUM PERCENTAGE | PROVISIONING TYPE
+	buf.WriteByte(0)
+
+	// THRESHOLD PERCENTAGE
+	buf.WriteByte(0)
+
+	return buf, pageLength
+}
+
 /*
  * SPCInquiry Implements SCSI INQUIRY command
  * The INQUIRY command requests the device server to return information regarding the logical unit and SCSI target device.
@@ -231,6 +305,10 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 			buf, _ = InquiryPage0x80(host, cmd)
 		case 0x83:
 			buf, _ = InquiryPage0x83(host, cmd)
+		case 0xB0:
+			buf, _ = InquiryPage0xB0(host, cmd)
+		case 0xB2:
+			buf, _ = InquiryPage0xB2(host, cmd)
 		default:
 			goto sense
 		}
@@ -600,7 +678,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 	var (
 		data = []byte{0x00, 0x00, 0x00, 0x00}
 	)
-	for _, i := range []api.SCSICommandType{api.TEST_UNIT_READY, api.WRITE_6, api.INQUIRY, api.READ_CAPACITY, api.WRITE_10, api.WRITE_16, api.REPORT_LUNS, api.WRITE_12} {
+	for _, i := range []api.SCSICommandType{api.TEST_UNIT_READY, api.WRITE_6, api.INQUIRY, api.READ_CAPACITY, api.WRITE_10, api.WRITE_16, api.REPORT_LUNS, api.WRITE_12, api.UNMAP} {
 		data = append(data, byte(i))
 		// reserved
 		data = append(data, 0x00)
@@ -617,7 +695,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 		}
 		// cdb length
 		length := getSCSICmdSize(i)
-		data = append(data, (length>>8)&0xff)
+		data = append(data, 0)
 		data = append(data, length&0xff)
 		// timeout descriptor
 		if rctd != 0 {

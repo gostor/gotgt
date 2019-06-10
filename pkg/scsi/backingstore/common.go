@@ -113,3 +113,7 @@ func (bs *FileBackingStore) DataSync() error {
 func (bs *FileBackingStore) DataAdvise(offset, length int64, advise uint32) error {
 	return util.Fadvise(bs.file, offset, length, advise)
 }
+
+func (bs *FileBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
+	return nil
+}

@@ -19,7 +19,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type SCSICommandType byte
@@ -264,7 +264,7 @@ type SCSILuPhyAttribute struct {
 	// Software Write Protect
 	SWP bool
 	// Use thin-provisioning for this LUN
-	Thinprovisioning bool
+	ThinProvisioning bool
 	// Logical Unit online
 	Online bool
 	// Descrptor format sense data supported
@@ -351,6 +351,7 @@ type BackingStore interface {
 	Write([]byte, int64) error
 	DataSync() error
 	DataAdvise(int64, int64, uint32) error
+	Unmap([]UnmapBlockDescriptor) error
 }
 
 type SCSIDeviceProtocol interface {
@@ -400,3 +401,8 @@ type SCSILu struct {
 }
 
 type LUNMap map[uint64]*SCSILu
+
+type UnmapBlockDescriptor struct {
+	Offset uint64
+	TL     uint32
+}
