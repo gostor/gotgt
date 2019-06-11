@@ -103,6 +103,10 @@ func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config)
 	return nil
 }
 
+func (s *ISCSITargetDriver) RereadTargetLUNMap() {
+	s.SCSI.RereadTargetLUNMap()
+}
+
 func (s *ISCSITargetDriver) AddiSCSIPortal(tgtName string, tpgt uint16, portal string) error {
 	var (
 		ok       bool

@@ -45,6 +45,15 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 	return target, nil
 }
 
+func (s *SCSITargetService) RereadTargetLUNMap() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for _, tgt := range s.Targets {
+		tgt.Devices = GetTargetLUNMap(tgt.Name)
+	}
+}
+
 func FindTargetGroup(target *api.SCSITarget, relPortID uint16) uint16 {
 	for _, tpg := range target.TargetPortGroups {
 		for _, port := range tpg.TargetPortGroup {

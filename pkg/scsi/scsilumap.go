@@ -37,15 +37,20 @@ type SCSILUMap struct {
 
 var globalSCSILUMap = SCSILUMap{AllDevices: make(api.LUNMap), TargetsLUNMap: make(map[string]api.LUNMap)}
 
-func mappingLUN(deviceID uint64, lun uint64, target string) {
+type LUNMapping struct {
+	TargetName string
+	LUN        uint64
+	DeviceID   uint64
+}
 
-	device := globalSCSILUMap.AllDevices[deviceID]
-	lunMap := globalSCSILUMap.TargetsLUNMap[target]
+func mappingLUN(lm LUNMapping) {
+	device := globalSCSILUMap.AllDevices[lm.DeviceID]
+	lunMap := globalSCSILUMap.TargetsLUNMap[lm.TargetName]
 	if lunMap == nil {
-		globalSCSILUMap.TargetsLUNMap[target] = make(api.LUNMap)
-		lunMap = globalSCSILUMap.TargetsLUNMap[target]
+		globalSCSILUMap.TargetsLUNMap[lm.TargetName] = make(api.LUNMap)
+		lunMap = globalSCSILUMap.TargetsLUNMap[lm.TargetName]
 	}
-	lunMap[lun] = device
+	lunMap[lm.LUN] = device
 }
 
 func GetLU(tgtName string, LUN uint64) *api.SCSILu {
@@ -66,18 +71,39 @@ func GetTargetLUNMap(tgtName string) api.LUNMap {
 	return lunMap
 }
 
-func InitSCSILUMap(config *config.Config) error {
-	var simpleOp *SCSISimpleReservationOperator
-	var ok bool
+func AddBackendStorage(bs config.BackendStorage) error {
 	globalSCSILUMap.mutex.Lock()
 	defer globalSCSILUMap.mutex.Unlock()
+	_, ok := globalSCSILUMap.AllDevices[bs.DeviceID]
+	if ok {
+		return fmt.Errorf("device %q already exists", bs.DeviceID)
+	}
 
+	lu, err := NewSCSILu(&bs)
+	if err != nil {
+		return fmt.Errorf("Init SCSI LU map error: %v", err)
+	}
+	globalSCSILUMap.AllDevices[bs.DeviceID] = lu
+	return nil
+}
+
+func AddLUNMapping(m LUNMapping) error {
+	globalSCSILUMap.mutex.Lock()
+	defer globalSCSILUMap.mutex.Unlock()
+	mappingLUN(m)
+	// Init SCSISimpleReservationOperator
+	op := GetSCSIReservationOperator()
+	if simpleOp, ok := op.(*SCSISimpleReservationOperator); ok {
+		simpleOp.InitLUReservation(m.TargetName, m.DeviceID)
+	}
+	return nil
+}
+
+func InitSCSILUMap(config *config.Config) error {
 	for _, bs := range config.Storages {
-		lu, err := NewSCSILu(&bs)
-		if err != nil {
-			return fmt.Errorf("Init SCSI LU map error: %v", err)
+		if err := AddBackendStorage(bs); err != nil {
+			return err
 		}
-		globalSCSILUMap.AllDevices[bs.DeviceID] = lu
 	}
 
 	for tgtName, tgt := range config.ISCSITargets {
@@ -86,12 +112,8 @@ func InitSCSILUMap(config *config.Config) error {
 			if err != nil {
 				return fmt.Errorf("LU Number must be a number")
 			}
-			mappingLUN(deviceID, lun, tgtName)
-			// Init SCSISimpleReservationOperator
-			op := GetSCSIReservationOperator()
-			if simpleOp, ok = op.(*SCSISimpleReservationOperator); ok {
-				simpleOp.InitLUReservation(tgtName, deviceID)
-			}
+			m := LUNMapping{DeviceID: deviceID, LUN: lun, TargetName: tgtName}
+			AddLUNMapping(m)
 		}
 	}
 	return nil

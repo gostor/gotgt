@@ -26,6 +26,7 @@ import (
 type SCSITargetDriver interface {
 	Run() error
 	NewTarget(string, *config.Config) error
+	RereadTargetLUNMap()
 }
 
 type TargetDriverFunc func(*SCSITargetService) (SCSITargetDriver, error)
