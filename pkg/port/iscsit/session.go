@@ -405,7 +405,7 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 			newSess.Target.SessionsRWMutex.Unlock()
 		} else {
 			if existConn != nil {
-				log.Infof("Connection Reinstatement initiator name:%v,target name:%v,ISID:0x%x,CID:%v",
+				log.Infof("Connection Reinstatement initiator name:%v,target name:%v,ISID:0x%x",
 					conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
 				existConn.ReInstatement(conn)
 			}

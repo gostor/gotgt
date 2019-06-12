@@ -11,14 +11,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:371dbf7f04fe7ddbcf65b88aef026278e21c9a7df810339bbe94abcf830e0627"
+  digest = "1:30f50828e5a6aa9257130334f34425a1bcba4e19b9f531f1da7747fbdc3235be"
   name = "github.com/ceph/go-ceph"
   packages = [
     "rados",
     "rbd",
   ]
   pruneopts = "UT"
-  revision = "e32f9f0f2e941422937c0a6c4f0a61b8f0c82995"
+  revision = "bd5bc6d4cb3e3d3441f2ec4e9f89899178edfc71"
 
 [[projects]]
   digest = "1:5155f7153c694dc8e2efd74d799a27fd54e65778fa3f0c3e17626df724857db9"
