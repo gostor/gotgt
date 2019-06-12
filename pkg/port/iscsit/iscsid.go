@@ -23,12 +23,12 @@ import (
 	"strconv"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
 	"github.com/gostor/gotgt/pkg/util/pool"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

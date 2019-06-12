@@ -22,10 +22,10 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
