@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	systemdActivation "github.com/coreos/go-systemd/activation"
 	"github.com/docker/go-connections/sockets"
 	"github.com/gorilla/mux"
@@ -34,6 +33,7 @@ import (
 	"github.com/gostor/gotgt/pkg/apiserver/router/discovery"
 	"github.com/gostor/gotgt/pkg/apiserver/router/lu"
 	"github.com/gostor/gotgt/pkg/apiserver/router/target"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -274,9 +274,9 @@ func listenFD(addr string, tlsConfig *tls.Config) ([]net.Listener, error) {
 	)
 	// socket activation
 	if tlsConfig != nil {
-		listeners, err = systemdActivation.TLSListeners(false, tlsConfig)
+		listeners, err = systemdActivation.TLSListeners(tlsConfig)
 	} else {
-		listeners, err = systemdActivation.Listeners(false)
+		listeners, err = systemdActivation.Listeners()
 	}
 	if err != nil {
 		return nil, err

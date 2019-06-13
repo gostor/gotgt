@@ -23,13 +23,13 @@ import (
 	"strings"
 	"syscall"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/api/client"
 	"github.com/gostor/gotgt/pkg/apiserver"
 	"github.com/gostor/gotgt/pkg/config"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
 	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 

@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/util"
+	log "github.com/sirupsen/logrus"
 )
 
 type OpCode int

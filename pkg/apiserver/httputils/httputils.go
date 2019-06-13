@@ -25,8 +25,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/gostor/gotgt/pkg/version"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
