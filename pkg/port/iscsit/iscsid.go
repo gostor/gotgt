@@ -42,6 +42,9 @@ type ISCSITargetDriver struct {
 	iSCSITargets  map[string]*ISCSITarget
 	TSIHPool      map[uint16]bool
 	TSIHPoolMutex sync.Mutex
+
+	mu sync.Mutex
+	l  net.Listener
 }
 
 func init() {
@@ -160,11 +163,20 @@ func (s *ISCSITargetDriver) Run() error {
 		log.Error(err)
 		os.Exit(1)
 	}
+	s.mu.Lock()
+	s.l = l
+	s.mu.Unlock()
 
 	for {
 		log.Info("Listening ...")
 		conn, err := l.Accept()
 		if err != nil {
+			if err, ok := err.(net.Error); ok {
+				if !err.Temporary() {
+					log.Info("Closing ...")
+					break
+				}
+			}
 			log.Error(err)
 			continue
 		}
@@ -181,7 +193,16 @@ func (s *ISCSITargetDriver) Run() error {
 		// start a new thread to do with this command
 		go s.handler(DATAIN, iscsiConn)
 	}
-	l.Close()
+	return nil
+}
+
+func (s *ISCSITargetDriver) Close() error {
+	s.mu.Lock()
+	l := s.l
+	s.mu.Unlock()
+	if l != nil {
+		return l.Close()
+	}
 	return nil
 }
 
