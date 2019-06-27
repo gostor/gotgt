@@ -87,6 +87,12 @@ func AddBackendStorage(bs config.BackendStorage) error {
 	return nil
 }
 
+func DelBackendStorage(deviceID uint64) {
+	globalSCSILUMap.mutex.Lock()
+	defer globalSCSILUMap.mutex.Unlock()
+	delete(globalSCSILUMap.AllDevices, deviceID)
+}
+
 func AddLUNMapping(m LUNMapping) error {
 	globalSCSILUMap.mutex.Lock()
 	defer globalSCSILUMap.mutex.Unlock()
@@ -97,6 +103,12 @@ func AddLUNMapping(m LUNMapping) error {
 		simpleOp.InitLUReservation(m.TargetName, m.DeviceID)
 	}
 	return nil
+}
+
+func DelLUNMapping(m LUNMapping) {
+	globalSCSILUMap.mutex.Lock()
+	defer globalSCSILUMap.mutex.Unlock()
+	delete(globalSCSILUMap.TargetsLUNMap[m.TargetName], m.LUN)
 }
 
 func InitSCSILUMap(config *config.Config) error {
