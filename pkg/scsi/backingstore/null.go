@@ -67,7 +67,7 @@ func (bs *NullBackingStore) Write(wbuf []byte, offset int64) error {
 	return nil
 }
 
-func (bs *NullBackingStore) DataSync() error {
+func (bs *NullBackingStore) DataSync(offset, tl int64) error {
 	return nil
 }
 

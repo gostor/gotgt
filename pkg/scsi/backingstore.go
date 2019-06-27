@@ -87,8 +87,13 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		doWrite = true
 		goto write
 	case api.SYNCHRONIZE_CACHE, api.SYNCHRONIZE_CACHE_16:
-		if err = bs.DataSync(); err != nil {
-			panic(err)
+		if tl == 0 {
+			tl = int64(lu.Size - offset)
+		}
+		if err = bs.DataSync(int64(offset), tl); err != nil {
+			key = MEDIUM_ERROR
+			asc = ASC_READ_ERROR
+			break
 		}
 		break
 	case api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
@@ -161,7 +166,7 @@ write:
 			goto sense
 		}
 		if ((opcode != api.WRITE_6) && (scb[1]&0x8 != 0)) || (pg.Data[0]&0x04 == 0) {
-			if err = bs.DataSync(); err != nil {
+			if err = bs.DataSync(int64(offset), tl); err != nil {
 				key = MEDIUM_ERROR
 				asc = ASC_READ_ERROR
 				goto sense

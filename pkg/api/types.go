@@ -349,7 +349,7 @@ type BackingStore interface {
 	Size(dev *SCSILu) uint64
 	Read(offset, tl int64) ([]byte, error)
 	Write([]byte, int64) error
-	DataSync() error
+	DataSync(offset, tl int64) error
 	DataAdvise(int64, int64, uint32) error
 	Unmap([]UnmapBlockDescriptor) error
 }
