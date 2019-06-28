@@ -595,7 +595,9 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 				// prepare to receive more data
 				conn.session.ExpCmdSN += 1
 				task.state = taskPending
+				conn.session.PendingTasksMutex.Lock()
 				conn.session.PendingTasks.Push(task)
+				conn.session.PendingTasksMutex.Unlock()
 				conn.rxTask = task
 				if conn.session.SessionParam[ISCSI_PARAM_INITIAL_R2T_EN].Value == 1 {
 					iscsiExecR2T(conn)
@@ -638,12 +640,9 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		}
 	case OpSCSIOut:
 		log.Debugf("iSCSI Data-out processing...")
-		var task *iscsiTask
-		for _, t := range conn.session.PendingTasks {
-			if t.tag == conn.req.TaskTag {
-				task = t
-			}
-		}
+		conn.session.PendingTasksMutex.RLock()
+		task := conn.session.PendingTasks.GetByTag(conn.req.TaskTag)
+		conn.session.PendingTasksMutex.RUnlock()
 		if task == nil {
 			err = fmt.Errorf("Cannot find iSCSI task with tag[%v]", conn.req.TaskTag)
 			log.Error(err)
@@ -679,6 +678,9 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		} else {
 			conn.buildRespPackage(OpSCSIResp, task)
 			conn.rxTask = nil
+			conn.session.PendingTasksMutex.Lock()
+			conn.session.PendingTasks.RemoveByTag(conn.req.TaskTag)
+			conn.session.PendingTasksMutex.Unlock()
 		}
 	case OpNoopOut:
 		iscsiExecNoopOut(conn)
@@ -719,11 +721,12 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		if err := s.iscsiExecTask(task); err != nil {
 			log.Error(err)
 		}
-		if len(sess.PendingTasks) == 0 {
+		sess.PendingTasksMutex.Lock()
+		if sess.PendingTasks.Len() == 0 {
+			sess.PendingTasksMutex.Unlock()
 			return nil
 		}
-		sess.PendingTasksMutex.Lock()
-		task = sess.PendingTasks.Pop().(*iscsiTask)
+		task = sess.PendingTasks.Pop()
 		cmd = task.cmd
 		if cmd.CmdSN != cmdsn {
 			sess.PendingTasks.Push(task)
@@ -770,15 +773,8 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 		sess := task.conn.session
 		switch cmd.TaskFunc {
 		case ISCSI_TM_FUNC_ABORT_TASK:
-			var stask *iscsiTask
 			sess.PendingTasksMutex.Lock()
-			for i, t := range sess.PendingTasks {
-				if cmd.ReferencedTaskTag == t.tag {
-					stask = sess.PendingTasks[i]
-					sess.PendingTasks = append(sess.PendingTasks[:i], sess.PendingTasks[i+1:]...)
-					break
-				}
-			}
+			stask := sess.PendingTasks.RemoveByTag(cmd.ReferencedTaskTag)
 			sess.PendingTasksMutex.Unlock()
 			if stask == nil {
 				task.result = ISCSI_TMF_RSP_NO_TASK
