@@ -141,7 +141,7 @@ func (bs *CephBackingStore) Write(wbuf []byte, offset int64) error {
 	return err
 }
 
-func (bs *CephBackingStore) DataSync() error {
+func (bs *CephBackingStore) DataSync(offset, tl int64) error {
 	err := bs.image.Flush()
 	return err
 }

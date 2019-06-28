@@ -708,5 +708,19 @@ func SBCServiceAction(host int, cmd *api.SCSICommand) api.SAMStat {
  * 5.19 - SYNCHRONIZE CACHE (16)
  */
 func SBCSyncCache(host int, cmd *api.SCSICommand) api.SAMStat {
+	scb := cmd.SCB
+	lba := getSCSIReadWriteOffset(scb)
+	tl := getSCSIReadWriteCount(scb)
+	dev := cmd.Device
+
+	cmd.Offset = lba << dev.BlockShift
+	cmd.TL = tl << dev.BlockShift
+
+	err, key, asc := bsPerformCommand(dev.Storage, cmd)
+	if err != nil {
+		BuildSenseData(cmd, key, asc)
+		return api.SAMStatCheckCondition
+	}
+
 	return api.SAMStatGood
 }

@@ -106,7 +106,7 @@ func (bs *FileBackingStore) Write(wbuf []byte, offset int64) error {
 	return nil
 }
 
-func (bs *FileBackingStore) DataSync() error {
+func (bs *FileBackingStore) DataSync(offset, tl int64) error {
 	return util.Fdatasync(bs.file)
 }
 
