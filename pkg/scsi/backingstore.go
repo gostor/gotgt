@@ -23,7 +23,6 @@ import (
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/gostor/gotgt/pkg/util/pool"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -110,7 +109,7 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
-		rbuf = pool.NewBuffer(int(tl))
+		rbuf = make([]byte, int(tl))
 		rbuf, err = bs.Read(int64(offset), tl)
 		if err != nil && err != io.EOF {
 			key = MEDIUM_ERROR
@@ -179,7 +178,7 @@ write:
 	}
 verify:
 	if doVerify {
-		rbuf = pool.NewBuffer(int(tl))
+		rbuf = make([]byte, int(tl))
 		rbuf, err = bs.Read(int64(offset), tl)
 		if err != nil {
 			key = MEDIUM_ERROR

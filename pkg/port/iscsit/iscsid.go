@@ -27,7 +27,6 @@ import (
 	"github.com/gostor/gotgt/pkg/config"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
-	"github.com/gostor/gotgt/pkg/util/pool"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -258,7 +257,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 				return
 			}
 			dl := ((cmd.DataLen + DataPadding - 1) / DataPadding) * DataPadding
-			cmd.RawData = pool.NewBuffer(dl)
+			cmd.RawData = make([]byte, int(dl))
 			length := 0
 			for length < dl {
 				l, err := conn.readData(cmd.RawData[length:])
@@ -583,7 +582,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 				}
 				scmd.OutSDBBuffer = &api.SCSIDataBuffer{
 					Length: uint32(blen),
-					Buffer: pool.NewBuffer(blen),
+					Buffer: make([]byte, blen),
 				}
 			}
 			log.Debugf("SCSI write, R2T count: %d, unsol Count: %d, offset: %d", task.r2tCount, task.unsolCount, task.offset)
@@ -611,7 +610,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		} else if scmd.InSDBBuffer == nil {
 			scmd.InSDBBuffer = &api.SCSIDataBuffer{
 				Length: uint32(req.ExpectedDataLen),
-				Buffer: pool.NewBuffer(int(req.ExpectedDataLen)),
+				Buffer: make([]byte, int(req.ExpectedDataLen)),
 			}
 		}
 		task.offset = 0
