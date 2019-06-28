@@ -198,7 +198,7 @@ func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 
 	if cmd.Device.Attrs.ThinProvisioning {
 		maxUnmapLbaCount = 0xFFFFFFFF
-		maxUnmapBlockDescriptorCount = 0xFFFFFFFF
+		maxUnmapBlockDescriptorCount = 16
 	}
 
 	//byte 0
