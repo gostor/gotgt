@@ -273,17 +273,37 @@ func (tq taskQueue) Swap(i, j int) {
 	tq[i], tq[j] = tq[j], tq[i]
 }
 
-func (tq *taskQueue) Push(x interface{}) {
-	item := x.(*iscsiTask)
+func (tq *taskQueue) Push(x *iscsiTask) {
+	item := x
 	*tq = append(*tq, item)
 }
 
-func (tq *taskQueue) Pop() interface{} {
+func (tq *taskQueue) Pop() *iscsiTask {
 	old := *tq
 	n := len(old)
 	item := old[n-1]
 	*tq = old[0 : n-1]
 	return item
+}
+
+func (tq taskQueue) GetByTag(tag uint32) *iscsiTask {
+	for _, t := range tq {
+		if t.tag == tag {
+			return t
+		}
+	}
+	return nil
+}
+
+func (tq *taskQueue) RemoveByTag(tag uint32) *iscsiTask {
+	old := *tq
+	for i, t := range old {
+		if t.tag == tag {
+			*tq = append(old[:i], old[i+1:]...)
+			return t
+		}
+	}
+	return nil
 }
 
 func (s *ISCSITargetDriver) LookupISCSISession(tgtName string, iniName string, isid uint64, tsih uint16, tpgt uint16) *ISCSISession {
