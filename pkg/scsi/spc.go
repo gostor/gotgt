@@ -404,7 +404,6 @@ sense:
 func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
 		remainLength     uint32
-		actualLength     uint32 = 8
 		availLength      uint32 = 0
 		allocationLength uint32
 		buf              *bytes.Buffer = &bytes.Buffer{}
@@ -425,7 +424,7 @@ func SPCReportLuns(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	// LUN list length
 	buf.Write(util.MarshalUint32(availLength))
-	cmd.InSDBBuffer.Resid = uint32(actualLength)
+	cmd.InSDBBuffer.Resid = allocationLength
 
 	// Skip through to byte 4, Reserved
 	for i := 0; i < 4; i++ {
