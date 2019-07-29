@@ -5,6 +5,9 @@ all: init build
 build: init
 	go build -o ${BIN_DIR}/gotgt gotgt.go
 
+build-nocgo: init
+	CGO_ENABLED=0 go build -o ${BIN_DIR}/gotgt gotgt.go
+
 verify:
 	hack/verify-gofmt.sh
 
