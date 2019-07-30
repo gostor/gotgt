@@ -29,7 +29,6 @@ import (
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
 	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
-	_ "github.com/gostor/gotgt/pkg/scsi/backingstore/cephstore"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

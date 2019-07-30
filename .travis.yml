@@ -30,6 +30,10 @@ before_script:
 
 script:
    - cd ${TRAVIS_BUILD_DIR}
+   # Try a build without cgo first
+   - make build-nocgo
+   - make clean
+   # Now build with cgo and cephstore.
    - make
    - hack/verify-gofmt.sh
    - go test -v ./pkg/...
