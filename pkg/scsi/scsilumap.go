@@ -17,6 +17,7 @@ limitations under the License.
 package scsi
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -33,9 +34,15 @@ type SCSILUMap struct {
 	AllDevices api.LUNMap
 	// use target name as the key for target's LUN map
 	TargetsLUNMap map[string]api.LUNMap
+
+	TargetsBSMap map[string]api.RemoteBackingStore /* use target name as the key for target's Backing Store (temp) */
 }
 
-var globalSCSILUMap = SCSILUMap{AllDevices: make(api.LUNMap), TargetsLUNMap: make(map[string]api.LUNMap)}
+var globalSCSILUMap = SCSILUMap{
+	AllDevices:    make(api.LUNMap),
+	TargetsLUNMap: make(map[string]api.LUNMap),
+	TargetsBSMap:  make(map[string]api.RemoteBackingStore),
+}
 
 type LUNMapping struct {
 	TargetName string
@@ -68,6 +75,15 @@ func GetTargetLUNMap(tgtName string) api.LUNMap {
 	defer globalSCSILUMap.mutex.RUnlock()
 
 	lunMap := globalSCSILUMap.TargetsLUNMap[tgtName]
+	return lunMap
+}
+
+func GetTargetBSMap(tgtName string) api.RemoteBackingStore {
+	/* TODO check for lock held by caller
+	globalSCSILUMap.mutex.RLock()
+	defer globalSCSILUMap.mutex.RUnlock()*/
+
+	lunMap := globalSCSILUMap.TargetsBSMap[tgtName]
 	return lunMap
 }
 
@@ -128,5 +144,35 @@ func InitSCSILUMap(config *config.Config) error {
 			AddLUNMapping(m)
 		}
 	}
+	return nil
+}
+
+func InitSCSILUMapEx(tgtName, devpath string, deviceID, lun, size, sectorSize uint64, bs api.RemoteBackingStore) error {
+	globalSCSILUMap.mutex.Lock()
+	defer globalSCSILUMap.mutex.Unlock()
+
+	if bs == nil {
+		return errors.New("Remote backing store is nil")
+	}
+
+	globalSCSILUMap.TargetsBSMap[tgtName] = bs
+
+	lu, err := NewSCSILu(&config.BackendStorage{
+		DeviceID: deviceID,
+		Path:     "RemBs:" + devpath,
+		Online:   true,
+	},
+	)
+	if err != nil {
+		return errors.New("Init SCSI LU map error.")
+	}
+	globalSCSILUMap.AllDevices[deviceID] = lu
+
+	mappingLUN(LUNMapping{
+		DeviceID:   deviceID,
+		LUN:        lun,
+		TargetName: tgtName,
+	},
+	)
 	return nil
 }

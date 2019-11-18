@@ -17,6 +17,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"sync"
 
 	uuid "github.com/satori/go.uuid"
@@ -405,4 +406,15 @@ type LUNMap map[uint64]*SCSILu
 type UnmapBlockDescriptor struct {
 	Offset uint64
 	TL     uint32
+}
+
+type ReaderWriterAt interface {
+	io.ReaderAt
+	io.WriterAt
+}
+
+type RemoteBackingStore interface {
+	ReaderWriterAt
+	Sync() (int, error)
+	Unmap(int64, int64) (int, error)
 }
