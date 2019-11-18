@@ -717,7 +717,7 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 }
 
 func reportOpcodeOne(cmd *api.SCSICommand, rctd int, opcode byte, rsa uint16, serviceAction bool) error {
-	return fmt.Errorf("non support")
+	return fmt.Errorf("rsa: %xh, sa:%v not supported", rsa, serviceAction)
 }
 
 func SPCReportSupportedOperationCodes(host int, cmd *api.SCSICommand) api.SAMStat {

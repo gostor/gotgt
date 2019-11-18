@@ -36,11 +36,12 @@ const (
 )
 
 type ISCSITargetDriver struct {
-	SCSI          *scsi.SCSITargetService
-	Name          string
-	iSCSITargets  map[string]*ISCSITarget
-	TSIHPool      map[uint16]bool
-	TSIHPoolMutex sync.Mutex
+	SCSI              *scsi.SCSITargetService
+	Name              string
+	iSCSITargets      map[string]*ISCSITarget
+	TSIHPool          map[uint16]bool
+	TSIHPoolMutex     sync.Mutex
+	isClientConnected bool
 
 	mu sync.Mutex
 	l  net.Listener
@@ -165,9 +166,8 @@ func (s *ISCSITargetDriver) Run() error {
 	s.mu.Lock()
 	s.l = l
 	s.mu.Unlock()
-
+	log.Infof("iSCSI service listening on: %v", s.listen.Addr())
 	for {
-		log.Info("Listening ...")
 		conn, err := l.Accept()
 		if err != nil {
 			if err, ok := err.(net.Error); ok {
@@ -180,24 +180,30 @@ func (s *ISCSITargetDriver) Run() error {
 			continue
 		}
 		log.Info(conn.LocalAddr().String())
-		log.Info("Accepting ...")
 
 		iscsiConn := &iscsiConnection{conn: conn,
 			loginParam: &iscsiLoginParam{}}
 
 		iscsiConn.init()
 		iscsiConn.rxIOState = IOSTATE_RX_BHS
-
-		log.Infof("connection is connected from %s...\n", conn.RemoteAddr().String())
+		log.Infof("Target is connected to initiator: %s", conn.RemoteAddr().String())
 		// start a new thread to do with this command
 		go s.handler(DATAIN, iscsiConn)
 	}
 	return nil
 }
 
+func (s *ISCSITargetDriver) setClientStatus(ok bool) {
+	s.isClientConnected = ok
+}
+
+func (s *ISCSITargetDriver) isInitiatorConnected() bool {
+	return s.isClientConnected
+}
 func (s *ISCSITargetDriver) Close() error {
 	s.mu.Lock()
 	l := s.l
+	s.setClientStatus(false)
 	s.mu.Unlock()
 	if l != nil {
 		return l.Close()
@@ -324,6 +330,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			}
 		case OpLogoutReq:
 			log.Debug("OpLogoutReq")
+			s.setClientStatus(false)
 			if err := iscsiExecLogout(conn); err != nil {
 				log.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
@@ -386,6 +393,7 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 }
 
 func iscsiExecLogout(conn *iscsiConnection) error {
+	log.Infof("Logout request received from initiator: %v", conn.conn.RemoteAddr().String())
 	cmd := conn.req
 	conn.resp = &ISCSICommand{
 		OpCode:  OpLogoutResp,
@@ -718,6 +726,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 	case OpNoopOut:
 		iscsiExecNoopOut(conn)
 	case OpLogoutReq:
+		s.setClientStatus(false)
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
 		conn.txIOState = IOSTATE_TX_BHS
 		iscsiExecLogout(conn)
