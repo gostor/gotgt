@@ -29,7 +29,7 @@ import (
 )
 
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
-	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_OP_CODE)
 	return api.SAMStatCheckCondition
 }
 

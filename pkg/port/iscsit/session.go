@@ -184,7 +184,7 @@ func boolKeyInConv(value uint) string {
 
 var sessionKeys map[string]*iscsiSessionKeys = map[string]*iscsiSessionKeys{
 	// ISCSI_PARAM_MAX_RECV_DLENGTH
-	"MaxRecvDataSegmentLength": {ISCSI_PARAM_MAX_RECV_DLENGTH, true, 32768, 512, 16777215, numberKeyConv, numberKeyInConv},
+	"MaxRecvDataSegmentLength": {ISCSI_PARAM_MAX_RECV_DLENGTH, true, 65536, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_HDRDGST_EN
 	"HeaderDigest": {ISCSI_PARAM_HDRDGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_DATADGST_EN
