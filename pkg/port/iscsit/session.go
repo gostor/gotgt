@@ -188,7 +188,9 @@ var sessionKeys map[string]*iscsiSessionKeys = map[string]*iscsiSessionKeys{
 	// ISCSI_PARAM_HDRDGST_EN
 	"HeaderDigest": {ISCSI_PARAM_HDRDGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_DATADGST_EN
-	"DataDigest": {ISCSI_PARAM_DATADGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
+	// TODO: Not sure why initialR2T was changed to true, need help in
+	// understanding it's use?
+	"DataDigest": {ISCSI_PARAM_DATADGST_EN, true, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_INITIAL_R2T_EN
 	"InitialR2T": {ISCSI_PARAM_INITIAL_R2T_EN, false, 1, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_MAX_R2T

@@ -164,6 +164,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 	case OpReady:
 		conn.resp.OpCode = OpReady
 		conn.resp.R2TSN = task.r2tSN
+		conn.resp.Final = true
 		conn.resp.BufferOffset = uint32(task.offset)
 		conn.resp.DesiredLength = uint32(task.r2tCount)
 		if val := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
