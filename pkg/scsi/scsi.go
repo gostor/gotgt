@@ -96,7 +96,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	result := scmd.Device.PerformCommand(tid, scmd)
 	if result != api.SAMStatGood {
 		scmd.Result = result.Stat
-		log.Warnf("%v", result.Err)
+		log.Warnf("opcode: %xh err: %v", scmd.OpCode, result.Err)
 	}
 	return nil
 }
