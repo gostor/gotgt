@@ -166,6 +166,7 @@ var (
 )
 
 type SCSICommand struct {
+	OpCode          byte
 	Target          *SCSITarget
 	DeviceID        uint64
 	Device          *SCSILu

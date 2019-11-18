@@ -126,6 +126,11 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		}
 		cmd.InSDBBuffer.Resid = uint32(length)
 		copy(cmd.InSDBBuffer.Buffer, rbuf)
+		if cmd.InSDBBuffer.Length < uint32(length) {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
 		err = bs.DataAdvise(int64(offset), tl, util.POSIX_FADV_WILLNEED)
 		if err != nil {
