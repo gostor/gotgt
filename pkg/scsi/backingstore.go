@@ -153,7 +153,7 @@ write:
 		if err != nil {
 			log.Error(err)
 			key = MEDIUM_ERROR
-			asc = ASC_READ_ERROR
+			asc = ASC_WRITE_ERROR
 			goto sense
 		}
 		log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
@@ -172,7 +172,7 @@ write:
 		if ((opcode != api.WRITE_6) && (scb[1]&0x8 != 0)) || (pg.Data[0]&0x04 == 0) {
 			if err = bs.DataSync(int64(offset), tl); err != nil {
 				key = MEDIUM_ERROR
-				asc = ASC_READ_ERROR
+				asc = ASC_WRITE_ERROR
 				goto sense
 			}
 		}

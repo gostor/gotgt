@@ -459,7 +459,9 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	err, key, asc = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
-		goto sense
+		log.Errorf("Error from backend: %v", err)
+		BuildSenseData(cmd, key, asc)
+		return api.SAMStatBusy
 	} else {
 		return api.SAMStatGood
 	}
