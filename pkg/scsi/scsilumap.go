@@ -147,7 +147,7 @@ func InitSCSILUMap(config *config.Config) error {
 	return nil
 }
 
-func InitSCSILUMapEx(tgtName, devpath string, deviceID, lun, size, sectorSize uint64, bs api.RemoteBackingStore) error {
+func InitSCSILUMapEx(config *config.BackendStorage, tgtName string, lun uint64, bs api.RemoteBackingStore) error {
 	globalSCSILUMap.mutex.Lock()
 	defer globalSCSILUMap.mutex.Unlock()
 
@@ -156,20 +156,14 @@ func InitSCSILUMapEx(tgtName, devpath string, deviceID, lun, size, sectorSize ui
 	}
 
 	globalSCSILUMap.TargetsBSMap[tgtName] = bs
-
-	lu, err := NewSCSILu(&config.BackendStorage{
-		DeviceID: deviceID,
-		Path:     "RemBs:" + devpath,
-		Online:   true,
-	},
-	)
+	lu, err := NewSCSILu(config)
 	if err != nil {
 		return errors.New("Init SCSI LU map error.")
 	}
-	globalSCSILUMap.AllDevices[deviceID] = lu
+	globalSCSILUMap.AllDevices[config.DeviceID] = lu
 
 	mappingLUN(LUNMapping{
-		DeviceID:   deviceID,
+		DeviceID:   config.DeviceID,
 		LUN:        lun,
 		TargetName: tgtName,
 	},

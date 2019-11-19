@@ -166,7 +166,7 @@ func (s *ISCSITargetDriver) Run() error {
 	s.mu.Lock()
 	s.l = l
 	s.mu.Unlock()
-	log.Infof("iSCSI service listening on: %v", s.listen.Addr())
+	log.Infof("iSCSI service listening on: %v", s.l.Addr())
 	for {
 		conn, err := l.Accept()
 		if err != nil {

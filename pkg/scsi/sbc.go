@@ -76,7 +76,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 		leave it with a default target name
 	*/
 
-	lu.Attrs.SCSIID = "iqn.2016-09.com.gotgt.gostor:iscsi-tgt"
+	lu.Attrs.SCSIID = SCSIID
 	/*
 	   The PRODUCT SERIAL NUMBER field contains
 	   right-aligned ASCII data (see 4.3.1)

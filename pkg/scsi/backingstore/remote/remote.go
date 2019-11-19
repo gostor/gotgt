@@ -24,6 +24,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	Size uint64
+)
+
 func init() {
 	scsi.RegisterBackingStore("RemBs", newRemBs)
 }
@@ -33,7 +37,7 @@ type RemBackingStore struct {
 	scsi.BaseBackingStore
 	// Remote backing store, remote server exposing
 	// read and write methods.
-	RemBs api.RemBackingStore
+	RemBs api.RemoteBackingStore
 }
 
 func newRemBs() (api.BackingStore, error) {
@@ -46,7 +50,11 @@ func newRemBs() (api.BackingStore, error) {
 }
 
 func (bs *RemBackingStore) Open(dev *api.SCSILu, path string) error {
-	bs.DataSize = uint64(dev.Size)
+	if Size == 0 {
+		return fmt.Errorf("Size is not initialized")
+	}
+
+	bs.DataSize = Size
 	bs.RemBs = scsi.GetTargetBSMap(path)
 	return nil
 }
@@ -102,6 +110,6 @@ func (bs *RemBackingStore) DataSync(offset, length int64) (err error) {
 }
 
 func (bs *RemBackingStore) Unmap(bd []api.UnmapBlockDescriptor) (err error) {
-	_, err = bs.RemBs.Unmap()
+	_, err = bs.RemBs.Unmap(int64(bd[0].Offset), int64(bd[0].TL))
 	return
 }

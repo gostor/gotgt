@@ -397,6 +397,9 @@ type SCSILu struct {
 	Storage             BackingStore
 	DeviceProtocol      SCSIDeviceProtocol
 	ModeBlockDescriptor []byte
+	SCSIVendorID        string
+	SCSIProductID       string
+	SCSIID              string
 
 	PerformCommand CommandFunc
 	FinishCommand  func(*SCSITarget, *SCSICommand)

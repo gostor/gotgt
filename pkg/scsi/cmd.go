@@ -231,6 +231,7 @@ const (
 const (
 	SCSIVendorID  = "GOSTOR"
 	SCSIProductID = "GOTGT"
+	SCSIID        = "iqn.2016-09.com.gotgt.gostor:iscsi-tgt"
 )
 
 /*
