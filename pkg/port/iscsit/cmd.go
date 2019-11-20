@@ -239,6 +239,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.Write = data[1]&0x20 == 0x20
 		m.CDB = data[32:48]
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
+		m.SCSIOpCode = m.CDB[0]
 		SCSIOpcode := api.SCSICommandType(m.SCSIOpCode)
 		switch SCSIOpcode {
 		case api.READ_6, api.READ_10, api.READ_12, api.READ_16:

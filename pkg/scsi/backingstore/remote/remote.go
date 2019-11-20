@@ -29,7 +29,7 @@ var (
 )
 
 func init() {
-	scsi.RegisterBackingStore("RemBs", newRemBs)
+	scsi.RegisterBackingStore("RemBs", NewRemoteBackingStore)
 }
 
 // RemBackingStore
@@ -40,7 +40,7 @@ type RemBackingStore struct {
 	RemBs api.RemoteBackingStore
 }
 
-func newRemBs() (api.BackingStore, error) {
+func NewRemoteBackingStore() (api.BackingStore, error) {
 	return &RemBackingStore{
 		BaseBackingStore: scsi.BaseBackingStore{
 			Name:            "RemBs",
@@ -53,9 +53,12 @@ func (bs *RemBackingStore) Open(dev *api.SCSILu, path string) error {
 	if Size == 0 {
 		return fmt.Errorf("Size is not initialized")
 	}
-
+	var err error
 	bs.DataSize = Size
-	bs.RemBs = scsi.GetTargetBSMap(path)
+	bs.RemBs, err = scsi.GetTargetBSMap(path)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

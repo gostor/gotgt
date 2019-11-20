@@ -78,13 +78,16 @@ func GetTargetLUNMap(tgtName string) api.LUNMap {
 	return lunMap
 }
 
-func GetTargetBSMap(tgtName string) api.RemoteBackingStore {
-	/* TODO check for lock held by caller
+func GetTargetBSMap(tgtName string) (api.RemoteBackingStore, error) {
 	globalSCSILUMap.mutex.RLock()
-	defer globalSCSILUMap.mutex.RUnlock()*/
+	defer globalSCSILUMap.mutex.RUnlock()
 
-	lunMap := globalSCSILUMap.TargetsBSMap[tgtName]
-	return lunMap
+	bs, ok := globalSCSILUMap.TargetsBSMap[tgtName]
+	if !ok {
+		return nil, errors.New("Remote backing store is not found in globalSCSILUMap")
+	}
+
+	return bs, nil
 }
 
 func AddBackendStorage(bs config.BackendStorage) error {
@@ -148,19 +151,22 @@ func InitSCSILUMap(config *config.Config) error {
 }
 
 func InitSCSILUMapEx(config *config.BackendStorage, tgtName string, lun uint64, bs api.RemoteBackingStore) error {
-	globalSCSILUMap.mutex.Lock()
-	defer globalSCSILUMap.mutex.Unlock()
-
 	if bs == nil {
 		return errors.New("Remote backing store is nil")
 	}
 
+	globalSCSILUMap.mutex.Lock()
 	globalSCSILUMap.TargetsBSMap[tgtName] = bs
+	globalSCSILUMap.mutex.Unlock()
+
 	lu, err := NewSCSILu(config)
 	if err != nil {
-		return errors.New("Init SCSI LU map error.")
+		return fmt.Errorf("Init SCSI LU map error, err: %v", err)
 	}
+
+	globalSCSILUMap.mutex.Lock()
 	globalSCSILUMap.AllDevices[config.DeviceID] = lu
+	globalSCSILUMap.mutex.Unlock()
 
 	mappingLUN(LUNMapping{
 		DeviceID:   config.DeviceID,

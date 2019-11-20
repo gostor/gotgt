@@ -228,7 +228,7 @@ const (
 	NAA_IEEE_REGD_EXTD = byte(0x6)
 )
 
-const (
+var (
 	SCSIVendorID  = "GOSTOR"
 	SCSIProductID = "GOTGT"
 	SCSIID        = "iqn.2016-09.com.gotgt.gostor:iscsi-tgt"

@@ -53,6 +53,20 @@ func (s *SCSITargetService) GetTargetList() ([]api.SCSITarget, error) {
 	return result, nil
 }
 
+func (s *SCSITargetService) Resize(size uint64) error {
+	s.mutex.Lock()
+	//TODO for multiple LUNs
+	for _, t := range s.Targets {
+		if t.Devices != nil {
+			for i := range t.Devices {
+				t.Devices[i].Size = size
+			}
+		}
+	}
+	s.mutex.Unlock()
+	return nil
+}
+
 func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) error {
 	var (
 		target *api.SCSITarget
@@ -128,9 +142,18 @@ func NewSCSIDeviceOperation(fn api.CommandFunc, sa []*SCSIServiceAction, pr uint
 func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	senseBuffer := &bytes.Buffer{}
 	inBufLen, ok := SCSICDBBufXLength(cmd.SCB)
-	var length uint32 = 0xa
+	var (
+		length      uint32 = 0xa
+		fixedFormat bool   = true
+	)
 
-	if cmd.Device.Attrs.SenseFormat {
+	if cmd.Device != nil {
+		if cmd.Device.Attrs.SenseFormat {
+			fixedFormat = false
+		}
+	}
+
+	if !fixedFormat {
 		// descriptor format
 		// current, not deferred
 		senseBuffer.WriteByte(0x72)
