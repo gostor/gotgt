@@ -93,7 +93,7 @@ script:
    - sudo iscsiadm -m node -L all
    - sudo iscsiadm -m session
    - sudo fdisk -l
-   - echo -e "n\np\n1\n\n\nt\nc\na\n1\nw" | sudo fdisk /dev/sdb
+   - echo -e "n\np\n1\n\n\nt\nc\na\nw" | sudo fdisk /dev/sdb
    - sudo mkfs.ext3 /dev/sdb1
    - sudo mkdir -p /var/tmp/test
    - sudo mount /dev/sdb1 /var/tmp/test
