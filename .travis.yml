@@ -1,5 +1,5 @@
 sudo: required
-dist: trusty
+dist: xenial
 env:
     global:
         - TARGET=iqn.2016-09.com.gotgt.gostor:example_tgt_0
@@ -10,9 +10,8 @@ env:
 language: go
 
 go:
-    - "1.10"
-    - "1.11"
-    - "1.12"
+    - 1.12.x
+    - 1.13.x
 
 install:
    - true
