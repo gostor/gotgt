@@ -55,7 +55,6 @@ type ISCSITargetDriver struct {
 	TSIHPoolMutex     sync.Mutex
 	isClientConnected bool
 	enableStats       bool
-	SCSIIOCount       map[int]int64
 	mu                *sync.RWMutex
 	l                 net.Listener
 	state             uint8
@@ -77,8 +76,8 @@ func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, 
 	}
 
 	if EnableStats {
-		driver.SCSIIOCount = map[int]int64{}
 		driver.enableStats = true
+		driver.TargetStats.SCSIIOCount = map[int]int64{}
 	}
 	return driver, nil
 }
@@ -631,10 +630,12 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 	switch req.OpCode {
 	case OpSCSICmd:
 		log.Debugf("SCSI Command processing...")
-		if _, ok := s.SCSIIOCount[(int)(req.CDB[0])]; ok != false {
-			s.SCSIIOCount[(int)(req.CDB[0])] += 1
-		} else {
-			s.SCSIIOCount[(int)(req.CDB[0])] = 1
+		if s.enableStats {
+			if _, ok := s.TargetStats.SCSIIOCount[(int)(req.CDB[0])]; ok != false {
+				s.TargetStats.SCSIIOCount[(int)(req.CDB[0])] += 1
+			} else {
+				s.TargetStats.SCSIIOCount[(int)(req.CDB[0])] = 1
+			}
 		}
 		scmd := &api.SCSICommand{
 			ITNexusID:       conn.session.ITNexus.ID,

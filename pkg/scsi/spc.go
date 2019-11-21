@@ -28,6 +28,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	EnableMultipath = true
+)
+
 func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
 	BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_OP_CODE)
 	return api.SAMStatCheckCondition
@@ -325,7 +329,11 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 		}
 		//byte 5
 		//SCCS(0) AAC(0) TPGS(0) 3PC(0) PROTECT(0)
-		addBuf.WriteByte(INQUIRY_TPGS_IMPLICIT)
+		if EnableMultipath {
+			addBuf.WriteByte(INQUIRY_TPGS_IMPLICIT)
+		} else {
+			addBuf.WriteByte(INQUIRY_TPGS_NO)
+		}
 		//byte 6
 		//ENCSERV(0) VS(0) MULTIP(0) ADDR16(0)
 		addBuf.WriteByte(0x00)

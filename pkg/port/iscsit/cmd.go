@@ -371,7 +371,6 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	copy(buf[36:], util.MarshalUint32(m.DataSN))
 	copy(buf[40:], util.MarshalUint32(m.BufferOffset))
 	copy(buf[44:], util.MarshalUint32(m.Resid))
-	copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
 	if m.ExpectedDataLen != 0 {
 		copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
 	}
