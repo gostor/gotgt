@@ -125,6 +125,11 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
 		}
 		cmd.InSDBBuffer.Resid = uint32(length)
+		if cmd.InSDBBuffer.Length < uint32(length) {
+			key = ILLEGAL_REQUEST
+			asc = ASC_INVALID_FIELD_IN_CDB
+			goto sense
+		}
 		copy(cmd.InSDBBuffer.Buffer, rbuf)
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
 		err = bs.DataAdvise(int64(offset), tl, util.POSIX_FADV_WILLNEED)
@@ -148,7 +153,7 @@ write:
 		if err != nil {
 			log.Error(err)
 			key = MEDIUM_ERROR
-			asc = ASC_READ_ERROR
+			asc = ASC_WRITE_ERROR
 			goto sense
 		}
 		log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
@@ -167,7 +172,7 @@ write:
 		if ((opcode != api.WRITE_6) && (scb[1]&0x8 != 0)) || (pg.Data[0]&0x04 == 0) {
 			if err = bs.DataSync(int64(offset), tl); err != nil {
 				key = MEDIUM_ERROR
-				asc = ASC_READ_ERROR
+				asc = ASC_WRITE_ERROR
 				goto sense
 			}
 		}

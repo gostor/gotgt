@@ -51,6 +51,7 @@ var (
 )
 
 type iscsiConnection struct {
+	ConnNum   int
 	state     int
 	authState int
 	session   *ISCSISession
@@ -96,12 +97,13 @@ const (
 )
 
 type iscsiTask struct {
-	tag    uint32
-	conn   *iscsiConnection
-	cmd    *ISCSICommand
-	scmd   *api.SCSICommand
-	state  taskState
-	result byte
+	tag                uint32
+	conn               *iscsiConnection
+	cmd                *ISCSICommand
+	scmd               *api.SCSICommand
+	state              taskState
+	expectedDataLength int64
+	result             byte
 
 	offset     int
 	r2tCount   int
@@ -154,6 +156,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		task = conn.rxTask
 	}
 	conn.resp = &ISCSICommand{
+		StartTime:       conn.req.StartTime,
 		StatSN:          conn.req.ExpStatSN,
 		TaskTag:         conn.req.TaskTag,
 		ExpCmdSN:        conn.session.ExpCmdSN,
@@ -164,6 +167,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 	case OpReady:
 		conn.resp.OpCode = OpReady
 		conn.resp.R2TSN = task.r2tSN
+		conn.resp.Final = true
 		conn.resp.BufferOffset = uint32(task.offset)
 		conn.resp.DesiredLength = uint32(task.r2tCount)
 		if val := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
@@ -171,6 +175,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		}
 	case OpSCSIIn, OpSCSIResp:
 		conn.resp.OpCode = oc
+		conn.resp.SCSIOpCode = conn.req.SCSIOpCode
 		conn.resp.Immediate = true
 		conn.resp.Final = true
 		conn.resp.SCSIResponse = 0x00

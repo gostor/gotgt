@@ -152,8 +152,8 @@ func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 				conn.loginParam.iniCSG, conn.loginParam.iniNSG, conn.loginParam.iniTrans)
 		}
 	} else {
-		conn.loginParam.tgtNSG = LoginOperationalNegotiation
-		conn.loginParam.tgtTrans = false
+		conn.loginParam.tgtNSG = FullFeaturePhase
+		conn.loginParam.tgtTrans = true
 	}
 	return negoKV, nil
 }

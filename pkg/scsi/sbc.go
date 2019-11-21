@@ -37,6 +37,11 @@ const (
 	PR_EA_FN   = (1 << 0)
 )
 
+var (
+	EnableORWrite16             = true
+	EnablePersistentReservation = true
+)
+
 type SBCSCSIDeviceProtocol struct {
 	BaseSCSIDeviceProtocol
 }
@@ -76,7 +81,7 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 		leave it with a default target name
 	*/
 
-	lu.Attrs.SCSIID = "iqn.2016-09.com.gotgt.gostor:iscsi-tgt"
+	lu.Attrs.SCSIID = SCSIID
 	/*
 	   The PRODUCT SERIAL NUMBER field contains
 	   right-aligned ASCII data (see 4.3.1)
@@ -176,26 +181,29 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.MODE_SELECT_10] = NewSCSIDeviceOperation(SBCModeSelect, nil, PR_WE_FA|PR_EA_FA|PR_EA_FN|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.MODE_SENSE_10] = NewSCSIDeviceOperation(SBCModeSense, nil, PR_WE_FA|PR_WE_FN|PR_EA_FA|PR_EA_FN)
 
-	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_IN] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
-		{ServiceAction: PR_IN_READ_KEYS, CommandPerformFunc: SPCPRReadKeys},
-		{ServiceAction: PR_IN_READ_RESERVATION, CommandPerformFunc: SPCPRReadReservation},
-		{ServiceAction: PR_IN_REPORT_CAPABILITIES, CommandPerformFunc: SPCPRReportCapabilities},
-	}, 0)
+	if EnablePersistentReservation {
+		sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_IN] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
+			{ServiceAction: PR_IN_READ_KEYS, CommandPerformFunc: SPCPRReadKeys},
+			{ServiceAction: PR_IN_READ_RESERVATION, CommandPerformFunc: SPCPRReadReservation},
+			{ServiceAction: PR_IN_REPORT_CAPABILITIES, CommandPerformFunc: SPCPRReportCapabilities},
+		}, 0)
 
-	sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_OUT] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
-		{ServiceAction: PR_OUT_REGISTER, CommandPerformFunc: SPCPRRegister},
-		{ServiceAction: PR_OUT_RESERVE, CommandPerformFunc: SPCPRReserve},
-		{ServiceAction: PR_OUT_RELEASE, CommandPerformFunc: SPCPRRelease},
-		{ServiceAction: PR_OUT_CLEAR, CommandPerformFunc: SPCPRClear},
-		{ServiceAction: PR_OUT_PREEMPT, CommandPerformFunc: SPCPRPreempt},
-		//		{ServiceAction: PR_OUT_PREEMPT_AND_ABORT, CommandPerformFunc: SPCPRPreempt},
-		{ServiceAction: PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY, CommandPerformFunc: SPCPRRegister},
-		{ServiceAction: PR_OUT_REGISTER_AND_MOVE, CommandPerformFunc: SPCPRRegisterAndMove},
-	}, 0)
-
+		sbc.SCSIDeviceOps[api.PERSISTENT_RESERVE_OUT] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
+			{ServiceAction: PR_OUT_REGISTER, CommandPerformFunc: SPCPRRegister},
+			{ServiceAction: PR_OUT_RESERVE, CommandPerformFunc: SPCPRReserve},
+			{ServiceAction: PR_OUT_RELEASE, CommandPerformFunc: SPCPRRelease},
+			{ServiceAction: PR_OUT_CLEAR, CommandPerformFunc: SPCPRClear},
+			{ServiceAction: PR_OUT_PREEMPT, CommandPerformFunc: SPCPRPreempt},
+			//		{ServiceAction: PR_OUT_PREEMPT_AND_ABORT, CommandPerformFunc: SPCPRPreempt},
+			{ServiceAction: PR_OUT_REGISTER_AND_IGNORE_EXISTING_KEY, CommandPerformFunc: SPCPRRegister},
+			{ServiceAction: PR_OUT_REGISTER_AND_MOVE, CommandPerformFunc: SPCPRRegisterAndMove},
+		}, 0)
+	}
 	sbc.SCSIDeviceOps[api.READ_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.WRITE_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN|PR_WE_FA|PR_WE_FN)
-	sbc.SCSIDeviceOps[api.ORWRITE_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
+	if EnableORWrite16 {
+		sbc.SCSIDeviceOps[api.ORWRITE_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
+	}
 	sbc.SCSIDeviceOps[api.WRITE_VERIFY_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.VERIFY_16] = NewSCSIDeviceOperation(SBCVerify, nil, PR_EA_FA|PR_EA_FN)
 
@@ -459,7 +467,9 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	err, key, asc = bsPerformCommand(dev.Storage, cmd)
 	if err != nil {
-		goto sense
+		log.Errorf("Error from backend: %v", err)
+		BuildSenseData(cmd, key, asc)
+		return api.SAMStatBusy
 	} else {
 		return api.SAMStatGood
 	}
@@ -533,7 +543,9 @@ overflow:
 	cmd.InSDBBuffer.Resid = 8
 	return api.SAMStatGood
 sense:
-	cmd.InSDBBuffer.Resid = 0
+	if cmd.InSDBBuffer != nil {
+		cmd.InSDBBuffer.Resid = 0
+	}
 	BuildSenseData(cmd, key, asc)
 	return api.SAMStatCheckCondition
 }
@@ -679,7 +691,9 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 	return api.SAMStatGood
 sense:
-	cmd.InSDBBuffer.Resid = 0
+	if cmd.InSDBBuffer != nil {
+		cmd.InSDBBuffer.Resid = 0
+	}
 	BuildSenseData(cmd, key, asc)
 	return api.SAMStatCheckCondition
 }

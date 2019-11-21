@@ -184,13 +184,13 @@ func boolKeyInConv(value uint) string {
 
 var sessionKeys map[string]*iscsiSessionKeys = map[string]*iscsiSessionKeys{
 	// ISCSI_PARAM_MAX_RECV_DLENGTH
-	"MaxRecvDataSegmentLength": {ISCSI_PARAM_MAX_RECV_DLENGTH, true, 32768, 512, 16777215, numberKeyConv, numberKeyInConv},
+	"MaxRecvDataSegmentLength": {ISCSI_PARAM_MAX_RECV_DLENGTH, true, 65536, 512, 16777215, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_HDRDGST_EN
 	"HeaderDigest": {ISCSI_PARAM_HDRDGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_DATADGST_EN
 	"DataDigest": {ISCSI_PARAM_DATADGST_EN, false, DIGEST_NONE, DIGEST_NONE, DIGEST_ALL, digestKeyConv, digestKeyInConv},
 	// ISCSI_PARAM_INITIAL_R2T_EN
-	"InitialR2T": {ISCSI_PARAM_INITIAL_R2T_EN, false, 1, 0, 1, boolKeyConv, boolKeyInConv},
+	"InitialR2T": {ISCSI_PARAM_INITIAL_R2T_EN, true, 1, 0, 1, boolKeyConv, boolKeyInConv},
 	// ISCSI_PARAM_MAX_R2T
 	"MaxOutstandingR2T": {ISCSI_PARAM_MAX_R2T, true, 1, 1, 65535, numberKeyConv, numberKeyInConv},
 	// ISCSI_PARAM_IMM_DATA_EN
@@ -392,8 +392,8 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 		}
 
 		if newSess.SessionType == SESSION_NORMAL {
-			log.Infof("New Session initiator name:%v,target name:%v,ISID:0x%x",
-				conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
+			log.Infof("Login request received from initiator: %v, Session type: %s, Target name:%v, ISID: 0x%x",
+				conn.loginParam.initiator, "Normal", conn.loginParam.target, conn.loginParam.isid)
 			//register normal session
 			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
 			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
@@ -404,6 +404,8 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 			newSess.Target.Sessions[newSess.TSIH] = newSess
 			newSess.Target.SessionsRWMutex.Unlock()
 		} else {
+			log.Infof("Discovery request received from initiator: %v, Session type: %s, ISID: 0x%x",
+				conn.loginParam.initiator, "Discovery", conn.loginParam.isid)
 			conn.session = newSess
 		}
 	} else {

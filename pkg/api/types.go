@@ -17,6 +17,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"sync"
 
 	uuid "github.com/satori/go.uuid"
@@ -165,6 +166,7 @@ var (
 )
 
 type SCSICommand struct {
+	OpCode          byte
 	Target          *SCSITarget
 	DeviceID        uint64
 	Device          *SCSILu
@@ -395,6 +397,9 @@ type SCSILu struct {
 	Storage             BackingStore
 	DeviceProtocol      SCSIDeviceProtocol
 	ModeBlockDescriptor []byte
+	SCSIVendorID        string
+	SCSIProductID       string
+	SCSIID              string
 
 	PerformCommand CommandFunc
 	FinishCommand  func(*SCSITarget, *SCSICommand)
@@ -405,4 +410,15 @@ type LUNMap map[uint64]*SCSILu
 type UnmapBlockDescriptor struct {
 	Offset uint64
 	TL     uint32
+}
+
+type ReaderWriterAt interface {
+	io.ReaderAt
+	io.WriterAt
+}
+
+type RemoteBackingStore interface {
+	ReaderWriterAt
+	Sync() (int, error)
+	Unmap(int64, int64) (int, error)
 }

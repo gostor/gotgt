@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
 	log "github.com/sirupsen/logrus"
 )
@@ -93,6 +95,7 @@ type ISCSICommand struct {
 	FinalInSeq         bool
 	Immediate          bool
 	TaskTag            uint32
+	StartTime          time.Time
 	ExpCmdSN, MaxCmdSN uint32
 	AHSLen             int
 	Resid              uint32
@@ -124,6 +127,7 @@ type ISCSICommand struct {
 	StatusDetail uint8
 
 	// SCSI commands
+	SCSIOpCode      byte
 	ExpectedDataLen uint32
 	CDB             []byte
 	Status          byte
@@ -225,6 +229,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 	m.AHSLen = int(data[4]) * 4
 	m.DataLen = int(ParseUint(data[5:8]))
 	m.TaskTag = uint32(ParseUint(data[16:20]))
+	m.StartTime = time.Now()
 	switch m.OpCode {
 	case OpSCSICmd:
 		m.LUN = [8]byte{data[9]}
@@ -234,6 +239,14 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.Write = data[1]&0x20 == 0x20
 		m.CDB = data[32:48]
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
+		m.SCSIOpCode = m.CDB[0]
+		SCSIOpcode := api.SCSICommandType(m.SCSIOpCode)
+		switch SCSIOpcode {
+		case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
+			m.Read = true
+		case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16, api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16:
+			m.Write = true
+		}
 		fallthrough
 	case OpSCSITaskReq:
 		m.ReferencedTaskTag = uint32(ParseUint(data[20:24]))
@@ -358,7 +371,9 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	copy(buf[36:], util.MarshalUint32(m.DataSN))
 	copy(buf[40:], util.MarshalUint32(m.BufferOffset))
 	copy(buf[44:], util.MarshalUint32(m.Resid))
-	copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
+	if m.ExpectedDataLen != 0 {
+		copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
+	}
 
 	return buf
 }

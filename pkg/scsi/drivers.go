@@ -28,6 +28,27 @@ type SCSITargetDriver interface {
 	NewTarget(string, *config.Config) error
 	RereadTargetLUNMap()
 	Close() error
+	Resize(uint64) error
+	Stats() Stats
+}
+
+type Stats struct {
+	IsClientConnected bool
+	RevisionCounter   int64
+	ReplicaCounter    int64
+	SCSIIOCount       map[int]int64
+
+	ReadIOPS            int64
+	TotalReadTime       int64
+	TotalReadBlockCount int64
+
+	WriteIOPS            int64
+	TotalWriteTime       int64
+	TotalWriteBlockCount int64
+
+	UsedLogicalBlocks int64
+	UsedBlocks        int64
+	SectorSize        int64
 }
 
 type TargetDriverFunc func(*SCSITargetService) (SCSITargetDriver, error)
