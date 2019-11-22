@@ -336,7 +336,7 @@ var (
 	TYPE_RBC            SCSIDeviceType = 0x0e
 	TYPE_OSD            SCSIDeviceType = 0x11
 	TYPE_NO_LUN         SCSIDeviceType = 0x7f
-	TYPE_UNKNOWN        SCSIDeviceType = 0X1f
+	TYPE_UNKNOWN        SCSIDeviceType = 0x1f
 
 	TYPE_PT SCSIDeviceType = 0xff
 )
