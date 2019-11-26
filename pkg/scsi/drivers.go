@@ -30,6 +30,7 @@ type SCSITargetDriver interface {
 	Close() error
 	Resize(uint64) error
 	Stats() Stats
+	SetClusterIP(string)
 }
 
 type Stats struct {
