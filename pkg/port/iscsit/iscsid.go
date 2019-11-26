@@ -60,6 +60,7 @@ type ISCSITargetDriver struct {
 	state             uint8
 	OpCode            int
 	TargetStats       scsi.Stats
+	clusterIP         string
 }
 
 func init() {
@@ -128,6 +129,10 @@ func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config)
 	return nil
 }
 
+func (s *ISCSITargetDriver) SetClusterIP(ip string) {
+	s.clusterIP = ip
+}
+
 func (s *ISCSITargetDriver) RereadTargetLUNMap() {
 	s.SCSI.RereadTargetLUNMap()
 }
@@ -185,6 +190,7 @@ func (s *ISCSITargetDriver) Run() error {
 		log.Error(err)
 		os.Exit(1)
 	}
+
 	s.mu.Lock()
 	s.l = l
 	s.mu.Unlock()
@@ -197,6 +203,7 @@ func (s *ISCSITargetDriver) Run() error {
 			if err, ok := err.(net.Error); ok {
 				if !err.Temporary() {
 					log.Warning("Closing connection with initiator...")
+					conn.Close()
 					break
 				}
 			}
@@ -463,11 +470,27 @@ func (s *ISCSITargetDriver) iscsiExecText(conn *iscsiConnection) error {
 				log.Debugf("iscsi target: %v", name)
 				//log.Debugf("iscsi target portals: %v", tgt.Portals)
 
-				result = append(result, util.KeyValue{"TargetName", name})
-				for _, tpgt := range tgt.TPGTs {
-					for portal := range tpgt.Portals {
-						targetPort := fmt.Sprintf("%s,%d", portal, tpgt.TPGT)
-						result = append(result, util.KeyValue{"TargetAddress", targetPort})
+				result = append(result, util.KeyValue{
+					Key:   "TargetName",
+					Value: name,
+				})
+				if s.clusterIP == "" {
+					for _, tpgt := range tgt.TPGTs {
+						for portal := range tpgt.Portals {
+							targetPort := fmt.Sprintf("%s,%d", portal, tpgt.TPGT)
+							result = append(result, util.KeyValue{
+								Key:   "TargetAddress",
+								Value: targetPort,
+							})
+						}
+					}
+				} else {
+					for _, tpgt := range tgt.TPGTs {
+						targetPort := fmt.Sprintf("%s,%d", s.clusterIP, tpgt.TPGT)
+						result = append(result, util.KeyValue{
+							Key:   "TargetAddress",
+							Value: targetPort,
+						})
 					}
 				}
 			}
