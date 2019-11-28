@@ -20,6 +20,8 @@ before_script:
     - echo ${TGT_CFG}
     - echo ${TARGET}
     - sudo apt-get update
+    # install dependency management tool dep
+    - go get -u github.com/golang/dep/cmd/dep
     - ci/ceph_install.sh
     - bash ci/ceph_micro-osd.sh /tmp/micro-ceph
     - export CEPH_CONF=/tmp/micro-ceph/ceph.conf
@@ -29,13 +31,15 @@ before_script:
 
 script:
    - cd ${TRAVIS_BUILD_DIR}
+   # install dependencies
+   - make deps
    # Try a build without cgo first
    - make build-nocgo
    - make clean
    # Now build with cgo and cephstore.
    - make
+   - make test-jiva
    - hack/verify-gofmt.sh
-   - go test -v ./pkg/...
    - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=102400
    - mkdir ${HOME}/.gotgt
    - echo ${TGT_CFG} > ${HOME}/.gotgt/config.json

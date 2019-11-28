@@ -203,7 +203,6 @@ func (s *ISCSITargetDriver) Run() error {
 			if err, ok := err.(net.Error); ok {
 				if !err.Temporary() {
 					log.Warning("Closing connection with initiator...")
-					conn.Close()
 					break
 				}
 			}

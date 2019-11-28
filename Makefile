@@ -1,6 +1,17 @@
 BIN_DIR=_output/cmd/bin
 
-all: init build
+PACKAGES = $(shell go list ./... | grep -v 'mock')
+
+deps:
+	dep ensure
+
+all: init build test
+
+test-jiva:
+	sudo -E env "PATH=${PATH}" go test -v ./mock/
+
+test:
+	go test ${PACKAGES}
 
 build: init
 	go build -o ${BIN_DIR}/gotgt gotgt.go
