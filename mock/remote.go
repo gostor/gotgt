@@ -52,9 +52,6 @@ func (r *remoteBs) Unmap(bs int64, size int64) (int, error) {
 
 func initializeSCSITarget(size int64) {
 	iscsit.EnableStats = true
-	scsi.SCSIVendorID = "OPENEBS"
-	scsi.SCSIProductID = "JIVA"
-	scsi.SCSIID = "iqn.2016-09.com.jiva.openebs:iscsi-tgt"
 	scsi.EnableORWrite16 = false
 	scsi.EnablePersistentReservation = false
 	scsi.EnableMultipath = false
@@ -79,7 +76,7 @@ func (r *remoteBs) Startup(name string, frontendIP string, clusterIP string, siz
 		}
 	}
 
-	r.tgtName = "iqn.2016-09.com.openebs.jiva:" + name
+	r.tgtName = "iqn.2016-09.com.gotgt.gostor:" + name
 	r.lhbsName = "RemBs:" + name
 	r.cfg = &config.Config{
 		Storages: []config.BackendStorage{
