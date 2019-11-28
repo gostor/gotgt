@@ -26,9 +26,11 @@ before_script:
     - ceph status
     - sudo apt-get install -y libcunit1 libcunit1-doc libcunit1-dev
     - sudo apt-get install -y open-iscsi
+    - go get -u github.com/golang/dep/cmd/dep
 
 script:
    - cd ${TRAVIS_BUILD_DIR}
+   - make deps
    # Try a build without cgo first
    - make build-nocgo
    - make clean
@@ -39,7 +41,7 @@ script:
    - dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=102400
    - mkdir ${HOME}/.gotgt
    - echo ${TGT_CFG} > ${HOME}/.gotgt/config.json
-   - ./_output/cmd/bin/gotgt daemon --log debug 1>/dev/null 2>&1 &
+   - ./_output/cmd/bin/gotgt daemon --log debug 1>log.txt 2>&1 &
    # libiscsi test
    - mkdir ${HOME}/libiscsi
    - git clone https://github.com/gostor/libiscsi ${HOME}/libiscsi
@@ -98,4 +100,5 @@ script:
    - sudo mkdir -p /var/tmp/test
    - sudo mount /dev/sdb1 /var/tmp/test
    - sudo ls -lh /var/tmp/test/
+   - cat log.txt
 
