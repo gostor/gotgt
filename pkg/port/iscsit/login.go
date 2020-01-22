@@ -19,6 +19,7 @@ package iscsit
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/gostor/gotgt/pkg/util"
 )
@@ -62,14 +63,47 @@ func (s iSCSILoginStage) String() string {
 }
 
 func loginKVDeclare(conn *iscsiConnection, negoKV []util.KeyValue) []util.KeyValue {
-
 	negoKV = append(negoKV, util.KeyValue{"TargetPortalGroupTag",
 		numberKeyInConv(uint(conn.loginParam.tpgt))})
 	negoKV = append(negoKV, util.KeyValue{"MaxRecvDataSegmentLength",
 		numberKeyInConv(sessionKeys["MaxRecvDataSegmentLength"].def)})
 	return negoKV
-
 }
+
+func stringsContains(s []string, p string) bool {
+	for _, q := range s {
+		if q == p {
+			return true
+		}
+	}
+	return false
+}
+
+func (conn *iscsiConnection) processSecurityData() error {
+	securityKV := util.ParseKVText(conn.req.RawData)
+
+	for key, val := range securityKV {
+		if key == "AuthMethod" {
+			// It can be a list.
+			vals := strings.Split(val, ",")
+			if !stringsContains(vals, "None") {
+				// TODO: respond with Reject message, rather
+				// than terminating TCP connection.
+				return fmt.Errorf("client requesting AuthMethod:%s, only support None", val)
+			}
+			conn.loginParam.tgtNSG = LoginOperationalNegotiation
+			conn.loginParam.tgtTrans = true
+			conn.loginParam.authMethod = AuthNone
+		} else if key == "TargetName" {
+			conn.loginParam.target = val
+		} else if key == "InitiatorName" {
+			conn.loginParam.initiator = val
+		}
+	}
+
+	return nil
+}
+
 func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 	var (
 		uintVal    uint
@@ -148,7 +182,7 @@ func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 			conn.loginParam.tgtTrans = true
 		} else {
 			//Currently, we just reject these kind of cases
-			return negoKV, fmt.Errorf("reject CSG=%d,NSG=%d,trans=%t",
+			return negoKV, fmt.Errorf("reject CSG=%s,NSG=%s,trans=%t",
 				conn.loginParam.iniCSG, conn.loginParam.iniNSG, conn.loginParam.iniTrans)
 		}
 	} else {

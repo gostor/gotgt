@@ -159,9 +159,11 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		StartTime:       conn.req.StartTime,
 		StatSN:          conn.req.ExpStatSN,
 		TaskTag:         conn.req.TaskTag,
-		ExpCmdSN:        conn.session.ExpCmdSN,
-		MaxCmdSN:        conn.session.ExpCmdSN + conn.session.MaxQueueCommand,
 		ExpectedDataLen: conn.req.ExpectedDataLen,
+	}
+	if conn.session != nil {
+		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
+		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
 	}
 	switch oc {
 	case OpReady:
@@ -216,15 +218,17 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 		conn.resp.NSG = conn.loginParam.tgtNSG
 		conn.resp.ExpCmdSN = conn.req.CmdSN
 		conn.resp.MaxCmdSN = conn.req.CmdSN
-		negoKeys, err := conn.processLoginData()
-		if err != nil {
-			return err
+		if conn.req.CSG != SecurityNegotiation {
+			negoKeys, err := conn.processLoginData()
+			if err != nil {
+				return err
+			}
+			if !conn.loginParam.keyDeclared {
+				negoKeys = loginKVDeclare(conn, negoKeys)
+				conn.loginParam.keyDeclared = true
+			}
+			conn.resp.RawData = util.MarshalKVText(negoKeys)
 		}
-		if !conn.loginParam.keyDeclared {
-			negoKeys = loginKVDeclare(conn, negoKeys)
-			conn.loginParam.keyDeclared = true
-		}
-		conn.resp.RawData = util.MarshalKVText(negoKeys)
 		conn.txTask = nil
 	}
 
