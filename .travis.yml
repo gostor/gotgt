@@ -27,7 +27,6 @@ before_script:
     - ceph status
     - sudo apt-get install -y libcunit1 libcunit1-doc libcunit1-dev
     - sudo apt-get install -y open-iscsi
-    - go get -u github.com/golang/dep/cmd/dep
 
 script:
    - cd ${TRAVIS_BUILD_DIR}
