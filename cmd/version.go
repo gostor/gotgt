@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"fmt"
+	"github.com/spf13/cobra"
 
 	"github.com/gostor/gotgt/pkg/api/client"
 	"github.com/gostor/gotgt/pkg/version"
-	"github.com/spf13/cobra"
 )
 
 func newVersionCommand(cli *client.Client) *cobra.Command {
@@ -14,7 +13,7 @@ func newVersionCommand(cli *client.Client) *cobra.Command {
 		Short: "Print the version number of gotgt",
 		Long:  `All software has versions. This is Gotgt 's`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Gotgt %s -- HEAD\n", version.Version)
+			version.PrintVersionAndExit()
 		},
 	}
 	return cmd
