@@ -3,7 +3,7 @@ BIN_DIR=_output/cmd/bin
 all: init build
 
 deps:
-	dep ensure
+	go mod download
 
 build: init
 	go build -o ${BIN_DIR}/gotgt gotgt.go
