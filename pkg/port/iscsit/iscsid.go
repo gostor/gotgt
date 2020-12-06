@@ -949,10 +949,6 @@ func (s *ISCSITargetDriver) UpdateStats(conn *iscsiConnection) {
 		s.TargetStats.TotalWriteBlockCount += int64(conn.resp.ExpectedDataLen)
 		break
 	}
-	if _, ok := s.TargetStats.SCSIIOCount[(int)(conn.resp.SCSIOpCode)]; ok != false {
-		s.TargetStats.SCSIIOCount[(int)(conn.resp.SCSIOpCode)] += 1
-	} else {
-		s.TargetStats.SCSIIOCount[(int)(conn.resp.SCSIOpCode)] = 1
-	}
+	s.TargetStats.SCSIIOCount[(int)(conn.resp.SCSIOpCode)] += 1
 	s.mu.Unlock()
 }
