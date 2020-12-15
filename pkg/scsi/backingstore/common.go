@@ -18,8 +18,8 @@ package backingstore
 
 import (
 	"fmt"
+	"io"
 	"os"
-        "io"
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
@@ -53,7 +53,7 @@ func new() (api.BackingStore, error) {
 func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 
 	var (
-		mode os.FileMode
+		mode  os.FileMode
 		finfo os.FileInfo
 	)
 
@@ -66,9 +66,9 @@ func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 
 	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
 
-        if err == nil {
+	if err == nil {
 		// block device filesize needs to be treated differently
-		if mode&os.ModeDevice != 0 {
+		if (mode & os.ModeDevice) != 0 {
 			pos, err := f.Seek(0, io.SeekEnd)
 			if err != nil {
 				return err
@@ -77,7 +77,7 @@ func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 		} else {
 			bs.DataSize = uint64(finfo.Size())
 		}
-        }
+	}
 
 	bs.file = f
 	return err
