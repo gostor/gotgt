@@ -37,22 +37,24 @@ func newDaemonCommand(cli *client.Client) *cobra.Command {
 	var host string
 	var driver string
 	var logLevel string
+	var blockMultipleHosts bool
 	var cmd = &cobra.Command{
 		Use:   "daemon",
 		Short: "Setup a daemon",
 		Long:  `Setup the Gotgt's daemon`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return createDaemon(host, driver, logLevel)
+			return createDaemon(host, driver, logLevel, blockMultipleHosts)
 		},
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&logLevel, "log", "info", "Log level of SCSI target daemon")
 	flags.StringVar(&host, "host", "tcp://127.0.0.1:23457", "Host for SCSI target daemon")
 	flags.StringVar(&driver, "driver", "iscsi", "SCSI low level driver")
+	flags.BoolVar(&blockMultipleHosts, "block-multiple-hosts", false, "Disable login from multiple hosts")
 	return cmd
 }
 
-func createDaemon(host, driver, level string) error {
+func createDaemon(host, driver, level string, blockMultipleHosts bool) error {
 	switch level {
 	case "info":
 		log.SetLevel(log.InfoLevel)
@@ -86,6 +88,10 @@ func createDaemon(host, driver, level string) error {
 
 	for tgtname := range config.ISCSITargets {
 		targetDriver.NewTarget(tgtname, config)
+	}
+
+	if blockMultipleHosts {
+		targetDriver.EnableBlockMultipleHostLogin()
 	}
 
 	// comment this to avoid concurrent issue
