@@ -31,6 +31,7 @@ type SCSITargetDriver interface {
 	Resize(uint64) error
 	Stats() Stats
 	SetClusterIP(string)
+	EnableBlockMultipleHostLogin()
 }
 
 type Stats struct {

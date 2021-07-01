@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,23 +45,25 @@ const (
 )
 
 var (
-	EnableStats bool
+	EnableStats   bool
+	CurrentHostIP string
 )
 
 type ISCSITargetDriver struct {
-	SCSI              *scsi.SCSITargetService
-	Name              string
-	iSCSITargets      map[string]*ISCSITarget
-	TSIHPool          map[uint16]bool
-	TSIHPoolMutex     sync.Mutex
-	isClientConnected bool
-	enableStats       bool
-	mu                *sync.RWMutex
-	l                 net.Listener
-	state             uint8
-	OpCode            int
-	TargetStats       scsi.Stats
-	clusterIP         string
+	SCSI                   *scsi.SCSITargetService
+	Name                   string
+	iSCSITargets           map[string]*ISCSITarget
+	TSIHPool               map[uint16]bool
+	TSIHPoolMutex          sync.Mutex
+	isClientConnected      bool
+	enableStats            bool
+	mu                     *sync.RWMutex
+	l                      net.Listener
+	state                  uint8
+	OpCode                 int
+	TargetStats            scsi.Stats
+	clusterIP              string
+	blockMultipleHostLogin bool
 }
 
 func init() {
@@ -131,6 +134,10 @@ func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config)
 
 func (s *ISCSITargetDriver) SetClusterIP(ip string) {
 	s.clusterIP = ip
+}
+
+func (s *ISCSITargetDriver) EnableBlockMultipleHostLogin() {
+	s.blockMultipleHostLogin = true
 }
 
 func (s *ISCSITargetDriver) RereadTargetLUNMap() {
@@ -210,6 +217,19 @@ func (s *ISCSITargetDriver) Run() error {
 			continue
 		}
 
+		remoteIP := strings.Split(conn.RemoteAddr().String(), ":")[0]
+
+		if CurrentHostIP == "" {
+			CurrentHostIP = remoteIP
+		}
+
+		if s.blockMultipleHostLogin && remoteIP != CurrentHostIP {
+			conn.Close()
+			log.Infof("rejecting connection: %s target already connected at %s",
+				remoteIP, CurrentHostIP)
+			continue
+		}
+
 		log.Info(conn.LocalAddr().String())
 		s.setClientStatus(true)
 
@@ -273,6 +293,7 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 	if conn.state == CONN_STATE_CLOSE {
 		log.Warningf("iscsi connection[%d] closed", conn.cid)
 		conn.close()
+		CurrentHostIP = ""
 	}
 }
 
@@ -457,6 +478,7 @@ func iscsiExecLogout(conn *iscsiConnection) error {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
 		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
 	}
+	CurrentHostIP = ""
 	return nil
 }
 
