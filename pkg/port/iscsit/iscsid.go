@@ -47,6 +47,7 @@ const (
 var (
 	EnableStats   bool
 	CurrentHostIP string
+	IPMutex       sync.Mutex
 )
 
 type ISCSITargetDriver struct {
@@ -219,9 +220,11 @@ func (s *ISCSITargetDriver) Run() error {
 
 		remoteIP := strings.Split(conn.RemoteAddr().String(), ":")[0]
 
+		IPMutex.Lock()
 		if CurrentHostIP == "" {
 			CurrentHostIP = remoteIP
 		}
+		IPMutex.Unlock()
 
 		if s.blockMultipleHostLogin && remoteIP != CurrentHostIP {
 			conn.Close()
@@ -230,7 +233,7 @@ func (s *ISCSITargetDriver) Run() error {
 			continue
 		}
 
-		log.Info(conn.LocalAddr().String())
+		log.Info("connection establishing at: ", conn.LocalAddr().String())
 		s.setClientStatus(true)
 
 		iscsiConn := &iscsiConnection{conn: conn,
@@ -284,7 +287,19 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 
 	if events&DATAIN != 0 {
 		log.Debug("rx handler processing...")
-		go s.rxHandler(conn)
+		go func() {
+			s.rxHandler(conn)
+			if conn.state == CONN_STATE_CLOSE {
+				log.Warningf("iscsi connection[%d] closed", conn.cid)
+				conn.close()
+				IPMutex.Lock()
+				remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
+				if CurrentHostIP == remoteIP {
+					CurrentHostIP = ""
+				}
+				IPMutex.Unlock()
+			}
+		}()
 	}
 	if conn.state != CONN_STATE_CLOSE && events&DATAOUT != 0 {
 		log.Debug("tx handler processing...")
@@ -293,7 +308,12 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 	if conn.state == CONN_STATE_CLOSE {
 		log.Warningf("iscsi connection[%d] closed", conn.cid)
 		conn.close()
-		CurrentHostIP = ""
+		IPMutex.Lock()
+		remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
+		if CurrentHostIP == remoteIP {
+			CurrentHostIP = ""
+		}
+		IPMutex.Unlock()
 	}
 }
 
@@ -319,7 +339,8 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			log.Debug("rx handler: IOSTATE_RX_BHS")
 			length, err = conn.readData(buf)
 			if err != nil {
-				log.Error(err)
+				log.Error("read BHS failed:", err)
+				conn.state = CONN_STATE_CLOSE
 				return
 			}
 			if length == 0 {
@@ -363,7 +384,8 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			for length < dl {
 				l, err := conn.readData(cmd.RawData[length:])
 				if err != nil {
-					log.Error(err)
+					log.Error("read data failed:", err)
+					conn.state = CONN_STATE_CLOSE
 					return
 				}
 				length += l
@@ -478,7 +500,12 @@ func iscsiExecLogout(conn *iscsiConnection) error {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
 		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
 	}
-	CurrentHostIP = ""
+	IPMutex.Lock()
+	remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
+	if CurrentHostIP == remoteIP {
+		CurrentHostIP = ""
+	}
+	IPMutex.Unlock()
 	return nil
 }
 
