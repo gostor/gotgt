@@ -18,29 +18,66 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 
+	"github.com/docker/go-connections/sockets"
 	"github.com/gostor/gotgt/pkg/api/client"
 	"github.com/spf13/cobra"
+
+	"github.com/gostor/gotgt/pkg/version"
 )
 
-func NewCommand(cli *client.Client) *cobra.Command {
+func NewCommand() *cobra.Command {
+	var cli *client.Client
+	var host string = "tcp://127.0.0.1:23457"
 	var cmd = &cobra.Command{
 		Use:   "gotgt",
 		Short: "Gotgt is a very fast and stable SCSI target framework",
 		Long:  ``,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			httpClient, err := newHTTPClient(host)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v", err)
+				return err
+			}
+
+			cli, err = client.NewClient(host, version.Version, httpClient, nil)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v", err)
+				return err
+			}
 			// Do Stuff Here
+			return nil
 		},
 	}
+
+	cmd.PersistentFlags().StringVar(&host, "host", host, "Endpoint for SCSI target daemon")
 	cmd.AddCommand(
-		newDaemonCommand(cli),
+		newDaemonCommand(),
 		newCreateCommand(cli),
 		newRemoveCommand(cli),
 		newListCommand(cli),
 		newVersionCommand(cli),
 	)
 	return cmd
+}
+
+func newHTTPClient(host string) (*http.Client, error) {
+	tr := &http.Transport{
+		TLSClientConfig: nil,
+	}
+	proto, addr, _, err := client.ParseHost(host)
+	if err != nil {
+		return nil, err
+	}
+
+	sockets.ConfigureTransport(tr, proto, addr)
+
+	return &http.Client{
+		Transport: tr,
+	}, nil
 }
 
 // NoArgs validate args and returns an error if there are any args

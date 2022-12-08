@@ -1,0 +1,126 @@
+[2022-12-08 17:05:40,120][ceph_deploy.conf][DEBUG ] found configuration file at: /home/xuelei/.cephdeploy.conf
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ] Invoked (2.0.1): /usr/local/bin/ceph-deploy install --release quincy k8s-master
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ] ceph-deploy options:
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  verbose                       : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  quiet                         : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  username                      : None
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  overwrite_conf                : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  ceph_conf                     : None
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  cluster                       : ceph
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  stable                        : None
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  release                       : quincy
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  testing                       : None
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  dev                           : master
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  dev_commit                    : None
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_mon                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_mgr                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_mds                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_rgw                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_osd                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_tests                 : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_common                : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  install_all                   : False
+[2022-12-08 17:05:40,120][ceph_deploy.cli][INFO  ]  adjust_repos                  : True
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  repo                          : False
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  host                          : ['k8s-master']
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  local_mirror                  : None
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  repo_url                      : None
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  gpg_url                       : None
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  nogpgcheck                    : False
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  cd_conf                       : <ceph_deploy.conf.cephdeploy.Conf object at 0x7fc60ea15cd0>
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  default_release               : False
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  version_kind                  : stable
+[2022-12-08 17:05:40,121][ceph_deploy.cli][INFO  ]  func                          : <function install at 0x7fc60ea40430>
+[2022-12-08 17:05:40,121][ceph_deploy.install][DEBUG ] Installing stable version quincy on cluster ceph hosts k8s-master
+[2022-12-08 17:05:40,121][ceph_deploy.install][DEBUG ] Detecting platform for host k8s-master ...
+[2022-12-08 17:05:40,137][k8s-master][DEBUG ] connection detected need for sudo
+[2022-12-08 17:05:40,152][k8s-master][DEBUG ] connected to host: k8s-master 
+[2022-12-08 17:05:40,160][ceph_deploy][ERROR ] RuntimeError: AttributeError: module 'platform' has no attribute 'linux_distribution'
+
+[2022-12-08 17:11:46,588][ceph_deploy.conf][DEBUG ] found configuration file at: /home/xuelei/.cephdeploy.conf
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ] Invoked (2.1.0): /usr/local/bin/ceph-deploy install --release quincy k8s-master
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ] ceph-deploy options:
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  verbose                       : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  quiet                         : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  username                      : None
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  overwrite_conf                : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  ceph_conf                     : None
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  cluster                       : ceph
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  stable                        : None
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  release                       : quincy
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  testing                       : None
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  dev                           : master
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  dev_commit                    : None
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_mon                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_mgr                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_mds                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_rgw                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_osd                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_tests                 : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_common                : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  install_all                   : False
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  adjust_repos                  : True
+[2022-12-08 17:11:46,588][ceph_deploy.cli][INFO  ]  repo                          : False
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  host                          : ['k8s-master']
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  local_mirror                  : None
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  repo_url                      : None
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  gpg_url                       : None
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  nogpgcheck                    : False
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  cd_conf                       : <ceph_deploy.conf.cephdeploy.Conf object at 0x7f8563b883d0>
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  default_release               : False
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  version_kind                  : stable
+[2022-12-08 17:11:46,589][ceph_deploy.cli][INFO  ]  func                          : <function install at 0x7f8563b6a5e0>
+[2022-12-08 17:11:46,589][ceph_deploy.install][DEBUG ] Installing stable version quincy on cluster ceph hosts k8s-master
+[2022-12-08 17:11:46,589][ceph_deploy.install][DEBUG ] Detecting platform for host k8s-master ...
+[2022-12-08 17:11:46,609][k8s-master][DEBUG ] connection detected need for sudo
+[2022-12-08 17:11:46,628][k8s-master][DEBUG ] connected to host: k8s-master 
+[2022-12-08 17:11:46,638][ceph_deploy.install][INFO  ] Distro info: ubuntu 20.04 focal
+[2022-12-08 17:11:46,638][k8s-master][INFO  ] installing Ceph on k8s-master
+[2022-12-08 17:11:46,638][k8s-master][INFO  ] Running command: sudo env DEBIAN_FRONTEND=noninteractive DEBIAN_PRIORITY=critical apt-get --assume-yes -q update
+[2022-12-08 17:11:46,778][k8s-master][DEBUG ] Hit:1 http://mirrors.aliyun.com/ubuntu focal InRelease
+[2022-12-08 17:11:46,823][k8s-master][DEBUG ] Get:2 http://mirrors.aliyun.com/ubuntu focal-security InRelease [114 kB]
+[2022-12-08 17:11:46,924][k8s-master][DEBUG ] Hit:3 http://nexus.infra.shg1.mthreads.com/repository/apt-releases bionic InRelease
+[2022-12-08 17:11:46,943][k8s-master][DEBUG ] Ign:4 https://baltocdn.com/helm/stable/debian all InRelease
+[2022-12-08 17:11:47,146][k8s-master][DEBUG ] Err:5 https://baltocdn.com/helm/stable/debian all Release
+[2022-12-08 17:11:47,216][k8s-master][DEBUG ]   Could not handshake: Error in the pull function. [IP: 151.139.128.10 443]
+[2022-12-08 17:11:47,216][k8s-master][DEBUG ] Get:7 http://mirrors.aliyun.com/ubuntu focal-updates InRelease [114 kB]
+[2022-12-08 17:11:47,603][k8s-master][DEBUG ] Get:8 http://mirrors.aliyun.com/ubuntu focal-proposed InRelease [267 kB]
+[2022-12-08 17:11:48,233][k8s-master][DEBUG ] Hit:9 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64  InRelease
+[2022-12-08 17:11:48,528][k8s-master][DEBUG ] Get:10 http://mirrors.aliyun.com/ubuntu focal-backports InRelease [108 kB]
+[2022-12-08 17:11:48,922][k8s-master][DEBUG ] Get:11 http://mirrors.aliyun.com/ubuntu focal-security/main Sources [260 kB]
+[2022-12-08 17:11:49,746][k8s-master][DEBUG ] Get:12 http://mirrors.aliyun.com/ubuntu focal-security/main amd64 Packages [1,892 kB]
+[2022-12-08 17:11:52,517][k8s-master][DEBUG ] Hit:6 https://packages.cloud.google.com/apt kubernetes-xenial InRelease
+[2022-12-08 17:11:52,572][k8s-master][DEBUG ] Get:13 https://nvidia.github.io/libnvidia-container/stable/ubuntu18.04/amd64  InRelease [1,484 B]
+[2022-12-08 17:11:52,572][k8s-master][DEBUG ] Get:14 https://nvidia.github.io/nvidia-container-runtime/stable/ubuntu18.04/amd64  InRelease [1,481 B]
+[2022-12-08 17:11:52,627][k8s-master][DEBUG ] Get:15 https://nvidia.github.io/nvidia-docker/ubuntu18.04/amd64  InRelease [1,474 B]
+[2022-12-08 17:11:55,290][k8s-master][DEBUG ] Get:16 http://mirrors.aliyun.com/ubuntu focal-security/main i386 Packages [530 kB]
+[2022-12-08 17:11:56,868][k8s-master][DEBUG ] Get:17 http://mirrors.aliyun.com/ubuntu focal-security/main amd64 DEP-11 Metadata [40.7 kB]
+[2022-12-08 17:11:56,986][k8s-master][DEBUG ] Get:18 http://mirrors.aliyun.com/ubuntu focal-security/main amd64 c-n-f Metadata [11.5 kB]
+[2022-12-08 17:11:57,026][k8s-master][DEBUG ] Get:19 http://mirrors.aliyun.com/ubuntu focal-security/universe amd64 Packages [777 kB]
+[2022-12-08 17:11:59,427][k8s-master][DEBUG ] Get:20 http://mirrors.aliyun.com/ubuntu focal-security/universe i386 Packages [574 kB]
+[2022-12-08 17:12:01,128][k8s-master][DEBUG ] Get:21 http://mirrors.aliyun.com/ubuntu focal-security/universe amd64 DEP-11 Metadata [94.0 kB]
+[2022-12-08 17:12:01,405][k8s-master][DEBUG ] Get:22 http://mirrors.aliyun.com/ubuntu focal-security/universe amd64 c-n-f Metadata [16.9 kB]
+[2022-12-08 17:12:01,454][k8s-master][DEBUG ] Get:23 http://mirrors.aliyun.com/ubuntu focal-security/multiverse amd64 DEP-11 Metadata [940 B]
+[2022-12-08 17:12:01,458][k8s-master][DEBUG ] Get:24 http://mirrors.aliyun.com/ubuntu focal-updates/main Sources [537 kB]
+[2022-12-08 17:12:03,070][k8s-master][DEBUG ] Get:25 http://mirrors.aliyun.com/ubuntu focal-updates/main amd64 Packages [2,270 kB]
+[2022-12-08 17:12:09,735][k8s-master][DEBUG ] Get:26 http://mirrors.aliyun.com/ubuntu focal-updates/main i386 Packages [761 kB]
+[2022-12-08 17:12:11,949][k8s-master][DEBUG ] Get:27 http://mirrors.aliyun.com/ubuntu focal-updates/main amd64 DEP-11 Metadata [275 kB]
+[2022-12-08 17:12:12,740][k8s-master][DEBUG ] Get:28 http://mirrors.aliyun.com/ubuntu focal-updates/main amd64 c-n-f Metadata [16.1 kB]
+[2022-12-08 17:12:12,790][k8s-master][DEBUG ] Get:29 http://mirrors.aliyun.com/ubuntu focal-updates/universe amd64 Packages [1,009 kB]
+[2022-12-08 17:12:15,710][k8s-master][DEBUG ] Get:30 http://mirrors.aliyun.com/ubuntu focal-updates/universe i386 Packages [704 kB]
+[2022-12-08 17:12:17,757][k8s-master][DEBUG ] Get:31 http://mirrors.aliyun.com/ubuntu focal-updates/universe amd64 DEP-11 Metadata [407 kB]
+[2022-12-08 17:12:18,945][k8s-master][DEBUG ] Get:32 http://mirrors.aliyun.com/ubuntu focal-updates/universe amd64 c-n-f Metadata [23.2 kB]
+[2022-12-08 17:12:19,017][k8s-master][DEBUG ] Get:33 http://mirrors.aliyun.com/ubuntu focal-updates/multiverse amd64 DEP-11 Metadata [940 B]
+[2022-12-08 17:12:19,023][k8s-master][DEBUG ] Get:34 http://mirrors.aliyun.com/ubuntu focal-proposed/main Sources [59.0 kB]
+[2022-12-08 17:12:19,192][k8s-master][DEBUG ] Get:35 http://mirrors.aliyun.com/ubuntu focal-proposed/main i386 Packages [54.5 kB]
+[2022-12-08 17:12:19,355][k8s-master][DEBUG ] Get:36 http://mirrors.aliyun.com/ubuntu focal-proposed/main amd64 Packages [227 kB]
+[2022-12-08 17:12:20,006][k8s-master][DEBUG ] Get:37 http://mirrors.aliyun.com/ubuntu focal-proposed/main Translation-en [52.1 kB]
+[2022-12-08 17:12:20,161][k8s-master][DEBUG ] Get:38 http://mirrors.aliyun.com/ubuntu focal-proposed/main amd64 DEP-11 Metadata [2,248 B]
+[2022-12-08 17:12:20,169][k8s-master][DEBUG ] Get:39 http://mirrors.aliyun.com/ubuntu focal-proposed/universe amd64 DEP-11 Metadata [2,940 B]
+[2022-12-08 17:12:20,178][k8s-master][DEBUG ] Get:40 http://mirrors.aliyun.com/ubuntu focal-backports/main amd64 DEP-11 Metadata [7,968 B]
+[2022-12-08 17:12:20,204][k8s-master][DEBUG ] Get:41 http://mirrors.aliyun.com/ubuntu focal-backports/universe amd64 DEP-11 Metadata [30.5 kB]
+[2022-12-08 17:12:23,194][k8s-master][DEBUG ] Reading package lists...
+[2022-12-08 17:12:23,205][k8s-master][WARNING] E: The repository 'https://baltocdn.com/helm/stable/debian all Release' no longer has a Release file.
+[2022-12-08 17:12:23,206][k8s-master][ERROR ] RuntimeError: command returned non-zero exit status: 100
+[2022-12-08 17:12:23,206][ceph_deploy][ERROR ] RuntimeError: Failed to execute command: env DEBIAN_FRONTEND=noninteractive DEBIAN_PRIORITY=critical apt-get --assume-yes -q update
+
