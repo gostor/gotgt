@@ -3,10 +3,10 @@
 set -e
 set -x
 
-sudo apt-get install -y python-virtualenv
+sudo apt-get install -y python3-pip
 
 # ceph-deploy and ceph
-CEPH_RELEASE=jewel
+CEPH_RELEASE=quincy
 
 sudo pip install ceph-deploy
 ceph-deploy install --release ${CEPH_RELEASE} `hostname`

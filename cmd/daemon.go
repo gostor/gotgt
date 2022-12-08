@@ -23,7 +23,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/gostor/gotgt/pkg/api/client"
 	"github.com/gostor/gotgt/pkg/apiserver"
 	"github.com/gostor/gotgt/pkg/config"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
@@ -33,7 +32,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newDaemonCommand(cli *client.Client) *cobra.Command {
+func newDaemonCommand() *cobra.Command {
 	var host string
 	var driver string
 	var logLevel string
@@ -48,7 +47,6 @@ func newDaemonCommand(cli *client.Client) *cobra.Command {
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&logLevel, "log", "info", "Log level of SCSI target daemon")
-	flags.StringVar(&host, "host", "tcp://127.0.0.1:23457", "Host for SCSI target daemon")
 	flags.StringVar(&driver, "driver", "iscsi", "SCSI low level driver")
 	flags.BoolVar(&blockMultipleHosts, "block-multiple-hosts", false, "Disable login from multiple hosts")
 	return cmd
