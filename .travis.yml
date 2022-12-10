@@ -10,8 +10,8 @@ env:
 language: go
 
 go:
-    - 1.13.x
-    - 1.14.x
+    - 1.18.x
+    - 1.19.x
 
 install:
    - true
@@ -20,8 +20,8 @@ before_script:
     - echo ${TGT_CFG}
     - echo ${TARGET}
     - sudo apt-get update
-    - ci/ceph_install.sh
-    - bash ci/ceph_micro-osd.sh /tmp/micro-ceph
+    - hack/ci/ceph_install.sh
+    - bash hack/ci/ceph_micro-osd.sh /tmp/micro-ceph
     - export CEPH_CONF=/tmp/micro-ceph/ceph.conf
     - ceph status
     - sudo apt-get install -y libcunit1 libcunit1-doc libcunit1-dev

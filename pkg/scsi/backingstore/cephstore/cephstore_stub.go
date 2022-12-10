@@ -1,5 +1,5 @@
 /*
-Copyright 2016 The GoStor Authors All rights reserved.
+Copyright 2018 The GoStor Authors All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,21 +13,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
-// SCSI target command line
-package main
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/gostor/gotgt/cmd"
-)
-
-func main() {
-
-	if err := cmd.NewCommand().Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-}
+package cephstore

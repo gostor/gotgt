@@ -1,3 +1,6 @@
+//go:build ceph
+// +build ceph
+
 /*
 Copyright 2018 The GoStor Authors All rights reserved.
 
@@ -19,12 +22,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gostor/gotgt/pkg/api"
-	"github.com/gostor/gotgt/pkg/scsi"
-
 	"github.com/ceph/go-ceph/rados"
 	"github.com/ceph/go-ceph/rbd"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/scsi"
 )
 
 // This ceph-rbd plugin is only for linux
