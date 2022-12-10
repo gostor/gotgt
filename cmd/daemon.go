@@ -23,13 +23,15 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/gostor/gotgt/pkg/apiserver"
 	"github.com/gostor/gotgt/pkg/config"
 	_ "github.com/gostor/gotgt/pkg/port/iscsit"
 	"github.com/gostor/gotgt/pkg/scsi"
 	_ "github.com/gostor/gotgt/pkg/scsi/backingstore"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 func newDaemonCommand() *cobra.Command {
@@ -41,7 +43,11 @@ func newDaemonCommand() *cobra.Command {
 		Use:   "daemon",
 		Short: "Setup a daemon",
 		Long:  `Setup the Gotgt's daemon`,
+		PreRun: func(cmd *cobra.Command, args []string) {
+			viper.BindPFlags(cmd.Flags())
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			host = viper.GetString("host")
 			return createDaemon(host, driver, logLevel, blockMultipleHosts)
 		},
 	}
