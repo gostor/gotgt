@@ -12,9 +12,6 @@ LD_FLAGS=" \
 
 all: init build
 
-deps:
-	go mod download
-
 build: init
 	go build -ldflags ${LD_FLAGS} -o ${BIN_DIR}/gotgt gotgt.go
 
