@@ -339,7 +339,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			log.Debug("rx handler: IOSTATE_RX_BHS")
 			length, err = conn.readData(buf)
 			if err != nil {
-				log.Error("read BHS failed:", err)
+				log.Error("read BHS failed: ", err)
 				conn.state = CONN_STATE_CLOSE
 				return
 			}

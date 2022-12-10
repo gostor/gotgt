@@ -21,10 +21,11 @@ import (
 	"io"
 	"os"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
 	"github.com/gostor/gotgt/pkg/util"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -51,13 +52,10 @@ func new() (api.BackingStore, error) {
 }
 
 func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
+	var mode os.FileMode
 
-	var (
-		mode  os.FileMode
-		finfo os.FileInfo
-	)
-
-	if finfo, err := os.Stat(path); err != nil {
+	finfo, err := os.Stat(path)
+	if err != nil {
 		return err
 	} else {
 		// determine file type
@@ -75,6 +73,9 @@ func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 			}
 			bs.DataSize = uint64(pos)
 		} else {
+			if finfo == nil {
+				log.Infof("finfo is nil")
+			}
 			bs.DataSize = uint64(finfo.Size())
 		}
 	}
