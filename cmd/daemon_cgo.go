@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // Only include cephstore when building with cgo.
+//go:build cgo
 // +build cgo
 
 package cmd
