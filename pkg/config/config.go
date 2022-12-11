@@ -23,7 +23,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gostor/gotgt/pkg/homedir"
+	"github.com/mitchellh/go-homedir"
 )
 
 /*
@@ -33,7 +33,7 @@ Format of configuration file
     "storages": [
         {
             "deviceID": integer, uniqu device id,
-            "path": string, <protocal>:<absolute/file/path>",
+            "path": string, <protocol>:<absolute/file/path>",
             "online": bool, online/offline
         }
     ],
@@ -126,7 +126,8 @@ type Config struct {
 
 func init() {
 	if configDir == "" {
-		configDir = filepath.Join(homedir.Get(), ".gotgt")
+		homeDir, _ := homedir.Dir()
+		configDir = filepath.Join(homeDir, ".gotgt")
 	}
 }
 

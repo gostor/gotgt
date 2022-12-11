@@ -1,6 +1,8 @@
 ## gotgt 
 
 ![Build Status](https://github.com/gostor/gotgt/actions/workflows/gotgt.yml/badge.svg)
+![License](https://img.shields.io/badge/license-Apache%202-blue)
+![Go Report Card](https://goreportcard.com/badge/github.com/gostor/gotgt)
 
 The gotgt project is a simple SCSI Target framework implemented in golang built for performance and density.
 Very briefly, this iSCSI/SCSI target Go implementation can be included/imported as a library to allow upper layer iSCSI clients to communicate to the actual SCSI devices. The target configuration is static with a json file for the time being. The core functionality of this target library provides the iSCSI/SCSI protocol services. A simple flat file based LUN target implementation is provided with plug-in interface. In the future, a formal plugin mechanism will be provided and supported to work with more sophisticated backend storage arrays.
@@ -22,9 +24,7 @@ There is a only one binary name `gotgt`, you can start a daemon via `gotgt daemo
 You will need to make sure that you have Go installed on your system and the automake package is installed also. The `gotgt` repository should be cloned in your $GOPATH.
 
 ```
-$ mkdir -p $GOPATH/src/github.com/gostor/
-$ cd $GOPATH/src/github.com/gostor/
-$ git clone https://github.com/gostor/gotgt gotgt
+$ git clone https://github.com/gostor/gotgt
 $ cd gotgt
 $ make
 ```
