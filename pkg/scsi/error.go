@@ -117,7 +117,7 @@ var (
 	ASC_MEDIUM_SRC_EMPTY                          SCSISubError = 0x3b0e
 	ASC_POSITION_PAST_BOM                         SCSISubError = 0x3b0c
 	ASC_MEDIUM_REMOVAL_PREVENTED                  SCSISubError = 0x5302
-	ASC_INSUFFICENT_REGISTRATION_RESOURCES        SCSISubError = 0x5504
+	ASC_INSUFFICIENT_REGISTRATION_RESOURCES       SCSISubError = 0x5504
 	ASC_BAD_MICROCODE_DETECTED                    SCSISubError = 0x8283
 
 	// Key 6: Unit Attention

@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// SCSITargetService SCSI target service
 type SCSITargetService struct {
 	mutex   sync.RWMutex
 	Targets []*api.SCSITarget
@@ -36,6 +37,7 @@ type SCSITargetService struct {
 var _instance *SCSITargetService
 var service sync.Once
 
+// NewSCSITargetService create a new SCSITargetService
 func NewSCSITargetService() *SCSITargetService {
 	service.Do(func() {
 		_instance = &SCSITargetService{Targets: []*api.SCSITarget{}}
@@ -43,6 +45,7 @@ func NewSCSITargetService() *SCSITargetService {
 	return _instance
 }
 
+// GetTargetList get SCSI target list
 func (s *SCSITargetService) GetTargetList() ([]api.SCSITarget, error) {
 	result := []api.SCSITarget{}
 	s.mutex.RLock()
@@ -53,6 +56,7 @@ func (s *SCSITargetService) GetTargetList() ([]api.SCSITarget, error) {
 	return result, nil
 }
 
+// Resize resize
 func (s *SCSITargetService) Resize(size uint64) error {
 	s.mutex.Lock()
 	//TODO for multiple LUNs
@@ -67,6 +71,7 @@ func (s *SCSITargetService) Resize(size uint64) error {
 	return nil
 }
 
+// AddCommandQueue add command queue
 func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) error {
 	var (
 		target *api.SCSITarget
@@ -115,22 +120,26 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	return nil
 }
 
+// SCSIServiceAction SCSI service action
 type SCSIServiceAction struct {
 	ServiceAction      uint8
 	CommandPerformFunc api.CommandFunc
 }
 
+// SCSIDeviceOperation SCSI device operation
 type SCSIDeviceOperation struct {
 	CommandPerformFunc api.CommandFunc
 	ServiceAction      []*SCSIServiceAction
 	PRConflictBits     uint8
 }
 
+// BaseSCSIDeviceProtocol base SCSI device protocol
 type BaseSCSIDeviceProtocol struct {
 	DeviceType    api.SCSIDeviceType
 	SCSIDeviceOps []SCSIDeviceOperation
 }
 
+// NewSCSIDeviceOperation create a new SCSI device operation
 func NewSCSIDeviceOperation(fn api.CommandFunc, sa []*SCSIServiceAction, pr uint8) SCSIDeviceOperation {
 	return SCSIDeviceOperation{
 		CommandPerformFunc: fn,
@@ -139,6 +148,7 @@ func NewSCSIDeviceOperation(fn api.CommandFunc, sa []*SCSIServiceAction, pr uint
 	}
 }
 
+// BuildSenseData build sense data
 func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	senseBuffer := &bytes.Buffer{}
 	inBufLen, ok := SCSICDBBufXLength(cmd.SCB)

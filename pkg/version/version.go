@@ -26,7 +26,7 @@ import (
 const (
 	// Version shows the version of gotgt.
 	Version = "Not provided."
-	// SCSI version string MUST be shorter than 4 characters
+	// SCSIVersion string MUST be shorter than 4 characters
 	SCSIVersion = "0.1"
 	// GitSHA shoows the git commit id of volcano.
 	GitSHA = "Not provided."

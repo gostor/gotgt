@@ -114,7 +114,7 @@ var (
 	EXCHANGE_MEDIUM                      SCSICommandType = 0xa6
 	READ_12                              SCSICommandType = 0xa8
 	WRITE_12                             SCSICommandType = 0xaa
-	GET_PERFORMACE                       SCSICommandType = 0xac
+	GET_PERFORMANCE                      SCSICommandType = 0xac
 	READ_DVD_STRUCTURE                   SCSICommandType = 0xad
 	WRITE_VERIFY_12                      SCSICommandType = 0xae
 	VERIFY_12                            SCSICommandType = 0xaf
@@ -193,7 +193,7 @@ type SCSICommand struct {
 type ITNexus struct {
 	// UUID v1
 	ID uuid.UUID `json:"id"`
-	// For protocal spec identifer
+	// For protocol spec identifer
 	Tag string `json:"Tag"`
 }
 
