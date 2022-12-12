@@ -170,7 +170,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask, cmd *I
 		TaskTag:         req.TaskTag,
 		ExpectedDataLen: req.ExpectedDataLen,
 	}
-	log.Debugf("buildRespPackage TaskTag %x, oc %v ", resp.TaskTag, oc)
+	log.Debugf("buildRespPackage TaskTag: %x, OpCode: %v ", resp.TaskTag, opCodeMap[oc])
 	if conn.session != nil {
 		resp.ExpCmdSN = conn.session.ExpCmdSN
 		resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
@@ -244,6 +244,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask, cmd *I
 			resp.RawData = util.MarshalKVText(negoKeys)
 		}
 	}
+	log.Debugf("response struct: %s", resp.String())
 
 	return resp, nil
 }

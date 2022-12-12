@@ -852,7 +852,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection, cmd *ISCSI
 	req := cmd
 	switch req.OpCode {
 	case OpSCSICmd:
-		log.Debugf("SCSI Command tag %x processing...", req.TaskTag)
+		log.Debugf("SCSI Command tag:0x%x, CmdSN:%d processing...", req.TaskTag, req.CmdSN)
 		conn.readLock.Lock()
 		scmd := &api.SCSICommand{
 			ITNexusID:       conn.session.ITNexus.ID,
@@ -922,7 +922,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection, cmd *ISCSI
 					} else {
 						s.txHandler(conn, resp)
 					}
-					break
+					return nil
 				} else {
 					log.Debugf("Not ready to exec the task")
 					return nil
@@ -971,12 +971,13 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection, cmd *ISCSI
 			}
 			resp, err = iscsiExecR2T(conn, task)
 			break
+		} else {
+			log.Debugf("Process the Data-out package")
+			conn.session.PendingTasksMutex.Lock()
+			conn.session.PendingTasks.RemoveByTag(req.TaskTag)
+			conn.session.PendingTasksMutex.Unlock()
+			s.workChan <- task
 		}
-		log.Debugf("Process the Data-out package")
-		s.workChan <- task
-		conn.session.PendingTasksMutex.Lock()
-		conn.session.PendingTasks.RemoveByTag(req.TaskTag)
-		conn.session.PendingTasksMutex.Unlock()
 	case OpNoopOut:
 		resp, err = iscsiExecNoopOut(conn, cmd)
 	case OpLogoutReq:
@@ -1046,10 +1047,10 @@ func (s *ISCSITargetDriver) iscsiTaskQueueRoutine() {
 			for {
 				select {
 				case task := <-s.workChan:
-					log.Debugf("go routine work task Tag 0x%x, CmdSN %d, StatSN %d ", task.tag, task.cmd.CmdSN, task.cmd.StatSN)
+					log.Debugf("go routine work task Tag:0x%x, CmdSN:%d, StatSN:%d, R2T:%d", task.tag, task.cmd.CmdSN, task.cmd.StatSN, task.r2tCount)
 					err := s.iscsiTaskQueueHandler(task)
 					if err != nil {
-						log.Error("TaskiscsiTaskQueueHandler error")
+						log.Errorf("TaskiscsiTaskQueueHandler error, %v", err)
 						return
 					}
 
@@ -1093,6 +1094,7 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		task = sess.PendingTasks.Pop()
 		cmd = task.cmd
 		if cmd.CmdSN != cmdsn {
+			log.Debugf("cmd.CmdSN(%d) != cmdsn(%d)", cmd.CmdSN, cmdsn)
 			sess.PendingTasks.Push(task)
 			sess.PendingTasksMutex.Unlock()
 			return nil
@@ -1106,13 +1108,18 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 			log.Warn(err)
 			return err
 		}
-		log.Debugf("add task(%d) into task queue", task.cmd.CmdSN)
+		if cmd.CmdSN > sess.MaxCmdSN {
+			err := fmt.Errorf("unexpected cmd serial number(%d), bigger than MaxCmdSN(%d) ", cmd.CmdSN, sess.MaxCmdSN)
+			log.Warn(err)
+			return err
+		}
+		log.Debugf("add task(%d) into task queue, CmdSN=%d, ExpCmdSN=%d", task.tag, task.cmd.CmdSN, sess.ExpCmdSN)
 		// add this task into queue and set it as a pending task
 		sess.PendingTasksMutex.Lock()
 		task.state = taskPending
 		sess.PendingTasks.Push(task)
 		sess.PendingTasksMutex.Unlock()
-		return fmt.Errorf("pending")
+		//return fmt.Errorf("pending")
 	}
 
 	return nil

@@ -176,6 +176,9 @@ func (m *ISCSICommand) String() string {
 	s = append(s, fmt.Sprintf("Data Segment Length = %d", m.DataLen))
 	s = append(s, fmt.Sprintf("Task Tag = %x", m.TaskTag))
 	s = append(s, fmt.Sprintf("AHS Length = %d", m.AHSLen))
+	s = append(s, fmt.Sprintf("StatSN = %d", m.StatSN))
+	s = append(s, fmt.Sprintf("ExpCmdSN = %d", m.ExpCmdSN))
+	s = append(s, fmt.Sprintf("MaxCmdSN = %d", m.MaxCmdSN))
 	switch m.OpCode {
 	case OpLoginReq:
 		s = append(s, fmt.Sprintf("ISID = %x", m.ISID))
@@ -199,10 +202,6 @@ func (m *ISCSICommand) String() string {
 		s = append(s, fmt.Sprintf("Read = %v", m.Read))
 		s = append(s, fmt.Sprintf("Write = %v", m.Write))
 		s = append(s, fmt.Sprintf("CDB = %x", m.CDB))
-	case OpSCSIResp:
-		s = append(s, fmt.Sprintf("StatSN = %d", m.StatSN))
-		s = append(s, fmt.Sprintf("ExpCmdSN = %d", m.ExpCmdSN))
-		s = append(s, fmt.Sprintf("MaxCmdSN = %d", m.MaxCmdSN))
 	}
 	return strings.Join(s, "\n")
 }
