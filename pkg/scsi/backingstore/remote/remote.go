@@ -91,6 +91,18 @@ func (bs *RemBackingStore) Read(offset, tl int64) ([]byte, error) {
 	return tmpbuf, nil
 }
 
+func (bs *RemBackingStore) ReadAt(buf []byte, offset int64) error {
+	length, err := bs.RemBs.ReadAt(buf, offset)
+	if err != nil {
+		return err
+	}
+
+	if length != len(buf) {
+		return fmt.Errorf("read is not same length of length")
+	}
+	return nil
+}
+
 func (bs *RemBackingStore) Write(wbuf []byte, offset int64) error {
 	length, err := bs.RemBs.WriteAt(wbuf, offset)
 	if err != nil {

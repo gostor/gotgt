@@ -323,6 +323,7 @@ func (s *ISCSITargetDriver) LookupISCSISession(tgtName string, iniName string, i
 		return nil
 	}
 	if (sess.ISID == isid) && (sess.TPGT == tpgt) {
+		log.Infof("session type: %v", sess.SessionType)
 		return sess
 	}
 	return nil
@@ -398,7 +399,10 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
 			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
 			newSess.ITNexus = itnexus
+			log.Infof("setup conn's session ITNexus, %v, tsih=%v", conn.id, newSess.TSIH)
+			conn.readLock.Lock()
 			conn.session = newSess
+			conn.readLock.Unlock()
 
 			newSess.Target.SessionsRWMutex.Lock()
 			newSess.Target.Sessions[newSess.TSIH] = newSess
@@ -406,7 +410,9 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 		} else {
 			log.Infof("Discovery request received from initiator: %v, Session type: %s, ISID: 0x%x",
 				conn.loginParam.initiator, "Discovery", conn.loginParam.isid)
+			conn.readLock.Lock()
 			conn.session = newSess
+			conn.readLock.Unlock()
 		}
 	} else {
 		if conn.loginParam.tsih == ISCSI_UNSPEC_TSIH {

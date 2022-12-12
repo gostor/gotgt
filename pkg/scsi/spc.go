@@ -19,6 +19,7 @@ package scsi
 
 import (
 	"bytes"
+	"container/list"
 	"encoding/binary"
 	"fmt"
 
@@ -920,10 +921,24 @@ sense:
 	return api.SAMStatCheckCondition
 }
 
+func getBufFromList(l *list.List) []byte {
+
+	var buf []byte
+	for e := l.Front(); e != nil; e = e.Next() {
+		b, ok := e.Value.([]byte)
+		if !ok {
+			break
+		}
+		buf = append(buf, b...)
+	}
+
+	return buf
+}
+
 func reservationCheck(host int, cmd *api.SCSICommand) bool {
 	var (
 		paramLen uint32
-		buf      []byte = cmd.OutSDBBuffer.Buffer
+		buf      []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 	)
 	length, _ := SCSICDBBufXLength(cmd.SCB)
 	paramLen = uint32(length)
@@ -942,7 +957,7 @@ func reservationCheck(host int, cmd *api.SCSICommand) bool {
 
 func SPCPRRegister(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf       []byte = cmd.OutSDBBuffer.Buffer
+		buf       []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 		scb       []byte = cmd.SCB
 		ignoreKey bool   = false
 		ok        bool   = false
@@ -1067,7 +1082,7 @@ sense:
 
 func SPCPRRelease(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf      []byte = cmd.OutSDBBuffer.Buffer
+		buf      []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 		scb      []byte = cmd.SCB
 		curRes   *api.SCSIReservation
 		res      *api.SCSIReservation
@@ -1152,7 +1167,7 @@ sense:
 
 func SPCPRClear(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf    []byte = cmd.OutSDBBuffer.Buffer
+		buf    []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 		curRes *api.SCSIReservation
 		res    *api.SCSIReservation
 		ok     bool = false
@@ -1208,7 +1223,7 @@ sense:
 
 func SPCPRPreempt(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf          []byte = cmd.OutSDBBuffer.Buffer
+		buf          []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 		scb          []byte = cmd.SCB
 		ok           bool   = false
 		resKey       uint64
@@ -1310,7 +1325,7 @@ sense:
 
 func SPCPRRegisterAndMove(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		buf                 []byte = cmd.OutSDBBuffer.Buffer
+		buf                 []byte = getBufFromList(cmd.OutSDBBuffer.BufferList)
 		scb                 []byte = cmd.SCB
 		resKey              uint64
 		sAResKey            uint64

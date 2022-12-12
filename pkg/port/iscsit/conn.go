@@ -24,6 +24,8 @@ import (
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	uuid "github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -50,22 +52,25 @@ var (
 	DATAOUT byte = 0x10
 )
 
-type iscsiConnection struct {
-	ConnNum   int
-	state     int
-	authState int
-	session   *ISCSISession
-	tid       int
-	cid       uint16
-	rxIOState int
-	txIOState int
-	refcount  int
-	conn      net.Conn
+type SendPackage struct {
+	headBuf []byte
+	dataBuf []byte
+}
 
-	rxBuffer []byte
-	txBuffer []byte
-	req      *ISCSICommand
-	resp     *ISCSICommand
+type iscsiConnection struct {
+	id          uuid.UUID
+	scsiCmdChan chan *ISCSICommand
+	ConnNum     int
+	state       int
+	authState   int
+	session     *ISCSISession
+	tid         int
+	cid         uint16
+	txIOState   int
+	refcount    int
+	conn        net.Conn
+
+	req *ISCSICommand
 
 	loginParam *iscsiLoginParam
 
@@ -83,10 +88,13 @@ type iscsiConnection struct {
 	maxBurstLength           uint32
 	maxSeqCount              uint32
 
-	rxTask *iscsiTask
-	txTask *iscsiTask
+	readLock      *sync.RWMutex
+	txWorkChan    chan *SendPackage
+	txWorkBufChan chan []byte
 
-	readLock *sync.RWMutex
+	bufPool    [bufNum][]byte
+	bufPoolMap map[uint32]bool
+	poolLock   sync.RWMutex
 }
 
 type taskState int
@@ -114,6 +122,8 @@ type iscsiTask struct {
 }
 
 func (c *iscsiConnection) init() {
+	c.id = uuid.NewV1()
+	c.scsiCmdChan = make(chan *ISCSICommand, workChanNum)
 	c.state = CONN_STATE_FREE
 	c.refcount = 1
 	c.readLock = new(sync.RWMutex)
@@ -148,91 +158,94 @@ func (conn *iscsiConnection) ReInstatement(newConn *iscsiConnection) {
 	conn.conn = newConn.conn
 }
 
-func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error {
-	conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag, scmd: &api.SCSICommand{}}
+func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask, cmd *ISCSICommand) (*ISCSICommand, error) {
 	conn.txIOState = IOSTATE_TX_BHS
 	conn.statSN += 1
-	if task == nil {
-		task = conn.rxTask
+	req := cmd
+	if task != nil {
+		req = task.cmd
 	}
-	conn.resp = &ISCSICommand{
-		StartTime:       conn.req.StartTime,
-		StatSN:          conn.req.ExpStatSN,
-		TaskTag:         conn.req.TaskTag,
-		ExpectedDataLen: conn.req.ExpectedDataLen,
+	resp := &ISCSICommand{
+		StatSN:          req.ExpStatSN,
+		TaskTag:         req.TaskTag,
+		ExpectedDataLen: req.ExpectedDataLen,
 	}
+	log.Debugf("buildRespPackage TaskTag %x, oc %v ", resp.TaskTag, oc)
 	if conn.session != nil {
-		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
-		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+		resp.ExpCmdSN = conn.session.ExpCmdSN
+		resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
 	}
 	switch oc {
 	case OpReady:
-		conn.resp.OpCode = OpReady
-		conn.resp.R2TSN = task.r2tSN
-		conn.resp.Final = true
-		conn.resp.BufferOffset = uint32(task.offset)
-		conn.resp.DesiredLength = uint32(task.r2tCount)
+		resp.OpCode = OpReady
+		resp.R2TSN = task.r2tSN
+		resp.Final = true
+		resp.BufferOffset = uint32(task.offset)
+		resp.DesiredLength = uint32(task.r2tCount)
 		if val := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_BURST].Value; task.r2tCount > int(val) {
-			conn.resp.DesiredLength = uint32(val)
+			resp.DesiredLength = uint32(val)
 		}
 	case OpSCSIIn, OpSCSIResp:
-		conn.resp.OpCode = oc
-		conn.resp.SCSIOpCode = conn.req.SCSIOpCode
-		conn.resp.Immediate = true
-		conn.resp.Final = true
-		conn.resp.SCSIResponse = 0x00
-		conn.resp.HasStatus = true
+		resp.OpCode = oc
+		resp.SCSIOpCode = req.SCSIOpCode
+		resp.Immediate = true
+		resp.Final = true
+		resp.SCSIResponse = 0x00
+		resp.HasStatus = true
 		scmd := task.scmd
-		conn.resp.Status = scmd.Result
+		resp.Status = scmd.Result
 		if scmd.Result != 0 && scmd.SenseBuffer != nil {
 			length := util.MarshalUint32(scmd.SenseBuffer.Length)
-			conn.resp.RawData = append(length[2:4], scmd.SenseBuffer.Buffer...)
+			resp.RawData = append(length[2:4], scmd.SenseBuffer.Buffer...)
+			if scmd.InSDBBuffer != nil {
+				freeBufPool(conn, scmd.InSDBBuffer.Buffer)
+
+			}
 		} else if scmd.Direction == api.SCSIDataRead || scmd.Direction == api.SCSIDataWrite {
 			if scmd.InSDBBuffer != nil {
-				conn.resp.Resid = scmd.InSDBBuffer.Resid
-				if conn.resp.Resid != 0 && conn.resp.Resid < scmd.InSDBBuffer.Length {
-					conn.resp.RawData = scmd.InSDBBuffer.Buffer[:conn.resp.Resid]
+				resp.Resid = scmd.InSDBBuffer.Resid
+				if resp.Resid != 0 && resp.Resid < scmd.InSDBBuffer.Length {
+					resp.RawData = scmd.InSDBBuffer.Buffer[:resp.Resid]
 				} else {
-					conn.resp.RawData = scmd.InSDBBuffer.Buffer
+					resp.RawData = scmd.InSDBBuffer.Buffer
 				}
 			} else {
-				conn.resp.RawData = []byte{}
+				resp.RawData = []byte{}
 			}
 		}
 
 	case OpNoopIn, OpReject:
-		conn.resp.OpCode = oc
-		conn.resp.Final = true
-		conn.resp.NSG = FullFeaturePhase
-		conn.resp.ExpCmdSN = conn.req.CmdSN + 1
+		resp.OpCode = oc
+		resp.Final = true
+		resp.NSG = FullFeaturePhase
+		resp.ExpCmdSN = req.CmdSN + 1
 	case OpSCSITaskResp:
-		conn.resp.OpCode = oc
-		conn.resp.Final = true
-		conn.resp.NSG = FullFeaturePhase
-		conn.resp.ExpCmdSN = conn.req.CmdSN + 1
-		conn.resp.Result = task.result
+		resp.OpCode = oc
+		resp.Final = true
+		resp.NSG = FullFeaturePhase
+		resp.ExpCmdSN = req.CmdSN + 1
+		resp.Result = task.result
 	case OpLoginResp:
-		conn.resp.OpCode = OpLoginResp
-		conn.resp.Transit = conn.loginParam.tgtTrans
-		conn.resp.CSG = conn.req.CSG
-		conn.resp.NSG = conn.loginParam.tgtNSG
-		conn.resp.ExpCmdSN = conn.req.CmdSN
-		conn.resp.MaxCmdSN = conn.req.CmdSN
-		if conn.req.CSG != SecurityNegotiation {
-			negoKeys, err := conn.processLoginData()
+		resp.OpCode = OpLoginResp
+		resp.Transit = conn.loginParam.tgtTrans
+		resp.CSG = req.CSG
+		resp.NSG = conn.loginParam.tgtNSG
+		resp.ExpCmdSN = req.CmdSN
+		resp.MaxCmdSN = req.CmdSN
+		if req.CSG != SecurityNegotiation {
+			negoKeys, err := conn.processLoginData(cmd)
 			if err != nil {
-				return err
+				return resp, err
 			}
 			if !conn.loginParam.keyDeclared {
 				negoKeys = loginKVDeclare(conn, negoKeys)
 				conn.loginParam.keyDeclared = true
 			}
-			conn.resp.RawData = util.MarshalKVText(negoKeys)
+			resp.RawData = util.MarshalKVText(negoKeys)
 		}
-		conn.txTask = nil
 	}
 
-	return nil
+	return resp, nil
 }
 
 func (conn *iscsiConnection) State() string {

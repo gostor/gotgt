@@ -63,6 +63,10 @@ func (bs *NullBackingStore) Read(offset, tl int64) ([]byte, error) {
 	return nil, nil
 }
 
+func (bs *NullBackingStore) ReadAt(buf []byte, offset int64) error {
+	return nil
+}
+
 func (bs *NullBackingStore) Write(wbuf []byte, offset int64) error {
 	return nil
 }

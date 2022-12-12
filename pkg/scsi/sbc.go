@@ -312,10 +312,11 @@ func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	const blockDescLen = 16
 
+	var buf = getBufFromList(cmd.OutSDBBuffer.BufferList)
 	var blockDescs []api.UnmapBlockDescriptor
 	for off := 8; uint32(off+blockDescLen) <= cmd.OutSDBBuffer.Length; off += blockDescLen {
-		lba := binary.BigEndian.Uint64(cmd.OutSDBBuffer.Buffer[off : off+8])
-		num := binary.BigEndian.Uint32(cmd.OutSDBBuffer.Buffer[off+8 : off+12])
+		lba := binary.BigEndian.Uint64(buf[off : off+8])
+		num := binary.BigEndian.Uint32(buf[off+8 : off+12])
 		blockDescs = append(blockDescs, api.UnmapBlockDescriptor{
 			Offset: lba << cmd.Device.BlockShift,
 			TL:     num << cmd.Device.BlockShift,

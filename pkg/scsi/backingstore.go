@@ -18,6 +18,7 @@ package scsi
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"io"
 
@@ -60,7 +61,9 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		length     int
 		doVerify   bool = false
 		doWrite    bool = false
+		ok         bool = false
 		rbuf, wbuf []byte
+		wbufList   *list.List
 		tl         int64 = int64(cmd.TL)
 	)
 
@@ -68,16 +71,14 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 	asc = ASC_INTERNAL_TGT_FAILURE
 	switch opcode {
 	case api.ORWRITE_16:
-		tmpbuf := []byte{}
-		tmpbuf, err = bs.Read(int64(offset), tl)
+		err = bs.ReadAt(cmd.InSDBBuffer.Buffer, int64(offset))
 		if err != nil {
 			key = MEDIUM_ERROR
 			asc = ASC_READ_ERROR
 			break
 		}
-		copy(cmd.InSDBBuffer.Buffer, tmpbuf)
 		if cmd.OutSDBBuffer != nil {
-			wbuf = cmd.OutSDBBuffer.Buffer
+			wbufList = cmd.OutSDBBuffer.BufferList
 		}
 		doWrite = true
 		goto write
@@ -101,7 +102,7 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 	case api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16:
 		// For stupid client which does not set WRITE flag
 		if cmd.OutSDBBuffer != nil {
-			wbuf = cmd.OutSDBBuffer.Buffer
+			wbufList = cmd.OutSDBBuffer.BufferList
 		}
 		doWrite = true
 		goto write
@@ -109,16 +110,11 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
-		rbuf = make([]byte, int(tl))
-		rbuf, err = bs.Read(int64(offset), tl)
+		err = bs.ReadAt(cmd.InSDBBuffer.Buffer, int64(offset))
 		if err != nil && err != io.EOF {
 			key = MEDIUM_ERROR
 			asc = ASC_READ_ERROR
 			break
-		}
-		length = len(rbuf)
-		for i := 0; i < int(tl)-length; i++ {
-			rbuf = append(rbuf, 0)
 		}
 
 		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
@@ -130,7 +126,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			asc = ASC_INVALID_FIELD_IN_CDB
 			goto sense
 		}
-		copy(cmd.InSDBBuffer.Buffer, rbuf)
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
 		err = bs.DataAdvise(int64(offset), tl, util.POSIX_FADV_WILLNEED)
 		if err != nil {
@@ -140,7 +135,7 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 	case api.VERIFY_10, api.VERIFY_12, api.VERIFY_16:
 		// For stupid client which does not set WRITE flag
 		if cmd.OutSDBBuffer != nil {
-			wbuf = cmd.OutSDBBuffer.Buffer
+			wbufList = cmd.OutSDBBuffer.BufferList
 		}
 		doVerify = true
 		goto verify
@@ -149,12 +144,22 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 	}
 write:
 	if doWrite {
-		err = bs.Write(wbuf, int64(offset))
-		if err != nil {
-			log.Error(err)
-			key = MEDIUM_ERROR
-			asc = ASC_WRITE_ERROR
-			goto sense
+		var write_offset = offset
+		for e := wbufList.Front(); e != nil; e = e.Next() {
+			wbuf, ok = e.Value.([]byte)
+			if !ok {
+				continue
+			}
+
+			err = bs.Write(wbuf, int64(write_offset))
+			if err != nil {
+				log.Error(err)
+				key = MEDIUM_ERROR
+				asc = ASC_WRITE_ERROR
+				goto sense
+			}
+
+			write_offset += uint64(len(wbuf))
 		}
 		log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
 		var pg *api.ModePage
@@ -184,14 +189,33 @@ write:
 verify:
 	if doVerify {
 		rbuf = make([]byte, int(tl))
-		rbuf, err = bs.Read(int64(offset), tl)
+		err = bs.ReadAt(rbuf, int64(offset))
 		if err != nil {
+			log.Errorf("failed to ReadAt at offset=%d, %v", offset, err)
 			key = MEDIUM_ERROR
 			asc = ASC_READ_ERROR
 			goto sense
 		}
-		if !bytes.Equal(wbuf, rbuf) {
+		var tmp_offset = 0
+		for e := wbufList.Front(); e != nil; e = e.Next() {
+			wbuf, ok = e.Value.([]byte)
+			if !ok {
+				continue
+			}
+
+			if !bytes.Equal(wbuf, rbuf[tmp_offset:tmp_offset+len(wbuf)]) {
+				err = fmt.Errorf("verify fail between out buffer[length=%d] and read buffer[length=%d]", len(wbuf), len(rbuf))
+				log.Error(err)
+				key = MISCOMPARE
+				asc = ASC_MISCOMPARE_DURING_VERIFY_OPERATION
+				goto sense
+			}
+
+			tmp_offset += len(wbuf)
+		}
+		if len(rbuf) != tmp_offset {
 			err = fmt.Errorf("verify fail between out buffer[length=%d] and read buffer[length=%d]", len(wbuf), len(rbuf))
+			log.Error(err)
 			key = MISCOMPARE
 			asc = ASC_MISCOMPARE_DURING_VERIFY_OPERATION
 			goto sense
@@ -203,7 +227,6 @@ verify:
 	return nil, key, asc
 sense:
 	if err != nil {
-		log.Error(err)
 		return err, key, asc
 	}
 

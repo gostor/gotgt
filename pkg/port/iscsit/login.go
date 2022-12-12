@@ -104,7 +104,7 @@ func (conn *iscsiConnection) processSecurityData() error {
 	return nil
 }
 
-func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
+func (conn *iscsiConnection) processLoginData(cmd *ISCSICommand) ([]util.KeyValue, error) {
 	var (
 		uintVal    uint
 		ok         bool
@@ -112,7 +112,7 @@ func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 		negoKV     []util.KeyValue
 		kvChanges  int
 	)
-	loginKV := util.ParseKVText(conn.req.RawData)
+	loginKV := util.ParseKVText(cmd.RawData)
 
 	for key, val := range loginKV {
 		// The MaxRecvDataSegmentLength of initiator

@@ -35,10 +35,14 @@ import (
 )
 
 func newDaemonCommand() *cobra.Command {
-	var host string
-	var driver string
-	var logLevel string
-	var blockMultipleHosts bool
+	var (
+		host               string
+		driver             string
+		logLevel           string
+		blockMultipleHosts bool
+		scsiPort           int
+	)
+
 	var cmd = &cobra.Command{
 		Use:   "daemon",
 		Short: "Setup a daemon",
@@ -48,17 +52,18 @@ func newDaemonCommand() *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			host = viper.GetString("host")
-			return createDaemon(host, driver, logLevel, blockMultipleHosts)
+			return createDaemon(host, driver, logLevel, blockMultipleHosts, scsiPort)
 		},
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&logLevel, "log", "info", "Log level of SCSI target daemon")
 	flags.StringVar(&driver, "driver", "iscsi", "SCSI low level driver")
+	flags.IntVar(&scsiPort, "port", 3260, "SCSI target port")
 	flags.BoolVar(&blockMultipleHosts, "block-multiple-hosts", false, "Disable login from multiple hosts")
 	return cmd
 }
 
-func createDaemon(host, driver, level string, blockMultipleHosts bool) error {
+func createDaemon(host, driver, level string, blockMultipleHosts bool, scsiPort int) error {
 	switch level {
 	case "info":
 		log.SetLevel(log.InfoLevel)
@@ -101,7 +106,7 @@ func createDaemon(host, driver, level string, blockMultipleHosts bool) error {
 	// comment this to avoid concurrent issue
 	// runtime.GOMAXPROCS(runtime.NumCPU())
 	// run a service
-	go targetDriver.Run()
+	go targetDriver.Run(scsiPort)
 
 	serverConfig := &apiserver.Config{
 		Addrs: []apiserver.Addr{},

@@ -16,6 +16,7 @@ limitations under the License.
 package api
 
 import (
+	"container/list"
 	"errors"
 	"io"
 	"sync"
@@ -156,6 +157,13 @@ type SCSIDataBuffer struct {
 	Resid          uint32
 }
 
+type SCSIDataBufferList struct {
+	BufferList     *list.List //[]byte
+	Length         uint32
+	TransferLength uint32
+	Resid          uint32
+}
+
 type SCSICommandState uint64
 
 var (
@@ -173,7 +181,7 @@ type SCSICommand struct {
 	State           SCSICommandState
 	Direction       SCSIDataDirection
 	InSDBBuffer     *SCSIDataBuffer
-	OutSDBBuffer    *SCSIDataBuffer
+	OutSDBBuffer    *SCSIDataBufferList
 	RelTargetPortID uint16
 	// Command ITN ID
 	ITNexusID     uuid.UUID
@@ -350,6 +358,7 @@ type BackingStore interface {
 	Exit(dev *SCSILu) error
 	Size(dev *SCSILu) uint64
 	Read(offset, tl int64) ([]byte, error)
+	ReadAt(buf []byte, offset int64) error
 	Write([]byte, int64) error
 	DataSync(offset, tl int64) error
 	DataAdvise(int64, int64, uint32) error

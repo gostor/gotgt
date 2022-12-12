@@ -334,11 +334,7 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 
 func (m *ISCSICommand) dataInBytes() []byte {
 	// rfc7143 11.7
-	dl := m.DataLen
-	for dl%4 > 0 {
-		dl++
-	}
-	var buf = make([]byte, (48 + dl))
+	var buf = make([]byte, 48)
 	buf[0] = byte(OpSCSIIn)
 	var flag byte
 	if m.FinalInSeq || m.Final == true {
@@ -371,9 +367,6 @@ func (m *ISCSICommand) dataInBytes() []byte {
 	copy(buf[36:], util.MarshalUint32(m.DataSN))
 	copy(buf[40:], util.MarshalUint32(m.BufferOffset))
 	copy(buf[44:], util.MarshalUint32(m.Resid))
-	if m.ExpectedDataLen != 0 {
-		copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
-	}
 
 	return buf
 }

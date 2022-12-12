@@ -24,7 +24,7 @@ import (
 )
 
 type SCSITargetDriver interface {
-	Run() error
+	Run(int) error
 	NewTarget(string, *config.Config) error
 	RereadTargetLUNMap()
 	Close() error
