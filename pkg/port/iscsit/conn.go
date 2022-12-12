@@ -174,6 +174,7 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask, cmd *I
 	if conn.session != nil {
 		resp.ExpCmdSN = conn.session.ExpCmdSN
 		resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+		conn.session.MaxCmdSN = resp.MaxCmdSN
 	}
 	switch oc {
 	case OpReady:
