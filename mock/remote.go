@@ -180,7 +180,7 @@ func (r *remoteBs) startScsiTarget(cfg *config.Config) error {
 	}
 	r.targetDriver.NewTarget(r.tgtName, cfg)
 	//r.targetDriver.SetClusterIP(r.clusterIP)
-	go r.targetDriver.Run()
+	go r.targetDriver.Run(3260)
 	// Wait here so that listener get started
 	time.Sleep(1 * time.Second)
 

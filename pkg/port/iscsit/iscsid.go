@@ -192,8 +192,8 @@ func (s *ISCSITargetDriver) HasPortal(tgtName string, tpgt uint16, portal string
 	}
 }
 
-func (s *ISCSITargetDriver) Run() error {
-	l, err := net.Listen("tcp", ":3260")
+func (s *ISCSITargetDriver) Run(port int) error {
+	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		log.Error(err)
 		os.Exit(1)
