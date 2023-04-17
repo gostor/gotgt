@@ -30,23 +30,24 @@ import (
 )
 
 func NewCommand() *cobra.Command {
-	var cli *client.Client
+	var cli client.Client
 	var host string = "tcp://127.0.0.1:23457"
 	var cmd = &cobra.Command{
 		Use:   "gotgt",
 		Short: "Gotgt is a very fast and stable SCSI target framework",
 		Long:  ``,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			httpClient, err := newHTTPClient(host)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v", err)
 				return err
 			}
 
-			cli, err = client.NewClient(host, version.Version, httpClient, nil)
-			if err != nil {
+			if _cli, err := client.NewClient(host, version.Version, httpClient, nil); err != nil {
 				fmt.Fprintf(os.Stderr, "%v", err)
 				return err
+			} else {
+				cli = *_cli
 			}
 			// Do Stuff Here
 			return nil
@@ -56,10 +57,10 @@ func NewCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&host, "host", host, "Endpoint for SCSI target daemon")
 	cmd.AddCommand(
 		newDaemonCommand(),
-		newCreateCommand(cli),
-		newRemoveCommand(cli),
-		newListCommand(cli),
-		newVersionCommand(cli),
+		newCreateCommand(&cli),
+		newRemoveCommand(&cli),
+		newListCommand(&cli),
+		newVersionCommand(&cli),
 	)
 	return cmd
 }
