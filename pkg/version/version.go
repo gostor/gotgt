@@ -23,7 +23,7 @@ import (
 	"runtime"
 )
 
-const (
+var (
 	// Version shows the version of gotgt.
 	Version = "Not provided."
 	// SCSIVersion string MUST be shorter than 4 characters
