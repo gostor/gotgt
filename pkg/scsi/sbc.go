@@ -20,7 +20,6 @@ package scsi
 import (
 	"encoding/binary"
 	"fmt"
-	"unsafe"
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
@@ -487,7 +486,7 @@ func SBCReserve(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
-	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
+	lun := binary.LittleEndian.Uint64(cmd.Lun[:])
 	if err := deviceRelease(cmd.Target.TID, cmd.ITNexusID, lun, false); err != nil {
 		return api.SAMStatReservationConflict
 	}

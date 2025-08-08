@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
-	"unsafe"
 
 	"github.com/gostor/gotgt/pkg/api"
 	uuid "github.com/satori/go.uuid"
@@ -97,7 +96,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 		}
 	}
 	scmd.ITNexus = itn
-	lun := *(*uint64)(unsafe.Pointer(&scmd.Lun))
+	lun := binary.LittleEndian.Uint64(scmd.Lun[:])
 	scmd.Device = target.Devices[lun]
 
 	log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))

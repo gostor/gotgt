@@ -18,7 +18,7 @@ package scsi
 
 import (
 	"fmt"
-	"unsafe"
+	"encoding/binary"
 
 	"github.com/gostor/gotgt/pkg/api"
 	uuid "github.com/satori/go.uuid"
@@ -97,7 +97,7 @@ func RemoveITNexus(target *api.SCSITarget, itnexus *api.ITNexus) {
 
 func deviceReserve(cmd *api.SCSICommand) error {
 	var lu *api.SCSILu
-	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
+	lun := binary.LittleEndian.Uint64(cmd.Lun[:])
 
 	for tgtLUN, lunDev := range cmd.Target.Devices {
 		if tgtLUN == lun {

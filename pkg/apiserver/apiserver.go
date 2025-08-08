@@ -25,6 +25,9 @@ import (
 	"strconv"
 	"strings"
 
+	stdctx "context"
+	"time"
+
 	systemdActivation "github.com/coreos/go-systemd/activation"
 	"github.com/docker/go-connections/sockets"
 	"github.com/gorilla/mux"
@@ -39,7 +42,7 @@ import (
 
 // versionMatcher defines a variable matcher to be parsed by the router
 // when a request is about to be served.
-const versionMatcher = "/v{version:[0-9.]+(?:-dirty)}"
+const versionMatcher = "/v{version:[0-9.]+(-dirty)?}"
 
 // Config provides the configuration for the API server
 type Config struct {
@@ -137,7 +140,16 @@ func (s *HTTPServer) Serve() error {
 
 // Close closes the HTTPServer from listening for the inbound requests.
 func (s *HTTPServer) Close() error {
-	return s.l.Close()
+	// Gracefully shutdown the HTTP server allowing in-flight requests to complete
+	ctx, cancel := stdctx.WithTimeout(stdctx.Background(), 5*time.Second)
+	defer cancel()
+	shutdownErr := s.srv.Shutdown(ctx)
+	// Ensure the listener is closed in any case
+	listenErr := s.l.Close()
+	if shutdownErr != nil {
+		return shutdownErr
+	}
+	return listenErr
 }
 
 func (s *Server) initTCPSocket(addr string) (l net.Listener, err error) {
