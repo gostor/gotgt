@@ -38,7 +38,7 @@ func SPCIllegalOp(host int, cmd *api.SCSICommand) api.SAMStat {
 }
 
 func SPCLuOffline(lu *api.SCSILu) error {
-	lu.Attrs.Online = true
+	lu.Attrs.Online = false
 	return nil
 }
 
@@ -47,7 +47,7 @@ func SPCLuOnline(lu *api.SCSILu) error {
 		return fmt.Errorf("lu prevent removal")
 	}
 
-	lu.Attrs.Online = false
+	lu.Attrs.Online = true
 	return nil
 }
 
