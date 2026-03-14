@@ -207,7 +207,7 @@ jobs:
         echo "--- verify new lu in list ---"
         curl -sf "$API/lu/list?target=$NEW_TARGET" | tee /tmp/list_lu2.out
         echo ""
-        grep -q "ci_disk.img" /tmp/list_lu2.out
+        python3 -c "import json,sys; data=json.load(sys.stdin); assert len(data)==1, f'expected 1 LU, got {len(data)}'" < /tmp/list_lu2.out
         echo "PASS: new LU visible in list"
 
         # 8. Remove the LU
@@ -224,10 +224,7 @@ jobs:
         echo "--- verify lu removed ---"
         curl -sf "$API/lu/list?target=$NEW_TARGET" | tee /tmp/list_lu3.out
         echo ""
-        if grep -q "ci_disk.img" /tmp/list_lu3.out; then
-          echo "FAIL: LU still present after removal"
-          exit 1
-        fi
+        python3 -c "import json,sys; data=json.load(sys.stdin); assert len(data)==0, f'expected 0 LUs, got {len(data)}'" < /tmp/list_lu3.out
         echo "PASS: LU no longer in list"
 
         # 10. Remove the target
