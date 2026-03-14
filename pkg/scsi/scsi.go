@@ -98,7 +98,9 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	lun := binary.LittleEndian.Uint64(scmd.Lun[:])
 	scmd.Device = target.Devices[lun]
 
-	log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB[0]), binary.LittleEndian.Uint64(scmd.Lun[:]))
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("scsi opcode: 0x%x, LUN: %d", int(scmd.SCB[0]), lun)
+	}
 
 	if scmd.Device == nil {
 		scmd.Device = target.LUN0

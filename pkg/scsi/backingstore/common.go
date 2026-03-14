@@ -139,6 +139,14 @@ func (bs *FileBackingStore) Read(offset, tl int64) ([]byte, error) {
 	return tmpbuf, nil
 }
 
+// ReadAt reads directly into the provided buffer, avoiding allocation.
+func (bs *FileBackingStore) ReadAt(buf []byte, offset int64) (int, error) {
+	if bs.file == nil {
+		return 0, fmt.Errorf("Backend store is nil")
+	}
+	return bs.file.ReadAt(buf, offset)
+}
+
 func (bs *FileBackingStore) Write(wbuf []byte, offset int64) error {
 	length, err := bs.file.WriteAt(wbuf, offset)
 	if err != nil {

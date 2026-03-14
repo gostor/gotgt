@@ -109,13 +109,38 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
-		rbuf, err = bs.Read(int64(offset), tl)
-		if err != nil && err != io.EOF {
-			key = MEDIUM_ERROR
-			asc = ASC_READ_ERROR
-			break
+		// Read directly into InSDBBuffer to avoid extra allocation + copy
+		if int64(cmd.InSDBBuffer.Length) >= tl {
+			if reader, ok := bs.(interface {
+				ReadAt(buf []byte, offset int64) (int, error)
+			}); ok {
+				length, err = reader.ReadAt(cmd.InSDBBuffer.Buffer[:tl], int64(offset))
+				if err != nil && err != io.EOF {
+					key = MEDIUM_ERROR
+					asc = ASC_READ_ERROR
+					break
+				}
+				err = nil
+			} else {
+				rbuf, err = bs.Read(int64(offset), tl)
+				if err != nil && err != io.EOF {
+					key = MEDIUM_ERROR
+					asc = ASC_READ_ERROR
+					break
+				}
+				length = len(rbuf)
+				copy(cmd.InSDBBuffer.Buffer, rbuf)
+			}
+		} else {
+			rbuf, err = bs.Read(int64(offset), tl)
+			if err != nil && err != io.EOF {
+				key = MEDIUM_ERROR
+				asc = ASC_READ_ERROR
+				break
+			}
+			length = len(rbuf)
+			copy(cmd.InSDBBuffer.Buffer, rbuf)
 		}
-		length = len(rbuf)
 
 		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
@@ -126,7 +151,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			asc = ASC_INVALID_FIELD_IN_CDB
 			goto sense
 		}
-		copy(cmd.InSDBBuffer.Buffer, rbuf)
 		// Zero-fill any remaining bytes if read was short
 		if length < int(tl) {
 			for i := length; i < int(tl) && i < len(cmd.InSDBBuffer.Buffer); i++ {
@@ -158,7 +182,9 @@ write:
 			asc = ASC_WRITE_ERROR
 			goto sense
 		}
-		log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
+		if log.GetLevel() >= log.DebugLevel {
+			log.Debugf("write data at 0x%x for length %d", offset, len(wbuf))
+		}
 		var pg *api.ModePage
 		for _, p := range lu.ModePages {
 			if p.PageCode == 0x08 && p.SubPageCode == 0 {
