@@ -106,6 +106,14 @@ type BackendStorage struct {
 	Online           bool   `json:"online"`
 	ThinProvisioning bool   `json:"thinProvisioning"`
 	BlockShift       uint   `json:"blockShift"`
+	// BackendType specifies the backend storage type (file, iouring, etc.)
+	BackendType string `json:"backendType,omitempty"`
+	// EnableNUMA enables NUMA-aware memory allocation for this storage
+	EnableNUMA bool `json:"enableNUMA,omitempty"`
+	// NumaNode specifies the preferred NUMA node for this storage (-1 for auto)
+	NumaNode int `json:"numaNode,omitempty"`
+	// IoUringQueueDepth specifies the io_uring queue depth (0 for default)
+	IoUringQueueDepth uint32 `json:"ioUringQueueDepth,omitempty"`
 }
 
 type ISCSIPortalInfo struct {
@@ -118,10 +126,25 @@ type ISCSITarget struct {
 	LUNs  map[string]uint64   `json:"luns"`
 }
 
+type PerformanceConfig struct {
+	// EnableNUMA enables NUMA-aware memory allocation
+	EnableNUMA bool `json:"enableNUMA,omitempty"`
+	// EnableIoUring enables io_uring backend storage support (Linux 5.1+)
+	EnableIoUring bool `json:"enableIoUring,omitempty"`
+	// IoUringQueueDepth sets the io_uring queue depth
+	IoUringQueueDepth uint32 `json:"ioUringQueueDepth,omitempty"`
+	// NUMABufferPoolSize sets the number of buffers per NUMA node
+	NUMABufferPoolSize int `json:"numaBufferPoolSize,omitempty"`
+	// NUMABufferSize sets the size of NUMA-local buffers
+	NUMABufferSize int `json:"numaBufferSize,omitempty"`
+}
+
 type Config struct {
 	Storages     []BackendStorage       `json:"storages"`
 	ISCSIPortals []ISCSIPortalInfo      `json:"iscsiportals"`
 	ISCSITargets map[string]ISCSITarget `json:"iscsitargets"`
+	// Performance settings
+	Performance PerformanceConfig `json:"performance,omitempty"`
 }
 
 func init() {

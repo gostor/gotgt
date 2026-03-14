@@ -73,32 +73,38 @@ func MarshalKVText(kv []KeyValue) []byte {
 	return data
 }
 
+// MarshalUint16 returns big-endian encoding of i as a new 2-byte slice.
+// Deprecated: Use MarshalUint16To or binary.BigEndian.PutUint16 for zero-allocation.
 func MarshalUint16(i uint16) []byte {
-	var data []byte
-	for j := 8; j >= 0; j -= 8 {
-		b := byte(i >> uint16(j))
-		data = append(data, b)
-	}
-	return data
+	var data [2]byte
+	binary.BigEndian.PutUint16(data[:], i)
+	return data[:]
 }
 
+// MarshalUint32 returns big-endian encoding of i as a new 4-byte slice.
+// Deprecated: Use MarshalUint32To or binary.BigEndian.PutUint32 for zero-allocation.
 func MarshalUint32(i uint32) []byte {
-	var data []byte
-	for j := 24; j >= 0; j -= 8 {
-		b := byte(i >> uint32(j))
-		data = append(data, b)
-	}
-	return data
+	var data [4]byte
+	binary.BigEndian.PutUint32(data[:], i)
+	return data[:]
+}
+
+// MarshalUint32To writes big-endian encoding of i into buf, which must be at least 4 bytes.
+// This is a zero-allocation alternative to MarshalUint32.
+func MarshalUint32To(buf []byte, i uint32) {
+	binary.BigEndian.PutUint32(buf, i)
 }
 
 func MarshalUint64(v uint64) []byte {
-	var data = [8]byte{}
-	var i = 0
-	for j := 56; j >= 0; j -= 8 {
-		data[i] = byte(v >> uint32(j))
-		i++
-	}
-	return data[0:8]
+	var data [8]byte
+	binary.BigEndian.PutUint64(data[:], v)
+	return data[:]
+}
+
+// MarshalUint64To writes big-endian encoding of v into buf, which must be at least 8 bytes.
+// This is a zero-allocation alternative for partial writes.
+func MarshalUint64To(buf []byte, v uint64) {
+	binary.BigEndian.PutUint64(buf, v)
 }
 
 func StringToByte(str string, align int, maxlength int) []byte {

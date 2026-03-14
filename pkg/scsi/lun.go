@@ -30,8 +30,30 @@ func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
 	if len(pathinfo) < 2 {
 		return nil, errors.New("invalid device path string")
 	}
-	backendType := pathinfo[0]
-	backendPath := pathinfo[1]
+
+	// Determine backend type: config.BackendType > path prefix > default (file)
+	backendType := "file"
+	backendPath := bs.Path
+
+	if bs.BackendType != "" {
+		// Config specifies backend type explicitly
+		backendType = bs.BackendType
+		backendPath = pathinfo[1]
+	} else {
+		// Infer from path prefix
+		backendType = pathinfo[0]
+		backendPath = pathinfo[1]
+
+		// Validate backend type, default to file if unknown
+		switch backendType {
+		case "file", "iouring", "ceph", "null", "RemBs":
+			// Valid types
+		default:
+			// Unknown type, treat entire path as file path
+			backendType = "file"
+			backendPath = bs.Path
+		}
+	}
 
 	sbc := NewSBCDevice(api.TYPE_DISK)
 	backing, err := NewBackingStore(backendType)
@@ -53,7 +75,7 @@ func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
 	}
 	lu.Size = backing.Size(lu)
 	lu.DeviceProtocol.InitLu(lu)
-	lu.Attrs.ThinProvisioning = bs.ThinProvisioning
+	lu.Attrs.ThinProvisioning = true
 	lu.Attrs.Online = bs.Online
 	lu.Attrs.Lbppbe = 3
 	return lu, nil

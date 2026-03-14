@@ -44,6 +44,86 @@ const (
 	STATE_TERMINATE
 )
 
+// tsihBitmap is a bitmap for efficient TSIH allocation/deallocation
+// Uses circular counter for O(1) allocation
+type tsihBitmap struct {
+	mu     sync.Mutex
+	bitmap []uint64 // Each uint64 stores the usage status of 64 TSIHs
+	next   uint16   // Next candidate position for allocation
+	used   uint16   // Number of used TSIHs
+}
+
+// newTSIHBitmap creates a new TSIH bitmap
+// Reserves 0 and 65535 as special values
+func newTSIHBitmap() *tsihBitmap {
+	// Need 65536 bits = 1024 uint64s
+	b := &tsihBitmap{
+		bitmap: make([]uint64, 1024),
+		next:   1, // Start from 1, 0 is reserved
+	}
+	// Mark 0 and 65535 as used (reserved values)
+	b.bitmap[0] |= 1 << 0     // TSIH = 0
+	b.bitmap[1023] |= 1 << 63 // TSIH = 65535
+	b.used = 2
+	return b
+}
+
+// alloc allocates an available TSIH using circular search strategy
+func (b *tsihBitmap) alloc() uint16 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.used >= ISCSI_MAX_TSIH-1 {
+		return ISCSI_UNSPEC_TSIH
+	}
+
+	start := b.next
+	for {
+		idx := b.next / 64
+		bit := b.next % 64
+
+		if (b.bitmap[idx] & (1 << bit)) == 0 {
+			// Found free slot
+			b.bitmap[idx] |= 1 << bit
+			b.used++
+			result := b.next
+			// Update next to next position
+			b.next++
+			if b.next >= ISCSI_MAX_TSIH {
+				b.next = 1
+			}
+			return result
+		}
+
+		b.next++
+		if b.next >= ISCSI_MAX_TSIH {
+			b.next = 1
+		}
+		if b.next == start {
+			// Looped around without finding
+			return ISCSI_UNSPEC_TSIH
+		}
+	}
+}
+
+// release releases a TSIH
+func (b *tsihBitmap) release(tsih uint16) {
+	if tsih == 0 || tsih == ISCSI_MAX_TSIH {
+		return // Cannot release reserved values
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	idx := tsih / 64
+	bit := tsih % 64
+
+	if (b.bitmap[idx] & (1 << bit)) != 0 {
+		b.bitmap[idx] &^= 1 << bit
+		b.used--
+	}
+}
+
 var (
 	EnableStats   bool
 	CurrentHostIP string
@@ -54,8 +134,7 @@ type ISCSITargetDriver struct {
 	SCSI                   *scsi.SCSITargetService
 	Name                   string
 	iSCSITargets           map[string]*ISCSITarget
-	TSIHPool               map[uint16]bool
-	TSIHPoolMutex          sync.Mutex
+	tsihBitmap             *tsihBitmap
 	isClientConnected      bool
 	enableStats            bool
 	mu                     *sync.RWMutex
@@ -76,7 +155,7 @@ func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, 
 		Name:         iSCSIDriverName,
 		iSCSITargets: map[string]*ISCSITarget{},
 		SCSI:         base,
-		TSIHPool:     map[uint16]bool{0: true, 65535: true},
+		tsihBitmap:   newTSIHBitmap(),
 		mu:           &sync.RWMutex{},
 	}
 
@@ -88,24 +167,11 @@ func NewISCSITargetDriver(base *scsi.SCSITargetService) (scsi.SCSITargetDriver, 
 }
 
 func (s *ISCSITargetDriver) AllocTSIH() uint16 {
-	var i uint16
-	s.TSIHPoolMutex.Lock()
-	for i = uint16(0); i < ISCSI_MAX_TSIH; i++ {
-		exist := s.TSIHPool[i]
-		if !exist {
-			s.TSIHPool[i] = true
-			s.TSIHPoolMutex.Unlock()
-			return i
-		}
-	}
-	s.TSIHPoolMutex.Unlock()
-	return ISCSI_UNSPEC_TSIH
+	return s.tsihBitmap.alloc()
 }
 
 func (s *ISCSITargetDriver) ReleaseTSIH(tsih uint16) {
-	s.TSIHPoolMutex.Lock()
-	delete(s.TSIHPool, tsih)
-	s.TSIHPoolMutex.Unlock()
+	s.tsihBitmap.release(tsih)
 }
 
 func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config) error {
@@ -122,9 +188,9 @@ func (s *ISCSITargetDriver) NewTarget(tgtName string, configInfo *config.Config)
 	targetConfig := configInfo.ISCSITargets[tgtName]
 	for tpgt, portalIDArrary := range targetConfig.TPGTs {
 		tpgtNumber, _ := strconv.ParseUint(tpgt, 10, 16)
-		tgt.TPGTs[uint16(tpgtNumber)] = &iSCSITPGT{uint16(tpgtNumber), make(map[string]struct{})}
+		tgt.TPGTs[uint16(tpgtNumber)] = &iSCSITPGT{TPGT: uint16(tpgtNumber), Portals: make(map[string]struct{})}
 		targetPortName := fmt.Sprintf("%s,t,0x%02x", tgtName, tpgtNumber)
-		scsiTPG.TargetPortGroup = append(scsiTPG.TargetPortGroup, &api.SCSITargetPort{uint16(tpgtNumber), targetPortName})
+		scsiTPG.TargetPortGroup = append(scsiTPG.TargetPortGroup, &api.SCSITargetPort{RelativeTargetPortID: uint16(tpgtNumber), TargetPortName: targetPortName})
 		for _, portalID := range portalIDArrary {
 			portal := configInfo.ISCSIPortals[portalID]
 			s.AddiSCSIPortal(tgtName, uint16(tpgtNumber), portal.Portal)
@@ -323,10 +389,12 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		ddigest uint = 0
 		final   bool = false
 		cmd     *ISCSICommand
-		buf     []byte = make([]byte, BHS_SIZE)
+		buf     []byte = getBuffer()
 		length  int
 		err     error
 	)
+	defer putBuffer(buf)
+
 	conn.readLock.Lock()
 	defer conn.readLock.Unlock()
 	if conn.state == CONN_STATE_SCSI {
@@ -366,10 +434,10 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 			}
 			final = true
 		case IOSTATE_RX_INIT_AHS:
-			conn.rxIOState = IOSTATE_RX_DATA
-			break
 			if hdigest != 0 {
 				conn.rxIOState = IOSTATE_RX_INIT_HDIGEST
+			} else {
+				conn.rxIOState = IOSTATE_RX_DATA
 			}
 		case IOSTATE_RX_DATA:
 			if ddigest != 0 {
@@ -561,6 +629,92 @@ func (s *ISCSITargetDriver) iscsiExecText(conn *iscsiConnection) error {
 
 func iscsiExecNoopOut(conn *iscsiConnection) error {
 	return conn.buildRespPackage(OpNoopIn, nil)
+}
+
+// SNACK Type constants per RFC 7143
+const (
+	SNACK_TYPE_DATA_ACK   = 0 // Data ACK
+	SNACK_TYPE_STATUS_ACK = 1 // Status ACK
+	SNACK_TYPE_DATA_R2T   = 2 // Data R2T
+	SNACK_TYPE_R_DATA     = 3 // R-Data
+)
+
+/*
+ * iscsiExecSNACK handles SNACK (Sequence Number Acknowledgement) requests
+ * SNACK is used for error recovery in iSCSI protocol per RFC 7143 section 11.9
+ */
+func (s *ISCSITargetDriver) iscsiExecSNACK(conn *iscsiConnection) error {
+	req := conn.req
+	// Parse SNACK type from byte 1, bits 0-1
+	snackType := (req.SCSIOpCode >> 0) & 0x03
+	// Parse BegRun and RunLength from the header
+	begRun := req.ReferencedTaskTag
+	runLength := req.R2TSN
+
+	log.Debugf("SNACK request type=%d, BegRun=%d, RunLength=%d", snackType, begRun, runLength)
+
+	switch snackType {
+	case SNACK_TYPE_DATA_ACK:
+		// Data ACK - initiator acknowledges receipt of Data-In PDUs
+		// For ErrorRecoveryLevel >= 1, we could track acknowledged Data-In
+		log.Debug("SNACK Data ACK received")
+		// Simply return success for now
+		conn.resp = &ISCSICommand{
+			OpCode:   OpNoopIn,
+			Final:    true,
+			TaskTag:  req.TaskTag,
+			StatSN:   conn.statSN,
+			ExpCmdSN: conn.expCmdSN,
+		}
+		if conn.session != nil {
+			conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+		}
+		return nil
+
+	case SNACK_TYPE_STATUS_ACK:
+		// Status ACK - initiator acknowledges receipt of status
+		log.Debug("SNACK Status ACK received")
+		// Similar to Data ACK, just acknowledge
+		conn.resp = &ISCSICommand{
+			OpCode:   OpNoopIn,
+			Final:    true,
+			TaskTag:  req.TaskTag,
+			StatSN:   conn.statSN,
+			ExpCmdSN: conn.expCmdSN,
+		}
+		if conn.session != nil {
+			conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+		}
+		return nil
+
+	case SNACK_TYPE_DATA_R2T:
+		// Data R2T - request retransmission of R2T
+		log.Debug("SNACK Data R2T received - requesting R2T retransmission")
+		// Find the task and resend R2T
+		conn.session.PendingTasksMutex.RLock()
+		task := conn.session.PendingTasks.GetByTag(begRun)
+		conn.session.PendingTasksMutex.RUnlock()
+		if task == nil {
+			log.Errorf("Cannot find task for R2T retransmission, tag=%d", begRun)
+			return fmt.Errorf("task not found")
+		}
+		// Reset R2T state and resend
+		task.r2tSN = runLength
+		conn.rxTask = task
+		return iscsiExecR2T(conn)
+
+	case SNACK_TYPE_R_DATA:
+		// R-Data - request retransmission of Data-In
+		log.Debug("SNACK R-Data received - requesting Data-In retransmission")
+		// For now, reject this as it requires complex data buffering
+		// In a full implementation, we would need to buffer Data-In PDUs
+		// and retransmit based on BegRun and RunLength
+		log.Warn("R-Data SNACK not fully implemented")
+		return fmt.Errorf("R-Data SNACK not supported")
+
+	default:
+		return fmt.Errorf("unknown SNACK type: %d", snackType)
+	}
 }
 
 func iscsiExecReject(conn *iscsiConnection) error {
@@ -852,10 +1006,16 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
 		conn.txIOState = IOSTATE_TX_BHS
 		iscsiExecLogout(conn)
-	case OpTextReq, OpSNACKReq:
+	case OpTextReq:
 		err = fmt.Errorf("Cannot handle yet %s", opCodeMap[conn.req.OpCode])
 		log.Error(err)
 		return
+	case OpSNACKReq:
+		log.Debug("SNACK Request processing...")
+		if err := s.iscsiExecSNACK(conn); err != nil {
+			log.Errorf("SNACK handling failed: %v", err)
+			iscsiExecReject(conn)
+		}
 	default:
 		err = fmt.Errorf("Unknown op %s", opCodeMap[conn.req.OpCode])
 		log.Error(err)
@@ -900,22 +1060,20 @@ func (s *ISCSITargetDriver) iscsiTaskQueueHandler(task *iscsiTask) error {
 		task.state = taskSCSI
 		sess.PendingTasksMutex.Unlock()
 		goto retry
-	} else {
-		if cmd.CmdSN < sess.ExpCmdSN {
-			err := fmt.Errorf("unexpected cmd serial number: (%d, %d)", cmd.CmdSN, sess.ExpCmdSN)
-			log.Error(err)
-			return err
-		}
-		log.Debugf("add task(%d) into task queue", task.cmd.CmdSN)
-		// add this task into queue and set it as a pending task
-		sess.PendingTasksMutex.Lock()
-		task.state = taskPending
-		sess.PendingTasks.Push(task)
-		sess.PendingTasksMutex.Unlock()
-		return fmt.Errorf("pending")
 	}
-
-	return nil
+	// cmd.CmdSN != sess.ExpCmdSN
+	if cmd.CmdSN < sess.ExpCmdSN {
+		err := fmt.Errorf("unexpected cmd serial number: (%d, %d)", cmd.CmdSN, sess.ExpCmdSN)
+		log.Error(err)
+		return err
+	}
+	log.Debugf("add task(%d) into task queue", task.cmd.CmdSN)
+	// add this task into queue and set it as a pending task
+	sess.PendingTasksMutex.Lock()
+	task.state = taskPending
+	sess.PendingTasks.Push(task)
+	sess.PendingTasksMutex.Unlock()
+	return fmt.Errorf("pending")
 }
 
 func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
@@ -970,6 +1128,63 @@ func (s *ISCSITargetDriver) iscsiExecTask(task *iscsiTask) error {
 		return task.conn.buildRespPackage(OpSCSITaskResp, task)
 	}
 	return nil
+}
+
+// Async Event types per RFC 7143
+const (
+	ASYNC_EVENT_SCSI      = 0   // SCSI Asynchronous Event
+	ASYNC_EVENT_STATUS    = 1   // iSCSI Status Update
+	ASYNC_EVENT_LOGOUT    = 2   // iSCSI Logout Request
+	ASYNC_EVENT_DROP_CONN = 3   // iSCSI Drop Connection
+	ASYNC_EVENT_DROP_SESS = 4   // iSCSI Drop All Connections
+	ASYNC_EVENT_NOP       = 5   // iSCSI NOP
+	ASYNC_EVENT_VENDOR    = 255 // Vendor Specific Event
+)
+
+/*
+ * SendAsyncMessage sends an asynchronous message to the initiator
+ * This implements RFC 7143 section 11.10 Asynchronous Message
+ */
+func (s *ISCSITargetDriver) SendAsyncMessage(conn *iscsiConnection, eventType byte, lun [8]uint8, param1, param2 uint32, data []byte) error {
+	if conn == nil || conn.state != CONN_STATE_SCSI {
+		return fmt.Errorf("connection not ready for async message")
+	}
+
+	conn.statSN += 1
+	conn.resp = &ISCSICommand{
+		OpCode:     OpAsync,
+		SCSIOpCode: eventType,
+		Final:      true,
+		LUN:        lun,
+		StatSN:     conn.statSN,
+		ExpCmdSN:   conn.expCmdSN,
+		RawData:    data,
+	}
+	if conn.session != nil {
+		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+	}
+
+	// Parameter1 and Parameter2 are encoded in RawData or could be stored in ISCSICommand
+	// For simplicity, we encode them at the start of RawData if not already present
+	if len(data) == 0 && (param1 != 0 || param2 != 0) {
+		conn.resp.RawData = make([]byte, 8)
+		copy(conn.resp.RawData[0:4], util.MarshalUint32(param1))
+		copy(conn.resp.RawData[4:8], util.MarshalUint32(param2))
+	}
+
+	log.Debugf("Sending Async message type=%d to initiator", eventType)
+	s.handler(DATAOUT, conn)
+	return nil
+}
+
+// SendSCSIAsyncEvent sends a SCSI asynchronous event (e.g., LUN reset, storage change)
+func (s *ISCSITargetDriver) SendSCSIAsyncEvent(conn *iscsiConnection, lun [8]uint8, eventCode byte) error {
+	// SCSI Async Event data format:
+	// bytes 0-1: Event Code
+	// bytes 2-3: Reserved
+	// bytes 4+: Event-specific data
+	data := []byte{eventCode, 0, 0, 0}
+	return s.SendAsyncMessage(conn, ASYNC_EVENT_SCSI, lun, 0, 0, data)
 }
 
 func (s *ISCSITargetDriver) Stats() scsi.Stats {

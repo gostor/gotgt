@@ -86,6 +86,9 @@ func createTarget(cli *client.Client, opts api.TargetCreateRequest) error {
 	if err != nil {
 		return err
 	}
+	if tgt == nil {
+		return fmt.Errorf("target creation returned nil")
+	}
 	fmt.Printf("Target %s successfully created\n", tgt.Name)
 	return nil
 }

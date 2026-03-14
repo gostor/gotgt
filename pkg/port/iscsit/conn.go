@@ -155,12 +155,12 @@ func (conn *iscsiConnection) buildRespPackage(oc OpCode, task *iscsiTask) error 
 	if task == nil {
 		task = conn.rxTask
 	}
-	conn.resp = &ISCSICommand{
-		StartTime:       conn.req.StartTime,
-		StatSN:          conn.req.ExpStatSN,
-		TaskTag:         conn.req.TaskTag,
-		ExpectedDataLen: conn.req.ExpectedDataLen,
-	}
+	// Get ISCSICommand from object pool
+	conn.resp = getCommand()
+	conn.resp.StartTime = conn.req.StartTime
+	conn.resp.StatSN = conn.req.ExpStatSN
+	conn.resp.TaskTag = conn.req.TaskTag
+	conn.resp.ExpectedDataLen = conn.req.ExpectedDataLen
 	if conn.session != nil {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
 		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand

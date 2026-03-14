@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/gostor/gotgt/pkg/api"
@@ -149,7 +149,7 @@ func (r *remoteBs) Stats() scsi.Stats {
 	return r.targetDriver.Stats()
 }
 
-//  Resize is called to resize the volume
+// Resize is called to resize the volume
 func (r *remoteBs) Resize(size uint64) error {
 	if !r.isUp {
 		return fmt.Errorf("Volume is not up")
@@ -159,7 +159,7 @@ func (r *remoteBs) Resize(size uint64) error {
 
 func (r *remoteBs) startScsiTarget(cfg *config.Config) error {
 	var err error
-	id := uuid.NewV4()
+	id := uuid.New()
 	uid := binary.BigEndian.Uint64(id[:8])
 	err = scsi.InitSCSILUMapEx(&config.BackendStorage{
 		DeviceID:         uid,

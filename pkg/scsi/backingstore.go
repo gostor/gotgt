@@ -82,9 +82,9 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		doWrite = true
 		goto write
 	case api.COMPARE_AND_WRITE:
-		// TODO
-		doWrite = true
-		goto write
+		// COMPARE_AND_WRITE is handled directly in SBCCompareAndWrite function
+		// This case should not be reached
+		return fmt.Errorf("COMPARE_AND_WRITE should be handled by SBCCompareAndWrite"), ILLEGAL_REQUEST, ASC_INVALID_OP_CODE
 	case api.SYNCHRONIZE_CACHE, api.SYNCHRONIZE_CACHE_16:
 		if tl == 0 {
 			tl = int64(lu.Size - offset)

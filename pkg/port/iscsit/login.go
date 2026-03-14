@@ -17,7 +17,6 @@ limitations under the License.
 package iscsit
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -26,20 +25,20 @@ import (
 
 var (
 	iSCSILoginParamTextKV = []util.KeyValue{
-		{"HeaderDigest", "None"},
-		{"DataDigest", "None"},
-		{"ImmediateData", "Yes"},
-		{"InitialR2T", "Yes"},
-		{"MaxBurstLength", "262144"},
-		{"FirstBurstLength", "65536"},
-		{"MaxRecvDataSegmentLength", "65536"},
-		{"DefaultTime2Wait", "2"},
-		{"DefaultTime2Retain", "0"},
-		{"MaxOutstandingR2T", "1"},
-		{"IFMarker", "No"},
-		{"OFMarker", "No"},
-		{"DataPDUInOrder", "Yes"},
-		{"DataSequenceInOrder", "Yes"}}
+		{Key: "HeaderDigest", Value: "None"},
+		{Key: "DataDigest", Value: "None"},
+		{Key: "ImmediateData", Value: "Yes"},
+		{Key: "InitialR2T", Value: "Yes"},
+		{Key: "MaxBurstLength", Value: "262144"},
+		{Key: "FirstBurstLength", Value: "65536"},
+		{Key: "MaxRecvDataSegmentLength", Value: "65536"},
+		{Key: "DefaultTime2Wait", Value: "2"},
+		{Key: "DefaultTime2Retain", Value: "0"},
+		{Key: "MaxOutstandingR2T", Value: "1"},
+		{Key: "IFMarker", Value: "No"},
+		{Key: "OFMarker", Value: "No"},
+		{Key: "DataPDUInOrder", Value: "Yes"},
+		{Key: "DataSequenceInOrder", Value: "Yes"}}
 )
 
 type iSCSILoginStage int
@@ -63,10 +62,10 @@ func (s iSCSILoginStage) String() string {
 }
 
 func loginKVDeclare(conn *iscsiConnection, negoKV []util.KeyValue) []util.KeyValue {
-	negoKV = append(negoKV, util.KeyValue{"TargetPortalGroupTag",
-		numberKeyInConv(uint(conn.loginParam.tpgt))})
-	negoKV = append(negoKV, util.KeyValue{"MaxRecvDataSegmentLength",
-		numberKeyInConv(sessionKeys["MaxRecvDataSegmentLength"].def)})
+	negoKV = append(negoKV, util.KeyValue{Key: "TargetPortalGroupTag",
+		Value: numberKeyInConv(uint(conn.loginParam.tpgt))})
+	negoKV = append(negoKV, util.KeyValue{Key: "MaxRecvDataSegmentLength",
+		Value: numberKeyInConv(sessionKeys["MaxRecvDataSegmentLength"].def)})
 	return negoKV
 }
 
@@ -158,14 +157,14 @@ func (conn *iscsiConnection) processLoginData() ([]util.KeyValue, error) {
 					if uintVal != defSessKey.def {
 						kvChanges++
 					}
-					negoKV = append(negoKV, util.KeyValue{key, defSessKey.inConv(defSessKey.def)})
+					negoKV = append(negoKV, util.KeyValue{Key: key, Value: defSessKey.inConv(defSessKey.def)})
 				} else {
 					if (uintVal >= defSessKey.min) && (uintVal <= defSessKey.max) {
 						conn.loginParam.sessionParam[defSessKey.idx].Value = uintVal
-						negoKV = append(negoKV, util.KeyValue{key, defSessKey.inConv(uintVal)})
+						negoKV = append(negoKV, util.KeyValue{Key: key, Value: defSessKey.inConv(uintVal)})
 					} else {
 						// the value out of the acceptable range, Uses target default key
-						negoKV = append(negoKV, util.KeyValue{key, defSessKey.inConv(defSessKey.def)})
+						negoKV = append(negoKV, util.KeyValue{Key: key, Value: defSessKey.inConv(defSessKey.def)})
 						kvChanges++
 					}
 				}
@@ -222,10 +221,13 @@ type iscsiLoginParam struct {
 }
 
 func (m *ISCSICommand) loginRespBytes() []byte {
-	// rfc7143 11.13
-	buf := &bytes.Buffer{}
-	// byte 0
-	buf.WriteByte(byte(OpLoginResp))
+	// rfc7143 11.13 - BHS 48 bytes + data (4-byte aligned)
+	rawDataLen := len(m.RawData)
+	padding := (4 - rawDataLen%4) % 4
+	buf := make([]byte, 48+rawDataLen+padding)
+
+	// byte 0: Opcode
+	buf[0] = byte(OpLoginResp)
 	var b byte
 	if m.Transit {
 		b |= 0x80
@@ -236,33 +238,38 @@ func (m *ISCSICommand) loginRespBytes() []byte {
 	b |= byte(m.CSG&0xff) << 2
 	b |= byte(m.NSG & 0xff)
 	// byte 1
-	buf.WriteByte(b)
+	buf[1] = b
 
-	b = 0
-	buf.WriteByte(b)                                          // version-max
-	buf.WriteByte(b)                                          // version-active
-	buf.WriteByte(b)                                          // ahsLen
-	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // data segment length, no padding
-	buf.Write(util.MarshalUint64(m.ISID)[2:])
-	buf.Write(util.MarshalUint64(uint64(m.TSIH))[6:])
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.WriteByte(b) // "reserved"
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	buf.WriteByte(byte(m.StatusClass))
-	buf.WriteByte(byte(m.StatusDetail))
-	buf.WriteByte(b)
-	buf.WriteByte(b) // "reserved"
-	var bs [8]byte
-	buf.Write(bs[:])
-	rd := m.RawData
-	for len(rd)%4 != 0 {
-		rd = append(rd, 0)
-	}
-	buf.Write(rd)
-	return buf.Bytes()
+	// byte 2: version-max, byte 3: version-active
+	// bytes 4-7: data segment length (24-bit)
+	buf[5] = byte(rawDataLen >> 16)
+	buf[6] = byte(rawDataLen >> 8)
+	buf[7] = byte(rawDataLen)
+	// bytes 8-13: ISID (6 bytes) - lower 6 bytes of uint64
+	buf[8] = byte(m.ISID >> 40)
+	buf[9] = byte(m.ISID >> 32)
+	buf[10] = byte(m.ISID >> 24)
+	buf[11] = byte(m.ISID >> 16)
+	buf[12] = byte(m.ISID >> 8)
+	buf[13] = byte(m.ISID)
+	// bytes 14-15: TSIH (2 bytes)
+	buf[14] = byte(m.TSIH >> 8)
+	buf[15] = byte(m.TSIH)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23: reserved
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36: StatusClass, 37: StatusDetail
+	buf[36] = byte(m.StatusClass)
+	buf[37] = byte(m.StatusDetail)
+	// bytes 38-47: reserved
+	// Copy data
+	copy(buf[48:], m.RawData)
+	// padding bytes are already zero
+	return buf
 }

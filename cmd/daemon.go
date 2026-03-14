@@ -63,18 +63,11 @@ func newDaemonCommand() *cobra.Command {
 }
 
 func createDaemon(host, driver, level string, blockMultipleHosts bool, port int) error {
-	switch level {
-	case "info":
-		log.SetLevel(log.InfoLevel)
-	case "warn":
-		log.SetLevel(log.WarnLevel)
-	case "debug":
-		log.SetLevel(log.DebugLevel)
-	case "panic", "fatal", "error":
-		log.SetLevel(log.ErrorLevel)
-	default:
-		return fmt.Errorf("unknown log level: %v", level)
+	logLevel, err := log.ParseLevel(level)
+	if err != nil {
+		return fmt.Errorf("invalid log level %q: %w", level, err)
 	}
+	log.SetLevel(logLevel)
 	config, err := config.Load(config.ConfigDir())
 	if err != nil {
 		log.Error(err)

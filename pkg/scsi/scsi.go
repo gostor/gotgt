@@ -24,7 +24,6 @@ import (
 	"unsafe"
 
 	"github.com/gostor/gotgt/pkg/api"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -46,13 +45,13 @@ func NewSCSITargetService() *SCSITargetService {
 }
 
 // GetTargetList get SCSI target list
-func (s *SCSITargetService) GetTargetList() ([]api.SCSITarget, error) {
-	result := []api.SCSITarget{}
+func (s *SCSITargetService) GetTargetList() ([]*api.SCSITarget, error) {
+	result := []*api.SCSITarget{}
 	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 	for _, t := range s.Targets {
-		result = append(result, *t)
+		result = append(result, t)
 	}
-	s.mutex.RUnlock()
 	return result, nil
 }
 
@@ -91,7 +90,7 @@ func (s *SCSITargetService) AddCommandQueue(tid int, scmd *api.SCSICommand) erro
 	}
 	scmd.Target = target
 	for _, it := range target.ITNexus {
-		if uuid.Equal(it.ID, scmd.ITNexusID) {
+		if it.ID == scmd.ITNexusID {
 			itn = it
 			break
 		}
@@ -199,8 +198,9 @@ func BuildSenseData(cmd *api.SCSICommand, key byte, asc SCSISubError) {
 	} else {
 		log.Debugf("cannot calc cbd alloc length. truncate failed")
 	}
-	cmd.Result = key
-	cmd.SenseBuffer = &api.SenseBuffer{senseBuffer.Bytes(), length}
+	// Note: cmd.Result should be set by the caller, not here
+	// The caller should set cmd.Result = api.SAM_STAT_CHECK_CONDITION when returning error
+	cmd.SenseBuffer = &api.SenseBuffer{Buffer: senseBuffer.Bytes(), Length: length}
 }
 
 func getSCSIReadWriteOffset(scb []byte) uint64 {
@@ -234,6 +234,8 @@ func getSCSIReadWriteCount(scb []byte) uint32 {
 		cnt = uint32(scb[7])<<8 | uint32(scb[8])
 	case api.READ_12, api.WRITE_12, api.VERIFY_12, api.WRITE_VERIFY_12:
 		cnt = binary.BigEndian.Uint32(scb[6:])
+		// Note: READ(12)/WRITE(12) have 32-bit transfer length field, but only use lower 16 bits
+		// per SCSI SBC-3 spec. Zero means zero blocks.
 	case api.READ_16, api.PRE_FETCH_16, api.WRITE_16, api.ORWRITE_16, api.VERIFY_16, api.WRITE_VERIFY_16, api.WRITE_SAME_16, api.SYNCHRONIZE_CACHE_16:
 		cnt = binary.BigEndian.Uint32(scb[10:])
 	case api.COMPARE_AND_WRITE:

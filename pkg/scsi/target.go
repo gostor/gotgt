@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/google/uuid"
 	"github.com/gostor/gotgt/pkg/api"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,7 +37,7 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 		TargetPortGroups: []*api.TargetPortGroup{},
 		ITNexus:          make(map[uuid.UUID]*api.ITNexus),
 	}
-	tpg := &api.TargetPortGroup{0, []*api.SCSITargetPort{}}
+	tpg := &api.TargetPortGroup{GroupID: 0, TargetPortGroup: []*api.SCSITargetPort{}}
 	s.Targets = append(s.Targets, target)
 	target.Devices = GetTargetLUNMap(target.Name)
 	target.LUN0 = NewLUN0()
@@ -110,7 +110,7 @@ func deviceReserve(cmd *api.SCSICommand) error {
 		return nil
 	}
 
-	if !uuid.Equal(lu.ReserveID, uuid.Nil) && uuid.Equal(lu.ReserveID, cmd.ITNexusID) {
+	if lu.ReserveID != uuid.Nil && lu.ReserveID == cmd.ITNexusID {
 		log.Errorf("already reserved %d, %d", lu.ReserveID, cmd.ITNexusID)
 		return fmt.Errorf("already reserved")
 	}

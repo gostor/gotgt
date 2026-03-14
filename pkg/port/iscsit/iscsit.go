@@ -79,7 +79,7 @@ type iSCSITPGT struct {
 }
 
 type ISCSITarget struct {
-	api.SCSITarget
+	*api.SCSITarget
 	api.SCSITargetDriverCommon
 	// TPGT number is the key
 	TPGTs map[uint16]*iSCSITPGT
@@ -123,7 +123,7 @@ func (tgt *ISCSITarget) FindTPG(portal string) (uint16, error) {
 
 func newISCSITarget(target *api.SCSITarget) *ISCSITarget {
 	return &ISCSITarget{
-		SCSITarget: *target,
+		SCSITarget: target,
 		TPGTs:      make(map[uint16]*iSCSITPGT),
 		Sessions:   make(map[uint16]*ISCSISession),
 	}
