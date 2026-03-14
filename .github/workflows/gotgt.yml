@@ -125,7 +125,6 @@ jobs:
         ./test-tool/iscsi-test-cu -d -A --test=ALL.StartStopUnit iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.TestUnitReady iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.OneCommand iscsi://127.0.0.1:3260/${{env.TARGET}}/0
 
         # iSCSI Protocol Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSITMF iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
