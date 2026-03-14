@@ -159,11 +159,26 @@ func (bs *FileBackingStore) DataAdvise(offset, length int64, advise uint32) erro
 	return util.Fadvise(bs.file, offset, length, advise)
 }
 
+// unmapZeroBufSize is the size of the reusable zero buffer for unmap operations.
+const unmapZeroBufSize = 1 << 20 // 1MB
+
+// unmapZeroBuf is a pre-allocated zero buffer shared across unmap calls.
+var unmapZeroBuf = make([]byte, unmapZeroBufSize)
+
 func (bs *FileBackingStore) Unmap(descriptors []api.UnmapBlockDescriptor) error {
 	for _, desc := range descriptors {
-		zeros := make([]byte, desc.TL)
-		if _, err := bs.file.WriteAt(zeros, int64(desc.Offset)); err != nil {
-			return err
+		remaining := desc.TL
+		off := int64(desc.Offset)
+		for remaining > 0 {
+			writeLen := remaining
+			if writeLen > unmapZeroBufSize {
+				writeLen = unmapZeroBufSize
+			}
+			if _, err := bs.file.WriteAt(unmapZeroBuf[:writeLen], off); err != nil {
+				return err
+			}
+			off += int64(writeLen)
+			remaining -= writeLen
 		}
 	}
 	return nil

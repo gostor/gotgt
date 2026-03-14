@@ -17,6 +17,7 @@ limitations under the License.
 package iscsit
 
 import (
+	"bufio"
 	"io"
 	"net"
 	"sort"
@@ -61,6 +62,7 @@ type iscsiConnection struct {
 	txIOState int
 	refcount  int
 	conn      net.Conn
+	writer    *bufio.Writer
 
 	rxBuffer []byte
 	txBuffer []byte
@@ -117,6 +119,7 @@ func (c *iscsiConnection) init() {
 	c.state = CONN_STATE_FREE
 	c.refcount = 1
 	c.readLock = new(sync.RWMutex)
+	c.writer = bufio.NewWriterSize(c.conn, 256*1024)
 	c.loginParam.sessionParam = []ISCSISessionParam{}
 	c.loginParam.tgtCSG = LoginOperationalNegotiation
 	c.loginParam.tgtNSG = LoginOperationalNegotiation
@@ -136,10 +139,15 @@ func (c *iscsiConnection) readData(buf []byte) (int, error) {
 }
 
 func (c *iscsiConnection) write(resp []byte) (int, error) {
-	return c.conn.Write(resp)
+	return c.writer.Write(resp)
+}
+
+func (c *iscsiConnection) flush() error {
+	return c.writer.Flush()
 }
 
 func (c *iscsiConnection) close() {
+	c.writer.Flush()
 	c.conn.Close()
 }
 

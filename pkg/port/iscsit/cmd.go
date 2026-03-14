@@ -312,8 +312,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 	if len(data) != BHS_SIZE {
 		return nil, fmt.Errorf("garbled header")
 	}
-	// TODO: sync.Pool
-	m := &ISCSICommand{}
+	m := getCommand()
 	m.Immediate = 0x40&data[0] == 0x40
 	m.OpCode = OpCode(data[0] & ISCSI_OPCODE_MASK)
 	m.Final = 0x80&data[1] == 0x80
