@@ -130,6 +130,13 @@ func DelLUNMapping(m LUNMapping) {
 	delete(globalSCSILUMap.TargetsLUNMap[m.TargetName], m.LUN)
 }
 
+// DelTargetLUNMap removes the entire LUN map for a target.
+func DelTargetLUNMap(targetName string) {
+	globalSCSILUMap.mutex.Lock()
+	defer globalSCSILUMap.mutex.Unlock()
+	delete(globalSCSILUMap.TargetsLUNMap, targetName)
+}
+
 func InitSCSILUMap(config *config.Config) error {
 	for _, bs := range config.Storages {
 		if err := AddBackendStorage(bs); err != nil {

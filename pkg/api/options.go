@@ -29,3 +29,36 @@ type TargetListOptions struct {
 	Name    string
 	Verbose bool
 }
+
+type LuCreateRequest struct {
+	TargetName string `json:"targetName"`
+	DeviceID   uint64 `json:"deviceID"`
+	LUN        uint64 `json:"lun"`
+	Path       string `json:"path"`
+	BlockShift uint   `json:"blockShift"`
+}
+
+type LuListOptions struct {
+	TargetName string
+}
+
+type LuRemoveOptions struct {
+	TargetName string `json:"targetName"`
+	LUN        uint64 `json:"lun"`
+}
+
+type LuInfo struct {
+	LUN    uint64 `json:"lun"`
+	Path   string `json:"path"`
+	Online bool   `json:"online"`
+	Size   uint64 `json:"size"`
+}
+
+type TpgtListOptions struct {
+	TargetName string
+}
+
+type TpgtInfo struct {
+	TPGT    uint16   `json:"tpgt"`
+	Portals []string `json:"portals"`
+}

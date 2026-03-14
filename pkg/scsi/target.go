@@ -26,11 +26,9 @@ import (
 )
 
 func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*api.SCSITarget, error) {
-	// verify the target ID
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-	// verify the target's Name
-
-	// verify the low level driver
 	var target = &api.SCSITarget{
 		Name:             name,
 		TID:              tid,
@@ -43,6 +41,24 @@ func (s *SCSITargetService) NewSCSITarget(tid int, driverName, name string) (*ap
 	target.LUN0 = NewLUN0()
 	target.TargetPortGroups = append(target.TargetPortGroups, tpg)
 	return target, nil
+}
+
+// DeleteTarget removes a target by name. If force is false and there are active sessions, it returns an error.
+func (s *SCSITargetService) DeleteTarget(name string, force bool) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for i, t := range s.Targets {
+		if t.Name == name {
+			if !force && len(t.ITNexus) > 0 {
+				return fmt.Errorf("target %s has %d active sessions, use force to remove", name, len(t.ITNexus))
+			}
+			s.Targets = append(s.Targets[:i], s.Targets[i+1:]...)
+			DelTargetLUNMap(name)
+			return nil
+		}
+	}
+	return fmt.Errorf("target %q not found", name)
 }
 
 func (s *SCSITargetService) RereadTargetLUNMap() {

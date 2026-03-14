@@ -16,25 +16,31 @@ limitations under the License.
 package lu
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/gostor/gotgt/pkg/api"
+	"github.com/gostor/gotgt/pkg/apiserver/httputils"
 	"github.com/gostor/gotgt/pkg/apiserver/router"
+	"github.com/gostor/gotgt/pkg/config"
+	"github.com/gostor/gotgt/pkg/scsi"
 	"golang.org/x/net/context"
 )
 
-// containerRouter is a router to talk with the container controller
+// luRouter is a router to talk with the LU controller
 type luRouter struct {
 	routes []router.Route
 }
 
-// NewRouter initializes a new container router
+// NewRouter initializes a new LU router
 func NewRouter() router.Router {
 	r := &luRouter{}
 	r.initRoutes()
 	return r
 }
 
-// Routes returns the available routers to the container controller
+// Routes returns the available routers to the LU controller
 func (r *luRouter) Routes() []router.Route {
 	return r.routes
 }
@@ -43,23 +49,102 @@ func (r *luRouter) Routes() []router.Route {
 func (r *luRouter) initRoutes() {
 	r.routes = []router.Route{
 		// GET
+		router.NewGetRoute("/lu/list", r.getLuList),
 		router.NewGetRoute("/lu/{id:.*}", r.getLu),
 		// POST
 		router.NewPostRoute("/lu/create", r.postLuCreate),
-		// PUT
 		// DELETE
-		router.NewDeleteRoute("/lu/{id:.*}", r.deleteLu),
+		router.NewDeleteRoute("/lu/delete", r.deleteLu),
 	}
 }
 
-func (s *luRouter) getLu(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (r *luRouter) getLuList(ctx context.Context, w http.ResponseWriter, req *http.Request, vars map[string]string) error {
+	if err := httputils.ParseForm(req); err != nil {
+		return err
+	}
+	targetName := req.FormValue("target")
+	if targetName == "" {
+		return fmt.Errorf("bad parameter: target name is required")
+	}
+
+	lunMap := scsi.GetTargetLUNMap(targetName)
+	var result []api.LuInfo
+	for lun, lu := range lunMap {
+		if lu == nil {
+			continue
+		}
+		info := api.LuInfo{
+			LUN:    lun,
+			Path:   lu.Path,
+			Online: lu.Attrs.Online,
+			Size:   lu.Size,
+		}
+		result = append(result, info)
+	}
+	return httputils.WriteJSON(w, http.StatusOK, result)
+}
+
+func (r *luRouter) getLu(ctx context.Context, w http.ResponseWriter, req *http.Request, vars map[string]string) error {
 	return nil
 }
 
-func (s *luRouter) postLuCreate(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (r *luRouter) postLuCreate(ctx context.Context, w http.ResponseWriter, req *http.Request, vars map[string]string) error {
+	var opts api.LuCreateRequest
+	if err := json.NewDecoder(req.Body).Decode(&opts); err != nil {
+		return fmt.Errorf("bad parameter: %v", err)
+	}
+	if opts.TargetName == "" {
+		return fmt.Errorf("bad parameter: target name is required")
+	}
+	if opts.Path == "" {
+		return fmt.Errorf("bad parameter: path is required")
+	}
+
+	bs := config.BackendStorage{
+		DeviceID:   opts.DeviceID,
+		Path:       opts.Path,
+		Online:     true,
+		BlockShift: opts.BlockShift,
+	}
+	if err := scsi.AddBackendStorage(bs); err != nil {
+		return err
+	}
+
+	m := scsi.LUNMapping{
+		TargetName: opts.TargetName,
+		LUN:        opts.LUN,
+		DeviceID:   opts.DeviceID,
+	}
+	if err := scsi.AddLUNMapping(m); err != nil {
+		return err
+	}
+
+	// Refresh target's device map
+	service := scsi.NewSCSITargetService()
+	service.RereadTargetLUNMap()
+
+	w.WriteHeader(http.StatusCreated)
 	return nil
 }
 
-func (s *luRouter) deleteLu(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+func (r *luRouter) deleteLu(ctx context.Context, w http.ResponseWriter, req *http.Request, vars map[string]string) error {
+	var opts api.LuRemoveOptions
+	if err := json.NewDecoder(req.Body).Decode(&opts); err != nil {
+		return fmt.Errorf("bad parameter: %v", err)
+	}
+	if opts.TargetName == "" {
+		return fmt.Errorf("bad parameter: target name is required")
+	}
+
+	scsi.DelLUNMapping(scsi.LUNMapping{
+		TargetName: opts.TargetName,
+		LUN:        opts.LUN,
+	})
+
+	// Refresh target's device map
+	service := scsi.NewSCSITargetService()
+	service.RereadTargetLUNMap()
+
+	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
