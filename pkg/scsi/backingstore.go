@@ -109,7 +109,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 		// TODO
 		break
 	case api.READ_6, api.READ_10, api.READ_12, api.READ_16:
-		rbuf = make([]byte, int(tl))
 		rbuf, err = bs.Read(int64(offset), tl)
 		if err != nil && err != io.EOF {
 			key = MEDIUM_ERROR
@@ -117,9 +116,6 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			break
 		}
 		length = len(rbuf)
-		for i := 0; i < int(tl)-length; i++ {
-			rbuf = append(rbuf, 0)
-		}
 
 		if (opcode != api.READ_6) && (scb[1]&0x10 != 0) {
 			bs.DataAdvise(int64(offset), int64(length), util.POSIX_FADV_NOREUSE)
@@ -131,6 +127,12 @@ func bsPerformCommand(bs api.BackingStore, cmd *api.SCSICommand) (err error, key
 			goto sense
 		}
 		copy(cmd.InSDBBuffer.Buffer, rbuf)
+		// Zero-fill any remaining bytes if read was short
+		if length < int(tl) {
+			for i := length; i < int(tl) && i < len(cmd.InSDBBuffer.Buffer); i++ {
+				cmd.InSDBBuffer.Buffer[i] = 0
+			}
+		}
 	case api.PRE_FETCH_10, api.PRE_FETCH_16:
 		err = bs.DataAdvise(int64(offset), tl, util.POSIX_FADV_WILLNEED)
 		if err != nil {

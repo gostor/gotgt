@@ -830,6 +830,13 @@ SendRemainingData:
 		}
 	}
 
+	// Flush buffered writes to the network
+	if err := conn.flush(); err != nil {
+		log.Errorf("failed to flush data to client: %v", err)
+		conn.state = CONN_STATE_CLOSE
+		return
+	}
+
 	log.Debugf("connection state: %v", conn.State())
 	switch conn.state {
 	case CONN_STATE_CLOSE, CONN_STATE_EXIT:
