@@ -40,7 +40,7 @@ import (
 
 // versionMatcher defines a variable matcher to be parsed by the router
 // when a request is about to be served.
-const versionMatcher = "/v{version:[0-9.]+(-dirty)?}"
+const versionMatcher = "/v{version:[0-9.]+(?:-dirty)?}"
 
 // Config provides the configuration for the API server
 type Config struct {
