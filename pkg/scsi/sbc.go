@@ -176,8 +176,11 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.PRE_FETCH_10] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.SYNCHRONIZE_CACHE] = NewSCSIDeviceOperation(SBCSyncCache, nil, PR_WE_FA|PR_EA_FA|PR_WE_FN|PR_EA_FN)
 
+	sbc.SCSIDeviceOps[api.READ_DEFECT_DATA] = NewSCSIDeviceOperation(SBCReadDefectData, nil, 0)
+
 	sbc.SCSIDeviceOps[api.WRITE_SAME] = NewSCSIDeviceOperation(SBCReadWrite, nil, 0)
 	sbc.SCSIDeviceOps[api.UNMAP] = NewSCSIDeviceOperation(SBCUnmap, nil, 0)
+	sbc.SCSIDeviceOps[api.SANITIZE] = NewSCSIDeviceOperation(SBCSanitize, nil, 0)
 
 	sbc.SCSIDeviceOps[api.MODE_SELECT_10] = NewSCSIDeviceOperation(SBCModeSelect, nil, PR_WE_FA|PR_EA_FA|PR_EA_FN|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.MODE_SENSE_10] = NewSCSIDeviceOperation(SBCModeSense, nil, PR_WE_FA|PR_WE_FN|PR_EA_FA|PR_EA_FN)
@@ -213,6 +216,8 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.WRITE_SAME_16] = NewSCSIDeviceOperation(SBCReadWrite, nil, 0)
 	sbc.SCSIDeviceOps[api.SERVICE_ACTION_IN] = NewSCSIDeviceOperation(SBCServiceAction, nil, 0)
 
+	sbc.SCSIDeviceOps[api.EXTENDED_COPY] = NewSCSIDeviceOperation(SPCIllegalOp, nil, 0)
+	sbc.SCSIDeviceOps[api.RECEIVE_COPY_RESULTS] = NewSCSIDeviceOperation(SPCIllegalOp, nil, 0)
 	sbc.SCSIDeviceOps[api.REPORT_LUNS] = NewSCSIDeviceOperation(SPCReportLuns, nil, 0)
 	sbc.SCSIDeviceOps[api.MAINT_PROTOCOL_IN] = NewSCSIDeviceOperation(SPCServiceAction, []*SCSIServiceAction{
 		{ServiceAction: 0x0C, CommandPerformFunc: SPCReportSupportedOperationCodes},
@@ -222,6 +227,7 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.WRITE_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_WE_FA|PR_EA_FA|PR_WE_FA|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.WRITE_VERIFY_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.VERIFY_12] = NewSCSIDeviceOperation(SBCVerify, nil, PR_EA_FA|PR_EA_FN)
+	sbc.SCSIDeviceOps[api.READ_DEFECT_DATA_12] = NewSCSIDeviceOperation(SBCReadDefectData, nil, 0)
 	sbc.SCSIDeviceOps[api.COMPARE_AND_WRITE] = NewSCSIDeviceOperation(SBCCompareAndWrite, nil, PR_EA_FA|PR_EA_FN)
 
 	return sbc
@@ -844,4 +850,131 @@ func SBCSyncCache(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 
 	return api.SAMStatGood
+}
+
+/*
+ * SBCReadDefectData implements SCSI READ DEFECT DATA(10) and READ DEFECT DATA(12) commands
+ * Returns an empty defect list as this is a virtual device with no physical defects.
+ *
+ * Reference : SBC-3
+ * 5.17 - READ DEFECT DATA (10)
+ * 5.18 - READ DEFECT DATA (12)
+ */
+func SBCReadDefectData(host int, cmd *api.SCSICommand) api.SAMStat {
+	scb := cmd.SCB
+	opcode := api.SCSICommandType(scb[0])
+
+	// Get the requested defect list format from bits 2:0 of byte 2
+	reqFormat := scb[2] & 0x07
+	// PLIST and GLIST bits
+	plist := scb[2] & 0x10
+	glist := scb[2] & 0x08
+
+	if opcode == api.READ_DEFECT_DATA {
+		// READ DEFECT DATA(10): 4 bytes header
+		if cmd.InSDBBuffer.Length < 4 {
+			BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+			return api.SAMStatCheckCondition
+		}
+		buf := cmd.InSDBBuffer.Buffer
+		// byte 0: reserved
+		buf[0] = 0
+		// byte 1: format and list bits (echo back the requested format)
+		buf[1] = (plist | glist | reqFormat)
+		// bytes 2-3: defect list length = 0 (no defects)
+		buf[2] = 0
+		buf[3] = 0
+		cmd.InSDBBuffer.Resid = 4
+	} else {
+		// READ DEFECT DATA(12): 8 bytes header
+		if cmd.InSDBBuffer.Length < 8 {
+			BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+			return api.SAMStatCheckCondition
+		}
+		buf := cmd.InSDBBuffer.Buffer
+		// byte 0: reserved
+		buf[0] = 0
+		// byte 1: format and list bits
+		buf[1] = (plist | glist | reqFormat)
+		// byte 2: reserved
+		buf[2] = 0
+		// byte 3: reserved
+		buf[3] = 0
+		// bytes 4-7: defect list length = 0 (no defects)
+		buf[4] = 0
+		buf[5] = 0
+		buf[6] = 0
+		buf[7] = 0
+		cmd.InSDBBuffer.Resid = 8
+	}
+
+	return api.SAMStatGood
+}
+
+/*
+ * SBCSanitize implements SCSI SANITIZE command (opcode 0x48)
+ * Sanitize is used to alter all user data in the device.
+ * For a virtual device, we zero out all blocks.
+ *
+ * Reference : SBC-4
+ * 5.19 - SANITIZE
+ */
+func SBCSanitize(host int, cmd *api.SCSICommand) api.SAMStat {
+	scb := cmd.SCB
+	serviceAction := scb[1] & 0x1f
+
+	if cmd.Device.Attrs.Readonly || cmd.Device.Attrs.SWP {
+		BuildSenseData(cmd, DATA_PROTECT, ASC_WRITE_PROTECT)
+		return api.SAMStatCheckCondition
+	}
+
+	switch serviceAction {
+	case 0x01: // OVERWRITE
+		// For a virtual device, zero out all blocks
+		size := cmd.Device.Size
+		zeros := make([]byte, 1<<cmd.Device.BlockShift)
+		var offset uint64
+		for offset = 0; offset < size; offset += uint64(len(zeros)) {
+			remaining := size - offset
+			if remaining < uint64(len(zeros)) {
+				zeros = zeros[:remaining]
+			}
+			if err := cmd.Device.Storage.Write(zeros, int64(offset)); err != nil {
+				log.Errorf("Sanitize overwrite failed at offset %d: %v", offset, err)
+				BuildSenseData(cmd, MEDIUM_ERROR, ASC_WRITE_ERROR)
+				return api.SAMStatCheckCondition
+			}
+		}
+		return api.SAMStatGood
+
+	case 0x02: // BLOCK ERASE
+		// Same as overwrite for virtual device
+		size := cmd.Device.Size
+		zeros := make([]byte, 1<<cmd.Device.BlockShift)
+		var offset uint64
+		for offset = 0; offset < size; offset += uint64(len(zeros)) {
+			remaining := size - offset
+			if remaining < uint64(len(zeros)) {
+				zeros = zeros[:remaining]
+			}
+			if err := cmd.Device.Storage.Write(zeros, int64(offset)); err != nil {
+				log.Errorf("Sanitize block erase failed at offset %d: %v", offset, err)
+				BuildSenseData(cmd, MEDIUM_ERROR, ASC_WRITE_ERROR)
+				return api.SAMStatCheckCondition
+			}
+		}
+		return api.SAMStatGood
+
+	case 0x03: // CRYPTO ERASE
+		// Not supported for virtual device
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+		return api.SAMStatCheckCondition
+
+	case 0x1f: // EXIT FAILURE MODE
+		return api.SAMStatGood
+
+	default:
+		BuildSenseData(cmd, ILLEGAL_REQUEST, ASC_INVALID_FIELD_IN_CDB)
+		return api.SAMStatCheckCondition
+	}
 }

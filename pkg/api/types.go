@@ -83,6 +83,7 @@ var (
 	UNMAP                                SCSICommandType = 0x42
 	READ_TOC                             SCSICommandType = 0x43
 	GET_CONFIGURATION                    SCSICommandType = 0x46
+	SANITIZE                             SCSICommandType = 0x48
 	LOG_SELECT                           SCSICommandType = 0x4c
 	LOG_SENSE                            SCSICommandType = 0x4d
 	READ_DISK_INFO                       SCSICommandType = 0x51
@@ -95,6 +96,8 @@ var (
 	READ_BUFFER_CAP                      SCSICommandType = 0x5c
 	PERSISTENT_RESERVE_IN                SCSICommandType = 0x5e
 	PERSISTENT_RESERVE_OUT               SCSICommandType = 0x5f
+	EXTENDED_COPY                        SCSICommandType = 0x83
+	RECEIVE_COPY_RESULTS                 SCSICommandType = 0x84
 	VARLEN_CDB                           SCSICommandType = 0x7f
 	READ_16                              SCSICommandType = 0x88
 	COMPARE_AND_WRITE                    SCSICommandType = 0x89
@@ -121,6 +124,7 @@ var (
 	SEARCH_HIGH_12                       SCSICommandType = 0xb0
 	SEARCH_EQUAL_12                      SCSICommandType = 0xb1
 	SEARCH_LOW_12                        SCSICommandType = 0xb2
+	READ_DEFECT_DATA_12                  SCSICommandType = 0xb7
 	READ_ELEMENT_STATUS                  SCSICommandType = 0xb8
 	SEND_VOLUME_TAG                      SCSICommandType = 0xb6
 	SET_STREAMING                        SCSICommandType = 0xb6

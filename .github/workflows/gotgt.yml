@@ -53,8 +53,8 @@ jobs:
         ./configure 2>&1 >/dev/null
         make 2>&1 >/dev/null
         
-        echo "=== Starting Comprehensive libiscsi Tests (60+ tests) ==="
-        
+        echo "=== Starting Comprehensive libiscsi Tests ==="
+
         # Inquiry Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.Standard iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.AllocLength iscsi://127.0.0.1:3260/${{env.TARGET}}/0
@@ -62,23 +62,24 @@ jobs:
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.SupportedVPD iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.VersionDescriptors iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.EVPD iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.Inquiry.BlockLimits iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # Mandatory Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Mandatory iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ModeSense6 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.NoMedia iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Read Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Read6 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Read10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Read12 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Read16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadOnly iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Read Capacity Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadCapacity10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadCapacity16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Write Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Write10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Write12 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
@@ -86,38 +87,64 @@ jobs:
         ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify12 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteVerify16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Write Same Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteSame10.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.WriteSame16.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
+        # Compare and Write Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.CompareAndWrite.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.CompareAndWrite.Miscompare iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
+        # OrWrite Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.OrWrite.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.OrWrite.BeyondEol iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.OrWrite.ZeroBlocks iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
+        # GetLBAStatus Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.GetLBAStatus.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.GetLBAStatus.BeyondEol iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # Verify Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify12 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Verify16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Prefetch Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Prefetch10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Prefetch16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # Synchronize Cache Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.SynchronizeCache10 iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
         ./test-tool/iscsi-test-cu -d -A --test=ALL.SynchronizeCache16 iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
-        
+
         # Reserve/Release Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Reserve6.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
+        # Persistent Reservation Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.PrinReadKeys.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.PrinReportCapabilities.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ProutRegister.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ProutReserve.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # Unmap Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.VPD iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.ZeroBlocks iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
+        # Read Defect Data Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadDefectData10.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadDefectData12.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # Other SCSI Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.PreventAllow iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.StartStopUnit iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.TestUnitReady iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.OneCommand iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.RCTD iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.SERVACTV iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # iSCSI Protocol Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSITMF iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
         ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSIcmdsn iscsi://127.0.0.1:3260/${{env.TARGET}}/0
