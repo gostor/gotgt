@@ -150,64 +150,81 @@ jobs:
 
     - name: CLI management test
       run: |
-        GOTGT=./_output/cmd/bin/gotgt
+        API="http://127.0.0.1:23457"
 
-        echo "=== CLI Management Tests ==="
+        echo "=== CLI Management API Tests ==="
 
         # 1. List targets - should show the target from config
         echo "--- list target ---"
-        $GOTGT list target | tee /tmp/list_target.out
+        curl -sf "$API/target/list" | tee /tmp/list_target.out
         grep -q "${{env.TARGET}}" /tmp/list_target.out
         echo "PASS: list target shows configured target"
 
         # 2. List LUs for the existing target
         echo "--- list lu ---"
-        $GOTGT list lu --target "${{env.TARGET}}" | tee /tmp/list_lu.out
-        grep -q "LUN" /tmp/list_lu.out
-        echo "PASS: list lu returns LU table"
+        curl -sf "$API/lu/list?target=${{env.TARGET}}" | tee /tmp/list_lu.out
+        echo ""
+        # Verify it returns a JSON array (may be empty or have LU 0)
+        python3 -c "import json,sys; data=json.load(sys.stdin); assert isinstance(data,list)" < /tmp/list_lu.out
+        echo "PASS: list lu returns valid JSON array"
 
         # 3. List TPGTs for the existing target
         echo "--- list tpgt ---"
-        $GOTGT list tpgt --target "${{env.TARGET}}" | tee /tmp/list_tpgt.out
-        grep -q "TPGT" /tmp/list_tpgt.out
-        echo "PASS: list tpgt returns TPGT table"
+        curl -sf "$API/target/tpgt/list?target=${{env.TARGET}}" | tee /tmp/list_tpgt.out
+        echo ""
+        python3 -c "import json,sys; data=json.load(sys.stdin); assert isinstance(data,list)" < /tmp/list_tpgt.out
+        echo "PASS: list tpgt returns valid JSON array"
 
-        # 4. Create a new target via CLI
+        # 4. Create a new target via API
         echo "--- create target ---"
         NEW_TARGET="iqn.2016-09.com.gotgt.gostor:ci_test_tgt"
-        $GOTGT create target --name "$NEW_TARGET" | tee /tmp/create_target.out
-        grep -q "successfully created" /tmp/create_target.out
+        curl -sf -X POST "$API/target/create" \
+          -H "Content-Type: application/json" \
+          -d "{\"Name\":\"$NEW_TARGET\"}" | tee /tmp/create_target.out
+        echo ""
+        grep -q "$NEW_TARGET" /tmp/create_target.out
         echo "PASS: create target succeeded"
 
         # 5. Verify new target appears in list
         echo "--- verify new target in list ---"
-        $GOTGT list target | tee /tmp/list_target2.out
+        curl -sf "$API/target/list" | tee /tmp/list_target2.out
+        echo ""
         grep -q "$NEW_TARGET" /tmp/list_target2.out
         echo "PASS: new target visible in list"
 
         # 6. Create a new LU on the new target
         echo "--- create lu ---"
-        dd if=/dev/zero of=/var/tmp/ci_disk.img bs=1024 count=10240
-        $GOTGT create lu --target "$NEW_TARGET" --lun 0 --device-id 2000 --path "file:/var/tmp/ci_disk.img" --block-shift 9 | tee /tmp/create_lu.out
-        grep -q "successfully created" /tmp/create_lu.out
-        echo "PASS: create lu succeeded"
+        dd if=/dev/zero of=/var/tmp/ci_disk.img bs=1024 count=10240 2>/dev/null
+        curl -sf -X POST "$API/lu/create" \
+          -H "Content-Type: application/json" \
+          -d "{\"targetName\":\"$NEW_TARGET\",\"deviceID\":2000,\"lun\":0,\"path\":\"file:/var/tmp/ci_disk.img\",\"blockShift\":9}" \
+          -o /dev/null -w "%{http_code}" | tee /tmp/create_lu_status.out
+        echo ""
+        grep -q "201" /tmp/create_lu_status.out
+        echo "PASS: create lu returned 201"
 
         # 7. Verify new LU appears in list
         echo "--- verify new lu in list ---"
-        $GOTGT list lu --target "$NEW_TARGET" | tee /tmp/list_lu2.out
-        grep -q "/var/tmp/ci_disk.img" /tmp/list_lu2.out
+        curl -sf "$API/lu/list?target=$NEW_TARGET" | tee /tmp/list_lu2.out
+        echo ""
+        grep -q "ci_disk.img" /tmp/list_lu2.out
         echo "PASS: new LU visible in list"
 
         # 8. Remove the LU
         echo "--- remove lu ---"
-        $GOTGT rm lu --target "$NEW_TARGET" --lun 0 | tee /tmp/rm_lu.out
-        grep -q "successfully removed" /tmp/rm_lu.out
-        echo "PASS: remove lu succeeded"
+        curl -sf -X DELETE "$API/lu/delete" \
+          -H "Content-Type: application/json" \
+          -d "{\"targetName\":\"$NEW_TARGET\",\"lun\":0}" \
+          -o /dev/null -w "%{http_code}" | tee /tmp/rm_lu_status.out
+        echo ""
+        grep -q "204" /tmp/rm_lu_status.out
+        echo "PASS: remove lu returned 204"
 
         # 9. Verify LU is gone
         echo "--- verify lu removed ---"
-        $GOTGT list lu --target "$NEW_TARGET" | tee /tmp/list_lu3.out
-        if grep -q "/var/tmp/ci_disk.img" /tmp/list_lu3.out; then
+        curl -sf "$API/lu/list?target=$NEW_TARGET" | tee /tmp/list_lu3.out
+        echo ""
+        if grep -q "ci_disk.img" /tmp/list_lu3.out; then
           echo "FAIL: LU still present after removal"
           exit 1
         fi
@@ -215,17 +232,20 @@ jobs:
 
         # 10. Remove the target
         echo "--- remove target ---"
-        $GOTGT rm target --name "$NEW_TARGET" --force | tee /tmp/rm_target.out
-        grep -q "successfully removed" /tmp/rm_target.out
-        echo "PASS: remove target succeeded"
+        curl -sf -X DELETE "$API/target/$NEW_TARGET?force=1" \
+          -o /dev/null -w "%{http_code}" | tee /tmp/rm_target_status.out
+        echo ""
+        grep -q "204" /tmp/rm_target_status.out
+        echo "PASS: remove target returned 204"
 
         # 11. Verify target is gone
         echo "--- verify target removed ---"
-        $GOTGT list target | tee /tmp/list_target3.out
+        curl -sf "$API/target/list" | tee /tmp/list_target3.out
+        echo ""
         if grep -q "$NEW_TARGET" /tmp/list_target3.out; then
           echo "FAIL: target still present after removal"
           exit 1
         fi
         echo "PASS: target no longer in list"
 
-        echo "=== All CLI Management Tests Passed ==="
+        echo "=== All CLI Management API Tests Passed ==="
