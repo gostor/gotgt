@@ -65,19 +65,24 @@ func newCreateTargetCmd(cli *client.Client) *cobra.Command {
 }
 
 func newCreateLuCmd(cli *client.Client) *cobra.Command {
+	opts := api.LuCreateRequest{}
 	var cmd = &cobra.Command{
 		Use:   "lu",
-		Short: "Create a new Lu into gotgt",
-		Long:  `All software has versions. This is Gotgt 's`,
+		Short: "Create a new LU into gotgt",
+		Long:  `Create a new Logical Unit and map it to a target`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := NoArgs(cmd, args); err != nil {
 				return err
 			}
-			return createLu(cli)
+			return createLu(cli, opts)
 		},
 	}
 	flags := cmd.Flags()
-	_ = flags
+	flags.StringVar(&opts.TargetName, "target", "", "Specify target name")
+	flags.Uint64Var(&opts.LUN, "lun", 0, "Specify LUN number")
+	flags.Uint64Var(&opts.DeviceID, "device-id", 0, "Specify device ID")
+	flags.StringVar(&opts.Path, "path", "", "Specify backing store path (e.g., file:/tmp/disk.img)")
+	flags.UintVar(&opts.BlockShift, "block-shift", 9, "Specify block shift (default 9 = 512 bytes)")
 	return cmd
 }
 
@@ -93,6 +98,17 @@ func createTarget(cli *client.Client, opts api.TargetCreateRequest) error {
 	return nil
 }
 
-func createLu(cli *client.Client) error {
+func createLu(cli *client.Client, opts api.LuCreateRequest) error {
+	if opts.TargetName == "" {
+		return fmt.Errorf("target name is required (--target)")
+	}
+	if opts.Path == "" {
+		return fmt.Errorf("backing store path is required (--path)")
+	}
+	err := cli.LuCreate(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("LU %d successfully created on target %s\n", opts.LUN, opts.TargetName)
 	return nil
 }

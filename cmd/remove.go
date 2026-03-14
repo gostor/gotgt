@@ -28,7 +28,7 @@ import (
 func newRemoveCommand(cli *client.Client) *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "rm",
-		Short: "remove a new object",
+		Short: "Remove an object",
 		Long:  `All software has versions. This is Gotgt 's`,
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println(cmd.UsageString())
@@ -45,7 +45,7 @@ func newRemoveTargetCmd(cli *client.Client) *cobra.Command {
 	opts := api.TargetRemoveOptions{}
 	var cmd = &cobra.Command{
 		Use:   "target",
-		Short: "Remove a new target into gotgt",
+		Short: "Remove a target from gotgt",
 		Long:  `All software has versions. This is Gotgt 's`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return removeTarget(cli, opts)
@@ -53,23 +53,28 @@ func newRemoveTargetCmd(cli *client.Client) *cobra.Command {
 	}
 	flags := cmd.Flags()
 	flags.StringVar(&opts.Name, "name", "", "Specify target name")
-	flags.BoolVar(&opts.Force, "force", false, "Specify target name")
+	flags.BoolVar(&opts.Force, "force", false, "Force removal even with active sessions")
 
 	return cmd
 
 }
 
 func newRemoveLuCmd(cli *client.Client) *cobra.Command {
+	opts := api.LuRemoveOptions{}
 	var cmd = &cobra.Command{
 		Use:   "lu",
-		Short: "Remove a new Lu into gotgt",
-		Long:  `All software has versions. This is Gotgt 's`,
+		Short: "Remove a LU from gotgt",
+		Long:  `Remove a Logical Unit from a target`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return removeLu(cli)
+			if err := NoArgs(cmd, args); err != nil {
+				return err
+			}
+			return removeLu(cli, opts)
 		},
 	}
 	flags := cmd.Flags()
-	_ = flags
+	flags.StringVar(&opts.TargetName, "target", "", "Specify target name")
+	flags.Uint64Var(&opts.LUN, "lun", 0, "Specify LUN number")
 	return cmd
 }
 
@@ -82,6 +87,14 @@ func removeTarget(cli *client.Client, opts api.TargetRemoveOptions) error {
 	return nil
 }
 
-func removeLu(cli *client.Client) error {
+func removeLu(cli *client.Client, opts api.LuRemoveOptions) error {
+	if opts.TargetName == "" {
+		return fmt.Errorf("target name is required (--target)")
+	}
+	err := cli.LuRemove(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("LU %d successfully removed from target %s\n", opts.LUN, opts.TargetName)
 	return nil
 }

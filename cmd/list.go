@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/gostor/gotgt/pkg/api"
@@ -39,6 +40,7 @@ func newListCommand(cli *client.Client) *cobra.Command {
 	cmd.AddCommand(
 		newListTargetCmd(cli),
 		newListLuCmd(cli),
+		newListTpgtCmd(cli),
 	)
 	return cmd
 }
@@ -68,19 +70,38 @@ func newListTargetCmd(cli *client.Client) *cobra.Command {
 }
 
 func newListLuCmd(cli *client.Client) *cobra.Command {
+	opts := api.LuListOptions{}
 	var cmd = &cobra.Command{
 		Use:   "lu",
-		Short: "List Lu(s) of gotgt",
-		Long:  `All software has versions. This is Gotgt 's`,
+		Short: "List LU(s) of gotgt",
+		Long:  `List Logical Units for a target`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := NoArgs(cmd, args); err != nil {
 				return err
 			}
-			return listLu(cli)
+			return listLu(cli, opts)
 		},
 	}
 	flags := cmd.Flags()
-	_ = flags
+	flags.StringVar(&opts.TargetName, "target", "", "Specify target name")
+	return cmd
+}
+
+func newListTpgtCmd(cli *client.Client) *cobra.Command {
+	opts := api.TpgtListOptions{}
+	var cmd = &cobra.Command{
+		Use:   "tpgt",
+		Short: "List TPGT(s) of gotgt",
+		Long:  `List Target Portal Group Tags for a target`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := NoArgs(cmd, args); err != nil {
+				return err
+			}
+			return listTpgt(cli, opts)
+		},
+	}
+	flags := cmd.Flags()
+	flags.StringVar(&opts.TargetName, "target", "", "Specify target name")
 	return cmd
 }
 
@@ -106,6 +127,39 @@ func listTarget(cli *client.Client, opts api.TargetListOptions) error {
 	return nil
 }
 
-func listLu(cli *client.Client) error {
+func listLu(cli *client.Client, opts api.LuListOptions) error {
+	if opts.TargetName == "" {
+		return fmt.Errorf("target name is required (--target)")
+	}
+	results, err := cli.LuList(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 15, 1, 3, ' ', 0)
+	fmt.Fprintln(w, "LUN\tPATH\tSIZE\tONLINE")
+	for _, lu := range results {
+		fmt.Fprintf(w, "%d\t%s\t%d\t%v\n", lu.LUN, lu.Path, lu.Size, lu.Online)
+	}
+	w.Flush()
+	return nil
+}
+
+func listTpgt(cli *client.Client, opts api.TpgtListOptions) error {
+	if opts.TargetName == "" {
+		return fmt.Errorf("target name is required (--target)")
+	}
+	results, err := cli.TpgtList(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 10, 1, 3, ' ', 0)
+	fmt.Fprintln(w, "TPGT\tPORTALS")
+	for _, tpgt := range results {
+		portals := strings.Join(tpgt.Portals, ", ")
+		fmt.Fprintf(w, "%d\t%s\n", tpgt.TPGT, portals)
+	}
+	w.Flush()
 	return nil
 }

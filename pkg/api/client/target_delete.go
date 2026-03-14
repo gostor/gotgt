@@ -29,7 +29,7 @@ func (cli *Client) TargetRemove(ctx context.Context, options api.TargetRemoveOpt
 	if options.Force {
 		query.Set("force", "1")
 	}
-	resp, err := cli.delete(ctx, "/targets/"+options.Name, query, nil)
+	resp, err := cli.delete(ctx, "/target/"+options.Name, query, nil)
 	ensureReaderClosed(resp)
 	return err
 }
