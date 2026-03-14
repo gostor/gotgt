@@ -106,18 +106,26 @@ jobs:
         
         # Reserve/Release Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Reserve6.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
+        # Persistent Reservation Tests (known issues with write-path sense data)
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.PrinReadKeys.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.PrinReportCapabilities.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
+
         # Unmap Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.VPD iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.Unmap.ZeroBlocks iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
+        # Read Defect Data Tests
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadDefectData10.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+        ./test-tool/iscsi-test-cu -d -A --test=ALL.ReadDefectData12.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
+
         # Other SCSI Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.PreventAllow iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.StartStopUnit iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.TestUnitReady iscsi://127.0.0.1:3260/${{env.TARGET}}/0
         ./test-tool/iscsi-test-cu -d -A --test=ALL.ReportSupportedOpcodes.Simple iscsi://127.0.0.1:3260/${{env.TARGET}}/0
-        
+
         # iSCSI Protocol Tests
         ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSITMF iscsi://127.0.0.1:3260/${{env.TARGET}}/0 || true
         ./test-tool/iscsi-test-cu -d -A --test=ALL.iSCSIcmdsn iscsi://127.0.0.1:3260/${{env.TARGET}}/0
