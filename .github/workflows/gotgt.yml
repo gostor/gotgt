@@ -224,7 +224,7 @@ jobs:
         echo "--- verify lu removed ---"
         curl -sf "$API/lu/list?target=$NEW_TARGET" | tee /tmp/list_lu3.out
         echo ""
-        python3 -c "import json,sys; data=json.load(sys.stdin); assert len(data)==0, f'expected 0 LUs, got {len(data)}'" < /tmp/list_lu3.out
+        python3 -c "import json,sys; data=json.load(sys.stdin); assert data is None or len(data)==0, f'expected 0 LUs, got {data}'" < /tmp/list_lu3.out
         echo "PASS: LU no longer in list"
 
         # 10. Remove the target
