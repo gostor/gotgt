@@ -249,21 +249,60 @@ func SCSICDBBufXLength(scb []byte) (int64, bool) {
 	opcode = scb[0]
 	group = SCSICDBGroupID(opcode)
 
+	// Note: group is 0-7, not the CDB length (6, 10, 12, 16)
 	switch group {
-	case CDB_GROUPID_0:
-		length = int64(scb[4])
-	case CDB_GROUPID_2:
-		length = int64(util.GetUnalignedUint16(scb[7:9]))
-	case CDB_GROUPID_3:
+	case 0: // GROUPID_0: 6-byte commands
+		// INQUIRY (0x12) and REQUEST_SENSE (0x03) have Allocation Length in bytes 3-4
+		if opcode == 0x12 || opcode == 0x03 {
+			length = int64(util.GetUnalignedUint16(scb[3:5]))
+		} else {
+			// For other Group 0 commands (READ_6, WRITE_6, etc.),
+			// byte 4 is typically Transfer Length, not Allocation Length.
+			// We should not use it to limit sense data buffer.
+			ok = false
+		}
+	case 1, 2: // GROUPID_1, GROUPID_2: 10-byte commands
+		// PERSISTENT_RESERVE_IN (0x5E) and PERSISTENT_RESERVE_OUT (0x5F)
+		// have Allocation Length in bytes 6-7, not 7-8
+		if opcode == 0x5E || opcode == 0x5F {
+			// Manual BigEndian conversion for PRIN/PROUT
+			length = int64(uint16(scb[6])<<8 | uint16(scb[7]))
+		} else if opcode == 0x28 || opcode == 0x2A || opcode == 0x2E || opcode == 0x35 ||
+			opcode == 0x34 || opcode == 0x2F || opcode == 0x41 || opcode == 0x55 ||
+			opcode == 0x5A || opcode == 0x56 || opcode == 0x57 {
+			// READ_10(0x28), WRITE_10(0x2A), WRITE_VERIFY(0x2E), SYNCHRONIZE_CACHE(0x35),
+			// PRE_FETCH_10(0x34), VERIFY_10(0x2F), WRITE_SAME(0x41), MODE_SELECT_10(0x55),
+			// MODE_SENSE_10(0x5A), RESERVE_10(0x56), RELEASE_10(0x57)
+			// These commands have Transfer Length or Parameter List Length in bytes 7-8,
+			// not Allocation Length.
+			ok = false
+		} else {
+			length = int64(util.GetUnalignedUint16(scb[7:9]))
+		}
+	case 3: // GROUPID_3: variable length
 		if opcode == 0x7F {
 			length = int64(scb[7])
 		} else {
 			ok = false
 		}
-	case CDB_GROUPID_4:
-		length = int64(util.GetUnalignedUint32(scb[6:10]))
-	case CDB_GROUPID_5:
-		length = int64(util.GetUnalignedUint32(scb[10:14]))
+	case 4: // GROUPID_4: 16-byte commands
+		// READ_16(0x88), WRITE_16(0x8A), WRITE_VERIFY_16(0x8E), SYNCHRONIZE_CACHE_16(0x91),
+		// PRE_FETCH_16(0x90), VERIFY_16(0x8F), WRITE_SAME_16(0x93), ORWRITE_16(0x8B)
+		if opcode == 0x88 || opcode == 0x8A || opcode == 0x8E || opcode == 0x91 ||
+			opcode == 0x90 || opcode == 0x8F || opcode == 0x93 || opcode == 0x8B {
+			// These commands have Transfer Length in bytes 6-9, not Allocation Length
+			ok = false
+		} else {
+			length = int64(util.GetUnalignedUint32(scb[6:10]))
+		}
+	case 5: // GROUPID_5: 12-byte commands
+		// READ_12(0xA8), WRITE_12(0xAA), WRITE_VERIFY_12(0xAE), VERIFY_12(0xAF)
+		if opcode == 0xA8 || opcode == 0xAA || opcode == 0xAE || opcode == 0xAF {
+			// These commands have Transfer Length in bytes 10-13, not Allocation Length
+			ok = false
+		} else {
+			length = int64(util.GetUnalignedUint32(scb[10:14]))
+		}
 	default:
 		ok = false
 	}

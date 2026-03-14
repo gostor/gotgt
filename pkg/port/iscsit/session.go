@@ -22,9 +22,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/scsi"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -333,7 +333,7 @@ func (s *ISCSITargetDriver) UnBindISCSISession(sess *ISCSISession) {
 	target.SessionsRWMutex.Lock()
 	defer target.SessionsRWMutex.Unlock()
 	delete(target.Sessions, sess.TSIH)
-	scsi.RemoveITNexus(&sess.Target.SCSITarget, sess.ITNexus)
+	scsi.RemoveITNexus(sess.Target.SCSITarget, sess.ITNexus)
 }
 
 func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
@@ -395,8 +395,8 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 			log.Infof("Login request received from initiator: %v, Session type: %s, Target name:%v, ISID: 0x%x",
 				conn.loginParam.initiator, "Normal", conn.loginParam.target, conn.loginParam.isid)
 			//register normal session
-			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
-			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
+			itnexus := &api.ITNexus{ID: uuid.New(), Tag: GeniSCSIITNexusID(newSess)}
+			scsi.AddITNexus(newSess.Target.SCSITarget, itnexus)
 			newSess.ITNexus = itnexus
 			conn.session = newSess
 
@@ -417,8 +417,8 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 				return err
 			}
 
-			itnexus := &api.ITNexus{uuid.NewV1(), GeniSCSIITNexusID(newSess)}
-			scsi.AddITNexus(&newSess.Target.SCSITarget, itnexus)
+			itnexus := &api.ITNexus{ID: uuid.New(), Tag: GeniSCSIITNexusID(newSess)}
+			scsi.AddITNexus(newSess.Target.SCSITarget, itnexus)
 			newSess.ITNexus = itnexus
 			conn.session = newSess
 

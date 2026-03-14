@@ -45,14 +45,150 @@ The SCSI layer implements the SCSI SPC and SBC standards that talks to the SCSI 
 
 Note that the examples directory is intended to show static configurations that serve as the backend storage. The simplest configuration has one LUN and one flat file behind the LUN in question. This json configuration file is read once at the beginning of the iSCSI target library instantiation.
 
-### Test
+## Performance Optimizations
+
+gotgt includes several performance optimizations for high-throughput and low-latency storage workloads:
+
+### 1. NUMA-Aware Memory Allocation
+
+For multi-socket systems, gotgt can optimize memory allocation to use NUMA-local memory, reducing cross-socket memory access latency.
+
+**Features:**
+- Automatic NUMA topology detection
+- NUMA-local buffer pools for I/O operations
+- Thread pinning to specific NUMA nodes
+- Configurable per-node buffer pool sizing
+
+**Configuration:**
+```json
+{
+    "performance": {
+        "enableNUMA": true,
+        "numaBufferPoolSize": 1024,
+        "numaBufferSize": 262144
+    },
+    "storages": [
+        {
+            "deviceID": 1000,
+            "path": "/var/tmp/disk.img",
+            "online": true,
+            "backendType": "file",
+            "enableNUMA": true,
+            "numaNode": 0
+        }
+    ]
+}
+```
+
+### 2. io_uring Backend Storage (Linux 5.1+)
+
+On Linux systems with kernel 5.1 or later, gotgt can use io_uring for high-performance asynchronous I/O, bypassing the traditional Linux AIO interface.
+
+**Features:**
+- Asynchronous I/O using io_uring
+- Reduced system call overhead
+- Better performance for high queue depth workloads
+- Automatic fallback to standard I/O on older kernels
+
+**Requirements:**
+- Linux kernel 5.1 or later
+- x86_64, ARM64, or other supported architectures
+
+**Configuration:**
+```json
+{
+    "performance": {
+        "enableIoUring": true,
+        "ioUringQueueDepth": 4096
+    },
+    "storages": [
+        {
+            "deviceID": 1000,
+            "path": "/var/tmp/disk.img",
+            "online": true,
+            "backendType": "iouring",
+            "ioUringQueueDepth": 4096
+        }
+    ]
+}
+```
+
+**Backend Type Options:**
+- `file` - Standard file I/O (default)
+- `iouring` - io_uring-based I/O (Linux 5.1+)
+
+### 3. Object Pooling
+
+The iSCSI protocol layer uses sync.Pool for efficient object reuse:
+- ISCSICommand object pooling to reduce GC pressure
+- Buffer pooling for protocol header processing
+- NUMA-aware buffer allocation for data operations
+
+### 4. Combined High-Performance Configuration Example
+
+For maximum performance, combine both NUMA and io_uring:
+
+```json
+{
+  "storages": [
+    {
+      "deviceID": 1000,
+      "path": "/var/tmp/disk.img",
+      "online": true,
+      "backendType": "iouring",
+      "enableNUMA": true,
+      "numaNode": 0,
+      "ioUringQueueDepth": 4096
+    }
+  ],
+  "iscsiportals": [
+    {
+      "id": 0,
+      "portal": "192.168.1.100:3260"
+    }
+  ],
+  "iscsitargets": {
+    "iqn.2024-01.com.gotgt:fast-storage": {
+      "tpgts": { "1": [0] },
+      "luns": { "1": 1000 }
+    }
+  },
+  "performance": {
+    "enableNUMA": true,
+    "enableIoUring": true,
+    "ioUringQueueDepth": 4096,
+    "numaBufferPoolSize": 1024,
+    "numaBufferSize": 262144
+  }
+}
+```
+
+### 5. Performance Tuning Tips
+
+1. **NUMA Optimization**: On multi-socket systems, ensure the iSCSI target threads run on the same NUMA node as the storage devices
+2. **Queue Depth**: For NVMe or fast SSDs, increase `ioUringQueueDepth` to 4096 or higher
+3. **Buffer Sizes**: Match `numaBufferSize` to your typical I/O size (e.g., 64KB, 128KB, 256KB)
+4. **CPU Pinning**: Use `numaNode` to pin storage backends to specific NUMA nodes
+
+### 6. Benchmarking
+
+Use fio to benchmark performance:
+```bash
+fio --name=iscsi-test --ioengine=libaio --iodepth=32 \
+    --rw=randread --bs=4k --direct=1 --size=1G \
+    --filename=/dev/sdX
+```
+
+For more details, see [PERFORMANCE_OPTIMIZATIONS.md](./docs/PERFORMANCE_OPTIMIZATIONS.md).
+
+## Test
 
 You can test this with [open-iscsi](http://www.open-iscsi.com/) or [libiscsi](https://github.com/gostor/libiscsi).
 For more information and example test scripts, please refer to the [test directory](./test).
 
-## Performance
+### SCSI Commands Support
 
-TBD
+For a complete list of supported SCSI commands, see [SCSI_COMMANDS.md](./docs/SCSI_COMMANDS.md).
 
 ## Roadmap
 

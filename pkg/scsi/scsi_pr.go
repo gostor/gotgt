@@ -17,8 +17,8 @@ limitations under the License.
 package scsi
 
 import (
+	"github.com/google/uuid"
 	"github.com/gostor/gotgt/pkg/api"
-	"github.com/satori/go.uuid"
 )
 
 type SCSIReservationOperator interface {
@@ -101,7 +101,7 @@ func (op *SCSISimpleReservationOperator) GetReservation(tgtName string, devUUID 
 		return nil
 	}
 	for _, SCSIRes = range LURes.Reservations {
-		if uuid.Equal(SCSIRes.ITNexusID, ITNexusID) {
+		if SCSIRes.ITNexusID == ITNexusID {
 			return SCSIRes
 		}
 	}

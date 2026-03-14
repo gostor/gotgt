@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -51,10 +52,33 @@ func new() (api.BackingStore, error) {
 	}, nil
 }
 
+// parseStoragePath parses a storage path that may include backend type prefix
+// Format: [backend_type:]path
+// Examples:
+//   - /var/tmp/disk.img (default file backend)
+//   - file:/var/tmp/disk.img (explicit file backend)
+//   - iouring:/var/tmp/disk.img (io_uring backend on Linux 5.1+)
+func parseStoragePath(path string) (backendType, filePath string) {
+	if idx := strings.Index(path, ":"); idx > 0 {
+		possibleType := path[:idx]
+		// Check if it's a known backend type
+		switch possibleType {
+		case "file", "iouring", "ceph", "null", "RemBs":
+			return possibleType, path[idx+1:]
+		}
+	}
+	// Default to file backend
+	return "file", path
+}
+
 func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 	var mode os.FileMode
 
-	finfo, err := os.Stat(path)
+	// Parse backend type and actual path
+	backendType, filePath := parseStoragePath(path)
+	_ = backendType // file backend ignores this
+
+	finfo, err := os.Stat(filePath)
 	if err != nil {
 		return err
 	} else {
@@ -62,7 +86,7 @@ func (bs *FileBackingStore) Open(dev *api.SCSILu, path string) error {
 		mode = finfo.Mode()
 	}
 
-	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
+	f, err := os.OpenFile(filePath, os.O_RDWR, os.ModePerm)
 
 	if err == nil {
 		// block device filesize needs to be treated differently

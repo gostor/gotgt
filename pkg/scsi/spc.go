@@ -22,9 +22,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -228,6 +228,33 @@ func InquiryPage0xB0(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	return buf, pageLength
 }
 
+func InquiryPage0xB1(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
+	var (
+		buf               = &bytes.Buffer{}
+		pageLength uint16 = 0x3C // 60 bytes
+	)
+
+	//byte 0
+	if cmd.Device.Attrs.Online {
+		buf.WriteByte(PQ_DEVICE_CONNECTED | byte(cmd.Device.Attrs.DeviceType))
+	} else {
+		buf.WriteByte(PQ_DEVICE_NOT_CONNECT | byte(cmd.Device.Attrs.DeviceType))
+	}
+	//PAGE CODE
+	buf.WriteByte(0xB1)
+	//PAGE LENGTH
+	binary.Write(buf, binary.BigEndian, pageLength)
+
+	// MEDIA ROTATION RATE (bytes 4-5)
+	// 0x0001 = Non-rotating medium (SSD)
+	binary.Write(buf, binary.BigEndian, uint16(0x0001))
+
+	// Reserved bytes (6-63)
+	buf.Write(make([]byte, 58))
+
+	return buf, pageLength
+}
+
 func InquiryPage0xB2(host int, cmd *api.SCSICommand) (*bytes.Buffer, uint16) {
 	var (
 		buf               = &bytes.Buffer{}
@@ -311,6 +338,8 @@ func SPCInquiry(host int, cmd *api.SCSICommand) api.SAMStat {
 			buf, _ = InquiryPage0x83(host, cmd)
 		case 0xB0:
 			buf, _ = InquiryPage0xB0(host, cmd)
+		case 0xB1:
+			buf, _ = InquiryPage0xB1(host, cmd)
 		case 0xB2:
 			buf, _ = InquiryPage0xB2(host, cmd)
 		default:
@@ -565,7 +594,6 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		asc            = ASC_INVALID_FIELD_IN_CDB
 		data           []byte
 		allocLen       uint32
-		i              uint32
 	)
 
 	if dbd == 0 {
@@ -577,16 +605,31 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 	if mode6 {
 		allocLen = uint32(scb[4])
-		// set header
-		for i = 0; i < 4 && i < allocLen; i++ {
-			data = append(data, 0x00)
-		}
+		// set header (4 bytes)
+		// byte 0: Mode Data Length
+		// byte 1: Medium Type
+		// byte 2: Device-Specific Parameter (DPOFUA=bit4)
+		// byte 3: Block Descriptor Length
+		data = append(data, 0x00) // Mode Data Length (filled later)
+		data = append(data, 0x00) // Medium Type
+		data = append(data, 0x10) // Device-Specific Parameter (DPOFUA=1)
+		data = append(data, 0x00) // Block Descriptor Length (filled later)
 	} else {
 		allocLen = uint32(util.GetUnalignedUint16(scb[7:9]))
-		// set header
-		for i = 0; i < 8 && i < allocLen; i++ {
-			data = append(data, 0x00)
-		}
+		// set header (8 bytes)
+		// byte 0-1: Mode Data Length
+		// byte 2: Medium Type
+		// byte 3: Device-Specific Parameter (DPOFUA=bit4)
+		// byte 4-5: Reserved
+		// byte 6-7: Block Descriptor Length
+		data = append(data, 0x00) // Mode Data Length (MSB, filled later)
+		data = append(data, 0x00) // Mode Data Length (LSB, filled later)
+		data = append(data, 0x00) // Medium Type
+		data = append(data, 0x10) // Device-Specific Parameter (DPOFUA=1)
+		data = append(data, 0x00) // Reserved
+		data = append(data, 0x00) // Reserved
+		data = append(data, 0x00) // Block Descriptor Length (MSB, filled later)
+		data = append(data, 0x00) // Block Descriptor Length (LSB, filled later)
 	}
 	if dbd == 0 {
 		data = append(data, cmd.Device.ModeBlockDescriptor...)
@@ -595,12 +638,12 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		for _, pg := range cmd.Device.ModePages {
 			if pg.SubPageCode == 0 {
 				data = append(data, pg.PageCode)
-				data = append(data, pg.Size)
+				data = append(data, byte(pg.Size))
 			} else {
 				data = append(data, pg.PageCode|0x40)
 				data = append(data, pg.SubPageCode)
-				data = append(data, (pg.Size>>8)&0xff)
-				data = append(data, pg.Size&0xff)
+				data = append(data, byte((pg.Size>>8)&0xff))
+				data = append(data, byte(pg.Size&0xff))
 			}
 			if pctrl == 1 {
 				data = append(data, pg.Data[pg.Size:]...)
@@ -621,7 +664,7 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		}
 		if pg.SubPageCode == 0 {
 			data = append(data, pg.PageCode)
-			data = append(data, pg.Size)
+			data = append(data, byte(pg.Size))
 			if pctrl == 1 {
 				data = append(data, pg.Data[pg.Size:]...)
 			} else {
@@ -630,8 +673,8 @@ func SPCModeSense(host int, cmd *api.SCSICommand) api.SAMStat {
 		} else {
 			data = append(data, pg.PageCode|0x40)
 			data = append(data, pg.SubPageCode)
-			data = append(data, (pg.Size>>8)&0xff)
-			data = append(data, pg.Size&0xff)
+			data = append(data, byte((pg.Size>>8)&0xff))
+			data = append(data, byte(pg.Size&0xff))
 			if pctrl == 1 {
 				data = append(data, pg.Data[pg.Size:]...)
 			} else {
@@ -700,17 +743,17 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 		data = append(data, 0x00)
 		// reserved
 		data = append(data, 0x00)
-		// flags : no service action, possibly timeout desc
+		// flags: no service action, possibly timeout desc
 		if rctd != 0 {
-			data = append(data, 0x02)
+			data = append(data, 0x08)
 		} else {
-			data = append(data, 0x00)
+			data = append(data, 0x08)
 		}
 		// cdb length
 		length := getSCSICmdSize(i)
 		data = append(data, 0)
 		data = append(data, length&0xff)
-		// timeout descriptor
+		// timeout descriptor (if rctd is set) - 12 bytes (all zeros)
 		if rctd != 0 {
 			// length == 0x0a
 			data[1] = 0x0a
@@ -725,7 +768,53 @@ func reportOpcodesAll(cmd *api.SCSICommand, rctd int) error {
 }
 
 func reportOpcodeOne(cmd *api.SCSICommand, rctd int, opcode byte, rsa uint16, serviceAction bool) error {
-	return fmt.Errorf("rsa: %xh, sa:%v not supported", rsa, serviceAction)
+	var data = []byte{0x00, 0x00, 0x00, 0x00}
+
+	// Support common opcodes that are tested by libiscsi
+	switch api.SCSICommandType(opcode) {
+	case api.READ_6, api.READ_10, api.READ_12, api.READ_16,
+		api.WRITE_6, api.WRITE_10, api.WRITE_12, api.WRITE_16,
+		api.WRITE_VERIFY, api.WRITE_VERIFY_12, api.WRITE_VERIFY_16,
+		api.INQUIRY, api.TEST_UNIT_READY, api.READ_CAPACITY,
+		api.VERIFY_10, api.VERIFY_12, api.VERIFY_16:
+		// For RCTD=0, libiscsi expects:
+		// data[0:4]: list length
+		// data[4:20]: CDB usage data (16 bytes)
+		// libiscsi reads ctdp from data[1], cdb_length from data[2:4]
+		// and copies data[4:4+cdb_length] to cdb_usage_data
+		//
+		// So we need to format data as:
+		// data[4]: opcode (CDB usage data byte 0)
+		// data[5]: byte 1 with DPO/FUA bits
+		// data[6:20]: remaining CDB usage data bytes
+
+		// CDB usage data (16 bytes) - describes the CDB format
+		cdbUsageData := make([]byte, 16)
+		cdbUsageData[0] = opcode // byte 0: opcode
+		// byte 1: RDPROTECT(7-5) | DPO(4) | FUA(3) | ...
+		// Set DPO(0x10) | FUA(0x08) = 0x18 for READ/WRITE/VERIFY/WRITE_VERIFY
+		if opcode == 0x28 || opcode == 0x2A || opcode == 0x2F || // READ10, WRITE10, VERIFY10
+			opcode == 0xA8 || opcode == 0xAA || opcode == 0xAF || // READ12, WRITE12, VERIFY12
+			opcode == 0x88 || opcode == 0x8A || opcode == 0x8F || // READ16, WRITE16, VERIFY16
+			opcode == 0x2E || opcode == 0xAE || opcode == 0x8E { // WRITE_VERIFY, WRITE_VERIFY_12, WRITE_VERIFY_16
+			cdbUsageData[1] = 0x18 // DPO | FUA
+		}
+		data = append(data, cdbUsageData...)
+
+		// timeout descriptor (if rctd is set) - 12 bytes (all zeros)
+		if rctd != 0 {
+			for n := 0; n < 12; n++ {
+				data = append(data, 0x00)
+			}
+		}
+	default:
+		return fmt.Errorf("opcode: %02xh not supported in report one", opcode)
+	}
+
+	// Update list length (total bytes after the length field)
+	copy(cmd.InSDBBuffer.Buffer, util.MarshalUint32(uint32(len(data)-4)))
+	copy(cmd.InSDBBuffer.Buffer[4:], data[4:])
+	return nil
 }
 
 func SPCReportSupportedOperationCodes(host int, cmd *api.SCSICommand) api.SAMStat {
@@ -799,6 +888,8 @@ func SPCPRReadKeys(host int, cmd *api.SCSICommand) api.SAMStat {
 	scsiResOp := GetSCSIReservationOperator()
 	PRGeneration, _ := scsiResOp.GetPRGeneration(tgtName, devUUID)
 	resList := scsiResOp.GetReservationList(tgtName, devUUID)
+	length, _ := SCSICDBBufXLength(cmd.SCB)
+	allocationLength = uint16(length)
 	if allocationLength < 8 {
 		goto sense
 	}
@@ -979,7 +1070,7 @@ func SPCPRRegister(host int, cmd *api.SCSICommand) api.SAMStat {
 		if ignoreKey || resKey == 0 {
 			if sAResKey != 0 {
 				newRes := &api.SCSIReservation{
-					ID:        uuid.NewV1(),
+					ID:        uuid.New(),
 					Key:       sAResKey,
 					ITNexusID: cmd.ITNexusID,
 				}

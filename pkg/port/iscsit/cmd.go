@@ -17,15 +17,104 @@ limitations under the License.
 package iscsit
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gostor/gotgt/pkg/api"
 	"github.com/gostor/gotgt/pkg/util"
+	"github.com/gostor/gotgt/pkg/util/numa"
 	log "github.com/sirupsen/logrus"
 )
+
+// Object pools to reduce GC pressure
+var (
+	// commandPool reuses ISCSICommand objects
+	commandPool = sync.Pool{
+		New: func() interface{} {
+			return &ISCSICommand{}
+		},
+	}
+
+	// bufferPool reuses small buffers for BHS reading
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, BHS_SIZE)
+			return &buf
+		},
+	}
+
+	// numaBufferPool NUMA-aware buffer pool for larger I/O operations
+	numaBufferPool *numa.NUMABufferPool
+	numaPoolOnce   sync.Once
+)
+
+// initNUMAPool initializes the NUMA-aware buffer pool
+func initNUMAPool() {
+	numaPoolOnce.Do(func() {
+		numaBufferPool = numa.NewNUMABufferPool(&numa.BufferPoolConfig{
+			BufferSize:      256 * 1024, // 256KB for I/O buffers
+			PerNodePoolSize: 512,
+			EnableNUMA:      numa.Available(),
+		})
+	})
+}
+
+// getCommand gets an ISCSICommand from the pool
+func getCommand() *ISCSICommand {
+	return commandPool.Get().(*ISCSICommand)
+}
+
+// putCommand puts an ISCSICommand back to the pool
+func putCommand(cmd *ISCSICommand) {
+	if cmd == nil {
+		return
+	}
+	// Clear sensitive data
+	cmd.RawData = nil
+	cmd.RawHeader = nil
+	cmd.CDB = nil
+	cmd.DataLen = 0
+	*cmd = ISCSICommand{}
+	commandPool.Put(cmd)
+}
+
+// getBuffer gets a buffer from the pool
+func getBuffer() []byte {
+	return *bufferPool.Get().(*[]byte)
+}
+
+// putBuffer puts a buffer back to the pool
+func putBuffer(buf []byte) {
+	if cap(buf) >= BHS_SIZE {
+		bufferPool.Put(&buf)
+	}
+}
+
+// getIOBuffer gets a NUMA-aware I/O buffer for larger data operations
+func getIOBuffer(size int) []byte {
+	initNUMAPool()
+	if size <= numaBufferPool.GetConfig().BufferSize {
+		return numaBufferPool.Get()[:size]
+	}
+	return make([]byte, size)
+}
+
+// putIOBuffer puts a NUMA-aware I/O buffer back to the pool
+func putIOBuffer(buf []byte) {
+	if numaBufferPool != nil && cap(buf) >= numaBufferPool.GetConfig().BufferSize {
+		numaBufferPool.Put(buf)
+	}
+}
+
+// NUMAStats returns NUMA buffer pool statistics
+func NUMAStats() numa.PoolStats {
+	if numaBufferPool == nil {
+		return numa.PoolStats{}
+	}
+	return numaBufferPool.Stats()
+}
 
 type OpCode int
 
@@ -164,6 +253,8 @@ func (cmd *ISCSICommand) Bytes() []byte {
 		return cmd.scsiTMFRespBytes()
 	case OpReady:
 		return cmd.r2tRespBytes()
+	case OpAsync:
+		return cmd.asyncMsgBytes()
 	}
 	return nil
 }
@@ -237,7 +328,7 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 		m.CmdSN = uint32(ParseUint(data[24:28]))
 		m.Read = data[1]&0x40 == 0x40
 		m.Write = data[1]&0x20 == 0x20
-		m.CDB = data[32:48]
+		m.CDB = append([]byte{}, data[32:48]...)
 		m.ExpStatSN = uint32(ParseUint(data[28:32]))
 		m.SCSIOpCode = m.CDB[0]
 		SCSIOpcode := api.SCSICommandType(m.SCSIOpCode)
@@ -290,9 +381,12 @@ func parseHeader(data []byte) (*ISCSICommand, error) {
 }
 
 func (m *ISCSICommand) scsiCmdRespBytes() []byte {
-	// rfc7143 11.4
-	buf := bytes.Buffer{}
-	buf.WriteByte(byte(OpSCSIResp))
+	// rfc7143 11.4 - BHS 48 bytes + data (4-byte aligned)
+	rawDataLen := len(m.RawData)
+	padding := (4 - rawDataLen%4) % 4
+	buf := make([]byte, 48+rawDataLen+padding)
+
+	buf[0] = byte(OpSCSIResp)
 	var flag byte = 0x80
 	if m.Resid > 0 {
 		if m.Resid > m.ExpectedDataLen {
@@ -301,50 +395,46 @@ func (m *ISCSICommand) scsiCmdRespBytes() []byte {
 			flag |= 0x02
 		}
 	}
-	buf.WriteByte(flag)
-	buf.WriteByte(byte(m.SCSIResponse))
-	buf.WriteByte(byte(m.Status))
+	buf[1] = flag
+	buf[2] = byte(m.SCSIResponse)
+	buf[3] = byte(m.Status)
 
-	buf.WriteByte(0x00)
-	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
-	// Skip through to byte 16
-	for i := 0; i < 8; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 0; i < 2*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.Resid))[4:])
-	buf.Write(m.RawData)
-	dl := len(m.RawData)
-	for dl%4 > 0 {
-		dl++
-		buf.WriteByte(0x00)
-	}
+	// byte 4 is reserved (0)
+	// Write data length (24-bit big-endian) at bytes 5-7
+	buf[5] = byte(rawDataLen >> 16)
+	buf[6] = byte(rawDataLen >> 8)
+	buf[7] = byte(rawDataLen)
+	// bytes 9-15 are reserved (0)
+	// TaskTag at bytes 16-19 (32-bit big-endian)
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23 are reserved (0)
+	// StatSN at bytes 24-27
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// ExpCmdSN at bytes 28-31
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// MaxCmdSN at bytes 32-35
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-43 are reserved (0)
+	// Resid at bytes 44-47
+	util.MarshalUint32To(buf[44:], m.Resid)
+	copy(buf[48:], m.RawData)
+	// padding bytes are already zero
 
-	return buf.Bytes()
+	return buf
 }
 
 func (m *ISCSICommand) dataInBytes() []byte {
 	// rfc7143 11.7
-	dl := m.DataLen
-	for dl%4 > 0 {
-		dl++
-	}
-	var buf = make([]byte, (48 + dl))
+	// Calculate padded length using bit operation instead of loop
+	dl := (m.DataLen + 3) &^ 3 // Round up to multiple of 4
+	buf := make([]byte, 48+dl)
+
 	buf[0] = byte(OpSCSIIn)
 	var flag byte
-	if m.FinalInSeq || m.Final == true {
+	if m.FinalInSeq || m.Final {
 		flag |= 0x80
 	}
-	if m.HasStatus && m.Final == true {
+	if m.HasStatus && m.Final {
 		flag |= 0x01
 	}
 	log.Debugf("resid: %v, ExpectedDataLen: %v", m.Resid, m.ExpectedDataLen)
@@ -356,22 +446,22 @@ func (m *ISCSICommand) dataInBytes() []byte {
 		}
 	}
 	buf[1] = flag
-	//buf.WriteByte(0x00)
-	if m.HasStatus && m.Final == true {
-		flag = byte(m.Status)
+	if m.HasStatus && m.Final {
+		buf[3] = byte(m.Status)
 	}
-	//buf.WriteByte(flag)
-	buf[3] = flag
-	copy(buf[5:], util.MarshalUint64(uint64(m.DataLen))[5:])
+	// Data length (24-bit) at bytes 5-7
+	buf[5] = byte(m.DataLen >> 16)
+	buf[6] = byte(m.DataLen >> 8)
+	buf[7] = byte(m.DataLen)
 	// Skip through to byte 16 Since A bit is not set 11.7.4
-	copy(buf[16:], util.MarshalUint32(m.TaskTag))
-	copy(buf[24:], util.MarshalUint32(m.StatSN))
-	copy(buf[28:], util.MarshalUint32(m.ExpCmdSN))
-	copy(buf[32:], util.MarshalUint32(m.MaxCmdSN))
-	copy(buf[36:], util.MarshalUint32(m.DataSN))
-	copy(buf[40:], util.MarshalUint32(m.BufferOffset))
-	copy(buf[44:], util.MarshalUint32(m.Resid))
-	if m.ExpectedDataLen != 0 {
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	util.MarshalUint32To(buf[36:], m.DataSN)
+	util.MarshalUint32To(buf[40:], m.BufferOffset)
+	util.MarshalUint32To(buf[44:], m.Resid)
+	if m.DataLen != 0 {
 		copy(buf[48:], m.RawData[m.BufferOffset:m.BufferOffset+uint32(m.DataLen)])
 	}
 
@@ -379,8 +469,13 @@ func (m *ISCSICommand) dataInBytes() []byte {
 }
 
 func (m *ISCSICommand) textRespBytes() []byte {
-	buf := bytes.Buffer{}
-	buf.WriteByte(byte(OpTextResp))
+	// Pre-calculate required capacity: BHS(48 bytes) + data (4-byte aligned)
+	dataLen := len(m.RawData)
+	padding := (4 - dataLen%4) % 4
+
+	buf := make([]byte, 48+dataLen+padding)
+
+	buf[0] = byte(OpTextResp)
 	var b byte
 	if m.Final {
 		b |= 0x80
@@ -389,122 +484,149 @@ func (m *ISCSICommand) textRespBytes() []byte {
 		b |= 0x40
 	}
 	// byte 1
-	buf.WriteByte(b)
+	buf[1] = b
 
-	b = 0
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
-	// Skip through to byte 12
-	for i := 0; i < 2*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0xff)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 0; i < 3*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	rd := m.RawData
-	for len(rd)%4 != 0 {
-		rd = append(rd, 0)
-	}
-	buf.Write(rd)
-	return buf.Bytes()
+	// bytes 2,3,4 reserved (0)
+	// bytes 5-8: data segment length (24-bit)
+	buf[5] = byte(dataLen >> 16)
+	buf[6] = byte(dataLen >> 8)
+	buf[7] = byte(dataLen)
+	// bytes 8-15 are reserved (0)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23: 0xffffffff
+	buf[20] = 0xff
+	buf[21] = 0xff
+	buf[22] = 0xff
+	buf[23] = 0xff
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-47 are reserved (0)
+	// Copy data
+	copy(buf[48:], m.RawData)
+	// padding bytes are already zero
+	return buf
 }
 
 func (m *ISCSICommand) noopInBytes() []byte {
-	buf := bytes.Buffer{}
-	buf.WriteByte(byte(OpNoopIn))
-	var b byte
-	b |= 0x80
-	// byte 1
-	buf.WriteByte(b)
+	// rfc7143 11.11 - BHS 48 bytes + data (4-byte aligned)
+	rawDataLen := len(m.RawData)
+	padding := (4 - rawDataLen%4) % 4
+	buf := make([]byte, 48+rawDataLen+padding)
 
-	b = 0
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.WriteByte(b)
-	buf.Write(util.MarshalUint64(uint64(len(m.RawData)))[5:]) // 5-8
-	// Skip through to byte 12
-	for i := 0; i < 2*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0xff)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 0; i < 3*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	rd := m.RawData
-	for len(rd)%4 != 0 {
-		rd = append(rd, 0)
-	}
-	buf.Write(rd)
-	return buf.Bytes()
+	buf[0] = byte(OpNoopIn)
+	buf[1] = 0x80
+	// bytes 2-3 are reserved (0)
+	// bytes 4-7: data segment length (32-bit)
+	util.MarshalUint32To(buf[4:], uint32(rawDataLen))
+	// bytes 8-15 are reserved (0)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23: 0xffffffff
+	buf[20] = 0xff
+	buf[21] = 0xff
+	buf[22] = 0xff
+	buf[23] = 0xff
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-47 are reserved (0)
+	copy(buf[48:], m.RawData)
+	// padding bytes are already zero
+	return buf
 }
 
 func (m *ISCSICommand) scsiTMFRespBytes() []byte {
-	// rfc7143 11.6
-	buf := bytes.Buffer{}
-	buf.WriteByte(byte(OpSCSITaskResp))
-	buf.WriteByte(0x80)
-	buf.WriteByte(m.Result)
-	buf.WriteByte(0x00)
-
-	// Skip through to byte 16
-	for i := 0; i < 3*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 0; i < 3*4; i++ {
-		buf.WriteByte(0x00)
-	}
-
-	return buf.Bytes()
+	// rfc7143 11.6 - Fixed 48 bytes
+	buf := make([]byte, 48)
+	buf[0] = byte(OpSCSITaskResp)
+	buf[1] = 0x80
+	buf[2] = m.Result
+	// byte 3 is reserved (0)
+	// bytes 4-15 are reserved (0)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23 are reserved (0)
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-47 are reserved (0)
+	return buf
 }
 
 func (m *ISCSICommand) r2tRespBytes() []byte {
-	// rfc7143 11.8
-	buf := bytes.Buffer{}
-	buf.WriteByte(byte(OpReady))
-	var b byte
+	// rfc7143 11.8 - Fixed 48 bytes
+	buf := make([]byte, 48)
+	buf[0] = byte(OpReady)
 	if m.Final {
-		b |= 0x80
+		buf[1] = 0x80
 	}
-	buf.WriteByte(b)
-	buf.WriteByte(0x00)
-	buf.WriteByte(0x00)
+	// bytes 2-15 are reserved (0)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23 are reserved (0)
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-39: R2TSN
+	util.MarshalUint32To(buf[36:], m.R2TSN)
+	// bytes 40-43: BufferOffset
+	util.MarshalUint32To(buf[40:], m.BufferOffset)
+	// bytes 44-47: DesiredLength
+	util.MarshalUint32To(buf[44:], m.DesiredLength)
+	return buf
+}
 
-	// Skip through to byte 16
-	for i := 0; i < 3*4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 0; i < 4; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.R2TSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.BufferOffset))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.DesiredLength))[4:])
+// asyncMsgBytes implements RFC 7143 section 11.10 - Asynchronous Message
+func (m *ISCSICommand) asyncMsgBytes() []byte {
+	// rfc7143 11.10 - BHS 48 bytes + data (4-byte aligned)
+	rawDataLen := len(m.RawData)
+	padding := (4 - rawDataLen%4) % 4
+	buf := make([]byte, 48+rawDataLen+padding)
 
-	return buf.Bytes()
+	buf[0] = byte(OpAsync)
+	// byte 1: AsyncEvent in bits 0-4
+	buf[1] = byte(m.SCSIOpCode & 0x1f)
+	// bytes 2-3 are reserved (0)
+
+	// byte 4: 0x80 if AsyncEvent is 0 (SCSI Asynchronous Event)
+	if m.SCSIOpCode == 0 {
+		buf[4] = 0x80
+	}
+
+	// bytes 5-7: data segment length (24-bit)
+	buf[5] = byte(rawDataLen >> 16)
+	buf[6] = byte(rawDataLen >> 8)
+	buf[7] = byte(rawDataLen)
+	// bytes 8-15: LUN (if applicable)
+	copy(buf[8:], m.LUN[:])
+	// bytes 16-19: Reserved (0)
+	// bytes 20-23: Target Transfer Tag (0xffffffff for Async)
+	buf[20] = 0xff
+	buf[21] = 0xff
+	buf[22] = 0xff
+	buf[23] = 0xff
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-43: Reserved (0)
+	// bytes 44-47: Parameter1 and Parameter2 (context-specific)
+	copy(buf[48:], m.RawData)
+	return buf
 }

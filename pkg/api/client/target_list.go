@@ -23,9 +23,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-// TargetCreate creates a target in the SCSI Target.
-func (cli *Client) TargetList(ctx context.Context, options api.TargetListOptions) ([]api.SCSITarget, error) {
-	var targets []api.SCSITarget
+// TargetList lists targets in the SCSI Target.
+func (cli *Client) TargetList(ctx context.Context, options api.TargetListOptions) ([]*api.SCSITarget, error) {
+	var targets []*api.SCSITarget
 	var query = url.Values{}
 	if options.Name != "" {
 		query.Set("name", options.Name)

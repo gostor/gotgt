@@ -1,29 +1,25 @@
 package iscsit
 
 import (
-	"bytes"
-
 	"github.com/gostor/gotgt/pkg/util"
 )
 
 func (m *ISCSICommand) logoutRespBytes() []byte {
-	buf := &bytes.Buffer{}
-	buf.WriteByte(byte(OpLogoutResp))
-	buf.WriteByte(0x80)
-	buf.WriteByte(0x00) // response
-	buf.WriteByte(0x00)
-	for i := 4; i < 16; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.TaskTag))[4:])
-	for i := 20; i < 24; i++ {
-		buf.WriteByte(0x00)
-	}
-	buf.Write(util.MarshalUint64(uint64(m.StatSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.ExpCmdSN))[4:])
-	buf.Write(util.MarshalUint64(uint64(m.MaxCmdSN))[4:])
-	for i := 36; i < 48; i++ {
-		buf.WriteByte(0x00)
-	}
-	return buf.Bytes()
+	// rfc7143 11.10 - Fixed 48 bytes
+	buf := make([]byte, 48)
+	buf[0] = byte(OpLogoutResp)
+	buf[1] = 0x80
+	// buf[2] = response (0)
+	// bytes 4-15 are reserved (0)
+	// bytes 16-19: TaskTag
+	util.MarshalUint32To(buf[16:], m.TaskTag)
+	// bytes 20-23 are reserved (0)
+	// bytes 24-27: StatSN
+	util.MarshalUint32To(buf[24:], m.StatSN)
+	// bytes 28-31: ExpCmdSN
+	util.MarshalUint32To(buf[28:], m.ExpCmdSN)
+	// bytes 32-35: MaxCmdSN
+	util.MarshalUint32To(buf[32:], m.MaxCmdSN)
+	// bytes 36-47 are reserved (0)
+	return buf
 }

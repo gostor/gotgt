@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,7 +20,7 @@ import (
 	"io"
 	"sync"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 )
 
 type SCSICommandType byte
@@ -370,7 +370,7 @@ type ModePage struct {
 	PageCode uint8
 	// Sub page code
 	SubPageCode uint8
-	Size        uint8
+	Size        uint16 // Use uint16 to support pages larger than 255 bytes
 	// Rest of mode page info
 	Data []byte
 }

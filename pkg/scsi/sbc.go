@@ -18,6 +18,7 @@ limitations under the License.
 package scsi
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"unsafe"
@@ -105,17 +106,17 @@ func (sbc SBCSCSIDeviceProtocol) InitLu(lu *api.SCSILu) error {
 	// Vendor uniq - However most apps seem to call for mode page 0
 	//pages = append(pages, api.ModePage{0, 0, []byte{}})
 	// Disconnect page
-	pages = append(pages, api.ModePage{2, 0, 14, []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{PageCode: 2, SubPageCode: 0, Size: 14, Data: []byte{0x80, 0x80, 0, 0xa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	// Caching Page
-	pages = append(pages, api.ModePage{8, 0, 18, []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{PageCode: 8, SubPageCode: 0, Size: 18, Data: []byte{0x14, 0, 0xff, 0xff, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x80, 0x14, 0, 0, 0, 0, 0, 0}})
 
 	// Control page
-	pages = append(pages, api.ModePage{0x0a, 0, 10, []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0, 0x08, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{PageCode: 0x0a, SubPageCode: 0, Size: 10, Data: []byte{2, 0x10, 0, 0, 0, 0, 0, 0, 2, 0, 0x08, 0, 0, 0, 0, 0, 0, 0}})
 
 	// Control Extensions mode page:  TCMOS:1
-	pages = append(pages, api.ModePage{0x0a, 1, 0x1c, []byte{0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{PageCode: 0x0a, SubPageCode: 1, Size: 0x1c, Data: []byte{0x04, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	// Informational Exceptions Control page
-	pages = append(pages, api.ModePage{0x1c, 0, 10, []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
+	pages = append(pages, api.ModePage{PageCode: 0x1c, SubPageCode: 0, Size: 10, Data: []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
 	lu.ModePages = pages
 	mbd := util.MarshalUint32(uint32(0xffffffff))
 	if size := lu.Size >> lu.BlockShift; size>>32 == 0 {
@@ -221,6 +222,7 @@ func NewSBCDevice(deviceType api.SCSIDeviceType) api.SCSIDeviceProtocol {
 	sbc.SCSIDeviceOps[api.WRITE_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_WE_FA|PR_EA_FA|PR_WE_FA|PR_WE_FN)
 	sbc.SCSIDeviceOps[api.WRITE_VERIFY_12] = NewSCSIDeviceOperation(SBCReadWrite, nil, PR_EA_FA|PR_EA_FN)
 	sbc.SCSIDeviceOps[api.VERIFY_12] = NewSCSIDeviceOperation(SBCVerify, nil, PR_EA_FA|PR_EA_FN)
+	sbc.SCSIDeviceOps[api.COMPARE_AND_WRITE] = NewSCSIDeviceOperation(SBCCompareAndWrite, nil, PR_EA_FA|PR_EA_FN)
 
 	return sbc
 }
@@ -354,15 +356,17 @@ func SBCUnmap(host int, cmd *api.SCSICommand) api.SAMStat {
  */
 func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		key    = ILLEGAL_REQUEST
-		asc    = ASC_INVALID_FIELD_IN_CDB
-		dev    = cmd.Device
-		scb    = cmd.SCB
-		opcode = api.SCSICommandType(scb[0])
-		lba    uint64
-		tl     uint32
-		err    error
+		key         = ILLEGAL_REQUEST
+		asc         = ASC_INVALID_FIELD_IN_CDB
+		dev         = cmd.Device
+		scb         = cmd.SCB
+		opcode      = api.SCSICommandType(scb[0])
+		lba         uint64
+		tl          uint32
+		err         error
+		totalBlocks uint64
 	)
+
 	if dev.Attrs.Removable && !dev.Attrs.Online {
 		key = NOT_READY
 		asc = ASC_MEDIUM_NOT_PRESENT
@@ -422,21 +426,22 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 	lba = getSCSIReadWriteOffset(scb)
 	tl = getSCSIReadWriteCount(scb)
 
+	// Calculate total blocks
+	totalBlocks = dev.Size >> dev.BlockShift
+	log.Debugf("SBCReadWrite: opcode=0x%x, lba=%d, tl=%d, totalBlocks=%d", opcode, lba, tl, totalBlocks)
+
 	// Verify that we are not doing i/o beyond the end-of-lun
-	if tl != 0 {
-		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_LBA_OUT_OF_RANGE) encounter: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
-			goto sense
-		}
-	} else {
-		if lba >= dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense data(ILLEGAL_REQUEST,ASC_LBA_OUT_OF_RANGE) encounter: lba: %d, size: %d", lba, dev.Size>>dev.BlockShift)
-			goto sense
-		}
+	// Even when transfer length is 0, we must validate the LBA is within range
+	if lba >= totalBlocks || lba+uint64(tl) < lba || lba+uint64(tl) > totalBlocks {
+		key = ILLEGAL_REQUEST
+		asc = ASC_LBA_OUT_OF_RANGE
+		log.Warnf("SBCReadWrite: LBA out of range (lba=%d, tl=%d, totalBlocks=%d)", lba, tl, totalBlocks)
+		goto sense
+	}
+
+	// If transfer length is 0, return GOOD status immediately (no data to transfer)
+	if tl == 0 {
+		return api.SAMStatGood
 	}
 
 	cmd.Offset = lba << dev.BlockShift
@@ -493,6 +498,120 @@ func SBCRelease(host int, cmd *api.SCSICommand) api.SAMStat {
 	}
 
 	return api.SAMStatGood
+}
+
+/*
+ * SBCCompareAndWrite Implements SCSI COMPARE AND WRITE command (0x89)
+ * The COMPARE AND WRITE command requests that the device server compare the specified
+ * logical block(s) with data transferred from the data-out buffer and, if they match,
+ * write the new data from the data-out buffer to the specified logical block(s).
+ *
+ * Reference : SBC3r35
+ * 5.3 - COMPARE AND WRITE
+ */
+func SBCCompareAndWrite(host int, cmd *api.SCSICommand) api.SAMStat {
+	var (
+		key             = ILLEGAL_REQUEST
+		asc             = ASC_INVALID_FIELD_IN_CDB
+		dev             = cmd.Device
+		scb             = cmd.SCB
+		lba             uint64
+		numBlocks       uint32
+		offset          uint64
+		blockSize       uint64
+		totalCompareLen uint64
+		expectedDataLen uint64
+		err             error
+		existingData    []byte
+		compareData     []byte
+		writeData       []byte
+	)
+
+	if dev.Attrs.Removable && !dev.Attrs.Online {
+		key = NOT_READY
+		asc = ASC_MEDIUM_NOT_PRESENT
+		goto sense
+	}
+
+	// We only support protection information type 0
+	if scb[1]&0xe0 != 0 {
+		key = ILLEGAL_REQUEST
+		asc = ASC_INVALID_FIELD_IN_CDB
+		goto sense
+	}
+
+	if dev.Attrs.Readonly || dev.Attrs.SWP {
+		key = DATA_PROTECT
+		asc = ASC_WRITE_PROTECT
+		goto sense
+	}
+
+	// Number of logical blocks (one byte: bits 0-7)
+	numBlocks = uint32(scb[13])
+	if numBlocks == 0 {
+		key = ILLEGAL_REQUEST
+		asc = ASC_INVALID_FIELD_IN_CDB
+		goto sense
+	}
+
+	lba = getSCSIReadWriteOffset(scb)
+
+	// Verify that we are not doing i/o beyond the end-of-lun
+	if lba+uint64(numBlocks) < lba || lba+uint64(numBlocks) > dev.Size>>dev.BlockShift {
+		key = ILLEGAL_REQUEST
+		asc = ASC_LBA_OUT_OF_RANGE
+		log.Warnf("COMPARE_AND_WRITE: lba out of range: lba: %d, num: %d, size: %d", lba, numBlocks, dev.Size>>dev.BlockShift)
+		goto sense
+	}
+
+	offset = lba << dev.BlockShift
+	blockSize = uint64(1 << dev.BlockShift)
+	totalCompareLen = uint64(numBlocks) * blockSize
+
+	// Data-out buffer contains: compare data followed by write data
+	// Total length should be 2 * numBlocks * blockSize
+	expectedDataLen = 2 * totalCompareLen
+	if uint64(cmd.OutSDBBuffer.Length) < expectedDataLen {
+		key = ILLEGAL_REQUEST
+		asc = ASC_INVALID_FIELD_IN_CDB
+		log.Warnf("COMPARE_AND_WRITE: data length too short: got %d, expected %d", cmd.OutSDBBuffer.Length, expectedDataLen)
+		goto sense
+	}
+
+	compareData = cmd.OutSDBBuffer.Buffer[:totalCompareLen]
+	writeData = cmd.OutSDBBuffer.Buffer[totalCompareLen:expectedDataLen]
+
+	// Read existing data from storage
+	existingData, err = dev.Storage.Read(int64(offset), int64(totalCompareLen))
+	if err != nil {
+		log.Errorf("COMPARE_AND_WRITE: failed to read data: %v", err)
+		key = MEDIUM_ERROR
+		asc = ASC_READ_ERROR
+		goto sense
+	}
+
+	// Compare data
+	if !bytes.Equal(existingData, compareData) {
+		key = MISCOMPARE
+		asc = ASC_MISCOMPARE_DURING_VERIFY_OPERATION
+		log.Warnf("COMPARE_AND_WRITE: data miscompare at LBA %d", lba)
+		goto sense
+	}
+
+	// Data matches, write new data
+	err = dev.Storage.Write(writeData, int64(offset))
+	if err != nil {
+		log.Errorf("COMPARE_AND_WRITE: failed to write data: %v", err)
+		key = MEDIUM_ERROR
+		asc = ASC_WRITE_ERROR
+		goto sense
+	}
+
+	return api.SAMStatGood
+
+sense:
+	BuildSenseData(cmd, key, asc)
+	return api.SAMStatCheckCondition
 }
 
 /*
@@ -558,13 +677,14 @@ sense:
  */
 func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		key = ILLEGAL_REQUEST
-		asc = ASC_INVALID_FIELD_IN_CDB
-		dev = cmd.Device
-		scb = cmd.SCB
-		lba uint64
-		tl  uint32
-		err error
+		key         = ILLEGAL_REQUEST
+		asc         = ASC_INVALID_FIELD_IN_CDB
+		dev         = cmd.Device
+		scb         = cmd.SCB
+		lba         uint64
+		tl          uint32
+		err         error
+		totalBlocks uint64
 	)
 	if dev.Attrs.Removable && !dev.Attrs.Online {
 		key = NOT_READY
@@ -579,28 +699,21 @@ func SBCVerify(host int, cmd *api.SCSICommand) api.SAMStat {
 		goto sense
 	}
 
-	if scb[1]&0x02 == 0 {
-		// no data compare with the media
-		return api.SAMStatGood
-	}
 	lba = getSCSIReadWriteOffset(scb)
 	tl = getSCSIReadWriteCount(scb)
 
 	// Verify that we are not doing i/o beyond the end-of-lun
-	if tl != 0 {
-		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
-			goto sense
-		}
-	} else {
-		if lba >= dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense")
-			goto sense
-		}
+	// Must check LBA range before BYTCHK early return per SBC spec
+	totalBlocks = dev.Size >> dev.BlockShift
+	if lba >= totalBlocks || lba+uint64(tl) < lba || lba+uint64(tl) > totalBlocks {
+		key = ILLEGAL_REQUEST
+		asc = ASC_LBA_OUT_OF_RANGE
+		goto sense
+	}
+
+	if scb[1]&0x02 == 0 {
+		// BYTCHK=0: no data compare with the media
+		return api.SAMStatGood
 	}
 
 	cmd.Offset = lba << dev.BlockShift
@@ -647,12 +760,13 @@ func SBCReadCapacity16(host int, cmd *api.SCSICommand) api.SAMStat {
 
 func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 	var (
-		key = ILLEGAL_REQUEST
-		asc = ASC_INVALID_FIELD_IN_CDB
-		dev = cmd.Device
-		scb = cmd.SCB
-		lba uint64
-		tl  uint32
+		key         = ILLEGAL_REQUEST
+		asc         = ASC_INVALID_FIELD_IN_CDB
+		dev         = cmd.Device
+		scb         = cmd.SCB
+		lba         uint64
+		tl          uint32
+		totalBlocks uint64
 	)
 	if dev.Attrs.Removable && !dev.Attrs.Online {
 		key = NOT_READY
@@ -674,20 +788,13 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 	lba = getSCSIReadWriteOffset(scb)
 	tl = getSCSIReadWriteCount(scb)
 	// Verify that we are not doing i/o beyond the end-of-lun
-	if tl != 0 {
-		if lba+uint64(tl) < lba || lba+uint64(tl) > dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense: lba: %d, tl: %d, size: %d", lba, tl, dev.Size>>dev.BlockShift)
-			goto sense
-		}
-	} else {
-		if lba >= dev.Size>>dev.BlockShift {
-			key = ILLEGAL_REQUEST
-			asc = ASC_LBA_OUT_OF_RANGE
-			log.Warnf("sense")
-			goto sense
-		}
+	totalBlocks = dev.Size >> dev.BlockShift
+	log.Warnf("DEBUG: dev.Size=%d, BlockShift=%d, totalBlocks=%d", dev.Size, dev.BlockShift, totalBlocks)
+	if lba >= totalBlocks || lba+uint64(tl) < lba || lba+uint64(tl) > totalBlocks {
+		key = ILLEGAL_REQUEST
+		asc = ASC_LBA_OUT_OF_RANGE
+		log.Warnf("sense: lba: %d, tl: %d, totalBlocks: %d", lba, tl, totalBlocks)
+		goto sense
 	}
 	return api.SAMStatGood
 sense:

@@ -93,6 +93,9 @@ func listTarget(cli *client.Client, opts api.TargetListOptions) error {
 	w := tabwriter.NewWriter(os.Stdout, 20, 1, 3, ' ', 0)
 	fmt.Fprintln(w, "TARGET NAME\tSTATE\tSESSIONS")
 	for _, tgt := range results {
+		if tgt == nil {
+			continue
+		}
 		status := "online"
 		if tgt.State == api.TargetReady {
 			status = "ready"
