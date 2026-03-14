@@ -380,7 +380,7 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 		return fmt.Errorf("initiator err, invalid request")
 	}
 
-	if existSess == nil && conn.loginParam.tsih != 0 &&
+	if existSess != nil && conn.loginParam.tsih != 0 &&
 		existSess.TSIH != conn.loginParam.tsih {
 		return fmt.Errorf("initiator err, no session")
 	}

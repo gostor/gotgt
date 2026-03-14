@@ -546,6 +546,12 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	if conn.loginParam.tgtNSG == FullFeaturePhase &&
 		conn.loginParam.tgtTrans {
 		conn.state = CONN_STATE_LOGIN_FULL
+		// Update maxRecvDataSegmentLength from the negotiated MaxXmitDataSegmentLength
+		// (which comes from the initiator's MaxRecvDataSegmentLength)
+		if negotiatedMaxXmit := conn.loginParam.sessionParam[ISCSI_PARAM_MAX_XMIT_DLENGTH].Value; negotiatedMaxXmit > 0 {
+			conn.maxRecvDataSegmentLength = uint32(negotiatedMaxXmit)
+			conn.maxSeqCount = conn.maxBurstLength / conn.maxRecvDataSegmentLength
+		}
 	} else {
 		conn.state = CONN_STATE_LOGIN
 	}

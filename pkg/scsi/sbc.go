@@ -789,7 +789,7 @@ func SBCGetLbaStatus(host int, cmd *api.SCSICommand) api.SAMStat {
 	tl = getSCSIReadWriteCount(scb)
 	// Verify that we are not doing i/o beyond the end-of-lun
 	totalBlocks = dev.Size >> dev.BlockShift
-	log.Warnf("DEBUG: dev.Size=%d, BlockShift=%d, totalBlocks=%d", dev.Size, dev.BlockShift, totalBlocks)
+	log.Debugf("dev.Size=%d, BlockShift=%d, totalBlocks=%d", dev.Size, dev.BlockShift, totalBlocks)
 	if lba >= totalBlocks || lba+uint64(tl) < lba || lba+uint64(tl) > totalBlocks {
 		key = ILLEGAL_REQUEST
 		asc = ASC_LBA_OUT_OF_RANGE
