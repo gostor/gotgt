@@ -409,7 +409,7 @@ type LUNMap map[uint64]*SCSILu
 
 type UnmapBlockDescriptor struct {
 	Offset uint64
-	TL     uint32
+	TL     uint64
 }
 
 type ReaderWriterAt interface {

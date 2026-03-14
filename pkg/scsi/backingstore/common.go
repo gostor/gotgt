@@ -159,6 +159,12 @@ func (bs *FileBackingStore) DataAdvise(offset, length int64, advise uint32) erro
 	return util.Fadvise(bs.file, offset, length, advise)
 }
 
-func (bs *FileBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
+func (bs *FileBackingStore) Unmap(descriptors []api.UnmapBlockDescriptor) error {
+	for _, desc := range descriptors {
+		zeros := make([]byte, desc.TL)
+		if _, err := bs.file.WriteAt(zeros, int64(desc.Offset)); err != nil {
+			return err
+		}
+	}
 	return nil
 }

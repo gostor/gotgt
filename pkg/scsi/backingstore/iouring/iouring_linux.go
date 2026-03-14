@@ -628,8 +628,14 @@ func (bs *IOUringBackingStore) DataAdvise(offset, length int64, advise uint32) e
 	return nil
 }
 
-// Unmap is a no-op for file-based storage
-func (bs *IOUringBackingStore) Unmap([]api.UnmapBlockDescriptor) error {
+// Unmap zeros out the specified blocks
+func (bs *IOUringBackingStore) Unmap(descriptors []api.UnmapBlockDescriptor) error {
+	for _, desc := range descriptors {
+		zeros := make([]byte, desc.TL)
+		if _, err := bs.file.WriteAt(zeros, int64(desc.Offset)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

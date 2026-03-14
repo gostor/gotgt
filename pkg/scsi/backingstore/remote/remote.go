@@ -113,6 +113,10 @@ func (bs *RemBackingStore) DataSync(offset, length int64) (err error) {
 }
 
 func (bs *RemBackingStore) Unmap(bd []api.UnmapBlockDescriptor) (err error) {
-	//_, err = bs.RemBs.Unmap(int64(bd[0].Offset), int64(bd[0].TL))
+	for _, desc := range bd {
+		if _, err = bs.RemBs.Unmap(int64(desc.Offset), int64(desc.TL)); err != nil {
+			return
+		}
+	}
 	return
 }
