@@ -433,7 +433,9 @@ func SBCReadWrite(host int, cmd *api.SCSICommand) api.SAMStat {
 
 	// Calculate total blocks
 	totalBlocks = dev.Size >> dev.BlockShift
-	log.Debugf("SBCReadWrite: opcode=0x%x, lba=%d, tl=%d, totalBlocks=%d", opcode, lba, tl, totalBlocks)
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("SBCReadWrite: opcode=0x%x, lba=%d, tl=%d, totalBlocks=%d", opcode, lba, tl, totalBlocks)
+	}
 
 	// Verify that we are not doing i/o beyond the end-of-lun
 	// Even when transfer length is 0, we must validate the LBA is within range
