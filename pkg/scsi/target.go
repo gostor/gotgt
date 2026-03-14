@@ -17,8 +17,8 @@ limitations under the License.
 package scsi
 
 import (
+	"encoding/binary"
 	"fmt"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/gostor/gotgt/pkg/api"
@@ -97,7 +97,7 @@ func RemoveITNexus(target *api.SCSITarget, itnexus *api.ITNexus) {
 
 func deviceReserve(cmd *api.SCSICommand) error {
 	var lu *api.SCSILu
-	lun := *(*uint64)(unsafe.Pointer(&cmd.Lun))
+	lun := binary.LittleEndian.Uint64(cmd.Lun[:])
 
 	for tgtLUN, lunDev := range cmd.Target.Devices {
 		if tgtLUN == lun {

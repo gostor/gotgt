@@ -35,6 +35,13 @@ func Do(ctx context.Context, client transport.Sender, req *http.Request) (*http.
 		client = http.DefaultClient
 	}
 
+	// If the context is already done, return early.
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	// Request cancelation changed in Go 1.5, see canceler.go and canceler_go14.go.
 	cancel := canceler(client, req)
 

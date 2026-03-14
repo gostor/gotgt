@@ -14,7 +14,10 @@ import (
 )
 
 func canceler(client transport.Sender, req *http.Request) func() {
-	// TODO(djd): Respect any existing value of req.Cancel.
+	// Respect any existing value of req.Cancel.
+	if req.Cancel != nil {
+		return nop
+	}
 	ch := make(chan struct{})
 	req.Cancel = ch
 
