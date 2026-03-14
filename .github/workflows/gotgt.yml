@@ -147,3 +147,85 @@ jobs:
         sudo mkdir -p /var/tmp/test
         sudo mount /dev/sdb1 /var/tmp/test
         sudo ls -lh /var/tmp/test/
+
+    - name: CLI management test
+      run: |
+        GOTGT=./_output/cmd/bin/gotgt
+
+        echo "=== CLI Management Tests ==="
+
+        # 1. List targets - should show the target from config
+        echo "--- list target ---"
+        $GOTGT list target | tee /tmp/list_target.out
+        grep -q "${{env.TARGET}}" /tmp/list_target.out
+        echo "PASS: list target shows configured target"
+
+        # 2. List LUs for the existing target
+        echo "--- list lu ---"
+        $GOTGT list lu --target "${{env.TARGET}}" | tee /tmp/list_lu.out
+        grep -q "LUN" /tmp/list_lu.out
+        echo "PASS: list lu returns LU table"
+
+        # 3. List TPGTs for the existing target
+        echo "--- list tpgt ---"
+        $GOTGT list tpgt --target "${{env.TARGET}}" | tee /tmp/list_tpgt.out
+        grep -q "TPGT" /tmp/list_tpgt.out
+        echo "PASS: list tpgt returns TPGT table"
+
+        # 4. Create a new target via CLI
+        echo "--- create target ---"
+        NEW_TARGET="iqn.2016-09.com.gotgt.gostor:ci_test_tgt"
+        $GOTGT create target --name "$NEW_TARGET" | tee /tmp/create_target.out
+        grep -q "successfully created" /tmp/create_target.out
+        echo "PASS: create target succeeded"
+
+        # 5. Verify new target appears in list
+        echo "--- verify new target in list ---"
+        $GOTGT list target | tee /tmp/list_target2.out
+        grep -q "$NEW_TARGET" /tmp/list_target2.out
+        echo "PASS: new target visible in list"
+
+        # 6. Create a new LU on the new target
+        echo "--- create lu ---"
+        dd if=/dev/zero of=/var/tmp/ci_disk.img bs=1024 count=10240
+        $GOTGT create lu --target "$NEW_TARGET" --lun 0 --device-id 2000 --path "file:/var/tmp/ci_disk.img" --block-shift 9 | tee /tmp/create_lu.out
+        grep -q "successfully created" /tmp/create_lu.out
+        echo "PASS: create lu succeeded"
+
+        # 7. Verify new LU appears in list
+        echo "--- verify new lu in list ---"
+        $GOTGT list lu --target "$NEW_TARGET" | tee /tmp/list_lu2.out
+        grep -q "/var/tmp/ci_disk.img" /tmp/list_lu2.out
+        echo "PASS: new LU visible in list"
+
+        # 8. Remove the LU
+        echo "--- remove lu ---"
+        $GOTGT rm lu --target "$NEW_TARGET" --lun 0 | tee /tmp/rm_lu.out
+        grep -q "successfully removed" /tmp/rm_lu.out
+        echo "PASS: remove lu succeeded"
+
+        # 9. Verify LU is gone
+        echo "--- verify lu removed ---"
+        $GOTGT list lu --target "$NEW_TARGET" | tee /tmp/list_lu3.out
+        if grep -q "/var/tmp/ci_disk.img" /tmp/list_lu3.out; then
+          echo "FAIL: LU still present after removal"
+          exit 1
+        fi
+        echo "PASS: LU no longer in list"
+
+        # 10. Remove the target
+        echo "--- remove target ---"
+        $GOTGT rm target --name "$NEW_TARGET" --force | tee /tmp/rm_target.out
+        grep -q "successfully removed" /tmp/rm_target.out
+        echo "PASS: remove target succeeded"
+
+        # 11. Verify target is gone
+        echo "--- verify target removed ---"
+        $GOTGT list target | tee /tmp/list_target3.out
+        if grep -q "$NEW_TARGET" /tmp/list_target3.out; then
+          echo "FAIL: target still present after removal"
+          exit 1
+        fi
+        echo "PASS: target no longer in list"
+
+        echo "=== All CLI Management Tests Passed ==="
