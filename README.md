@@ -116,15 +116,68 @@ On Linux systems with kernel 5.1 or later, gotgt can use io_uring for high-perfo
 **Backend Type Options:**
 - `file` - Standard file I/O (default)
 - `iouring` - io_uring-based I/O (Linux 5.1+)
+- `s3` - S3-compatible object storage (AWS S3, MinIO, etc.)
+- `ceph-rbd` - Ceph RADOS Block Device (Linux, requires Ceph libraries)
 
-### 3. Object Pooling
+### 3. S3-Compatible Object Storage Backend
+
+gotgt supports using S3-compatible object storage (AWS S3, MinIO, Ceph RGW, etc.) as backend storage. The virtual block device is divided into fixed-size chunks, each stored as an independent S3 object. This enables iSCSI targets backed by cloud or distributed object storage.
+
+**Features:**
+- Chunked storage strategy with configurable chunk size (default 4 MiB)
+- Sparse device support (unwritten chunks are treated as zeros)
+- Concurrent multi-chunk reads and writes using goroutines
+- Per-chunk locking for safe read-modify-write operations
+- Compatible with AWS S3, MinIO, and other S3-compatible services
+- AWS SDK v2 default credential chain (env vars, IAM roles, shared config)
+
+**Path Format:** `s3:bucket/prefix`
+
+**Configuration:**
+```json
+{
+    "storages": [
+        {
+            "deviceID": 2000,
+            "path": "s3:my-bucket/iscsi/disk0",
+            "online": true,
+            "backendType": "s3",
+            "blockShift": 9,
+            "deviceSize": 1073741824,
+            "s3ChunkSize": 4194304,
+            "s3Endpoint": "http://localhost:9000",
+            "s3ForcePathStyle": true
+        }
+    ]
+}
+```
+
+**Configuration Fields:**
+| Field | Description | Default |
+|-------|-------------|---------|
+| `deviceSize` | Virtual device size in bytes | Required for new devices |
+| `s3ChunkSize` | Chunk size in bytes | 4194304 (4 MiB) |
+| `s3Endpoint` | Custom S3 endpoint URL | AWS default |
+| `s3Region` | AWS region | From credential chain |
+| `s3ForcePathStyle` | Use path-style addressing (required for MinIO) | false |
+
+**Credentials:** Set via environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) or AWS shared config files.
+
+**Performance Considerations:**
+- S3 latency (~5-50ms per operation) is higher than local disk. Best suited for archival, disaster recovery, or cloud-native deployments where capacity and durability are prioritized over latency.
+- Reads and writes spanning multiple chunks are parallelized automatically.
+- Full-chunk writes bypass read-modify-write, so aligning I/O to chunk boundaries improves write throughput.
+
+For a complete example, see [config-s3.json](./examples/config-s3.json).
+
+### 4. Object Pooling
 
 The iSCSI protocol layer uses sync.Pool for efficient object reuse:
 - ISCSICommand object pooling to reduce GC pressure
 - Buffer pooling for protocol header processing
 - NUMA-aware buffer allocation for data operations
 
-### 4. Combined High-Performance Configuration Example
+### 5. Combined High-Performance Configuration Example
 
 For maximum performance, combine both NUMA and io_uring:
 
@@ -163,14 +216,14 @@ For maximum performance, combine both NUMA and io_uring:
 }
 ```
 
-### 5. Performance Tuning Tips
+### 6. Performance Tuning Tips
 
 1. **NUMA Optimization**: On multi-socket systems, ensure the iSCSI target threads run on the same NUMA node as the storage devices
 2. **Queue Depth**: For NVMe or fast SSDs, increase `ioUringQueueDepth` to 4096 or higher
 3. **Buffer Sizes**: Match `numaBufferSize` to your typical I/O size (e.g., 64KB, 128KB, 256KB)
 4. **CPU Pinning**: Use `numaNode` to pin storage backends to specific NUMA nodes
 
-### 6. Benchmarking
+### 7. Benchmarking
 
 Use fio to benchmark performance:
 ```bash

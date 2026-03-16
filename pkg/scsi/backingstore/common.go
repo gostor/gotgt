@@ -63,7 +63,7 @@ func parseStoragePath(path string) (backendType, filePath string) {
 		possibleType := path[:idx]
 		// Check if it's a known backend type
 		switch possibleType {
-		case "file", "iouring", "ceph", "null", "RemBs":
+		case "file", "iouring", "ceph", "null", "RemBs", "s3":
 			return possibleType, path[idx+1:]
 		}
 	}

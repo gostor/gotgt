@@ -114,6 +114,16 @@ type BackendStorage struct {
 	NumaNode int `json:"numaNode,omitempty"`
 	// IoUringQueueDepth specifies the io_uring queue depth (0 for default)
 	IoUringQueueDepth uint32 `json:"ioUringQueueDepth,omitempty"`
+	// DeviceSize specifies the virtual device size in bytes (used by S3 backend)
+	DeviceSize uint64 `json:"deviceSize,omitempty"`
+	// S3ChunkSize specifies the chunk size in bytes for S3 backend (default 4MiB)
+	S3ChunkSize int64 `json:"s3ChunkSize,omitempty"`
+	// S3Endpoint specifies a custom S3 endpoint URL (for MinIO, etc.)
+	S3Endpoint string `json:"s3Endpoint,omitempty"`
+	// S3Region specifies the AWS region
+	S3Region string `json:"s3Region,omitempty"`
+	// S3ForcePathStyle uses path-style addressing (required for MinIO)
+	S3ForcePathStyle bool `json:"s3ForcePathStyle,omitempty"`
 }
 
 type ISCSIPortalInfo struct {
