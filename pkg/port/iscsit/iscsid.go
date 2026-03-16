@@ -357,6 +357,7 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 			s.rxHandler(conn)
 			if conn.state == CONN_STATE_CLOSE {
 				log.Warningf("iscsi connection[%d] closed", conn.cid)
+				s.removeConnectionFromSession(conn)
 				conn.close()
 				IPMutex.Lock()
 				remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
@@ -373,6 +374,7 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 	}
 	if conn.state == CONN_STATE_CLOSE {
 		log.Warningf("iscsi connection[%d] closed", conn.cid)
+		s.removeConnectionFromSession(conn)
 		conn.close()
 		IPMutex.Lock()
 		remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
@@ -491,7 +493,7 @@ func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
 		case OpLogoutReq:
 			log.Debug("OpLogoutReq")
 			s.setClientStatus(false)
-			if err := iscsiExecLogout(conn); err != nil {
+			if err := s.iscsiExecLogout(conn); err != nil {
 				log.Warningf("set connection to close")
 				conn.state = CONN_STATE_CLOSE
 			}
@@ -559,7 +561,7 @@ func (s *ISCSITargetDriver) iscsiExecLogin(conn *iscsiConnection) error {
 	return conn.buildRespPackage(OpLoginResp, nil)
 }
 
-func iscsiExecLogout(conn *iscsiConnection) error {
+func (s *ISCSITargetDriver) iscsiExecLogout(conn *iscsiConnection) error {
 	log.Infof("Logout request received from initiator: %v", conn.conn.RemoteAddr().String())
 	cmd := conn.req
 	conn.resp = &ISCSICommand{
@@ -573,6 +575,7 @@ func iscsiExecLogout(conn *iscsiConnection) error {
 	} else {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
 		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
+		s.removeConnectionFromSession(conn)
 	}
 	IPMutex.Lock()
 	remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
@@ -1018,7 +1021,7 @@ func (s *ISCSITargetDriver) scsiCommandHandler(conn *iscsiConnection) (err error
 		s.setClientStatus(false)
 		conn.txTask = &iscsiTask{conn: conn, cmd: conn.req, tag: conn.req.TaskTag}
 		conn.txIOState = IOSTATE_TX_BHS
-		iscsiExecLogout(conn)
+		s.iscsiExecLogout(conn)
 	case OpTextReq:
 		err = fmt.Errorf("Cannot handle yet %s", opCodeMap[conn.req.OpCode])
 		log.Error(err)

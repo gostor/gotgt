@@ -334,6 +334,27 @@ func (s *ISCSITargetDriver) UnBindISCSISession(sess *ISCSISession) {
 	defer target.SessionsRWMutex.Unlock()
 	delete(target.Sessions, sess.TSIH)
 	scsi.RemoveITNexus(sess.Target.SCSITarget, sess.ITNexus)
+	s.ReleaseTSIH(sess.TSIH)
+	log.Infof("session %x unbound from target %s", sess.TSIH, target.SCSITarget.Name)
+}
+
+// removeConnectionFromSession removes a connection from its session.
+// If the session has no remaining connections, the session is unbound.
+func (s *ISCSITargetDriver) removeConnectionFromSession(conn *iscsiConnection) {
+	sess := conn.session
+	if sess == nil {
+		return
+	}
+
+	sess.ConnectionsRWMutex.Lock()
+	delete(sess.Connections, conn.cid)
+	remaining := len(sess.Connections)
+	sess.ConnectionsRWMutex.Unlock()
+
+	if remaining == 0 {
+		s.UnBindISCSISession(sess)
+	}
+	conn.session = nil
 }
 
 func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
