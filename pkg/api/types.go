@@ -407,6 +407,9 @@ type SCSILu struct {
 
 	PerformCommand CommandFunc
 	FinishCommand  func(*SCSITarget, *SCSICommand)
+
+	// BackendConfig holds backend-specific configuration (e.g., *config.BackendStorage)
+	BackendConfig interface{} `json:"-"`
 }
 
 type LUNMap map[uint64]*SCSILu

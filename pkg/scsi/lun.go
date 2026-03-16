@@ -46,7 +46,7 @@ func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
 
 		// Validate backend type, default to file if unknown
 		switch backendType {
-		case "file", "iouring", "ceph", "null", "RemBs":
+		case "file", "iouring", "ceph", "null", "RemBs", "s3":
 			// Valid types
 		default:
 			// Unknown type, treat entire path as file path
@@ -67,6 +67,7 @@ func NewSCSILu(bs *config.BackendStorage) (*api.SCSILu, error) {
 		Storage:        backing,
 		BlockShift:     bs.BlockShift,
 		UUID:           bs.DeviceID,
+		BackendConfig:  bs,
 	}
 
 	err = backing.Open(lu, backendPath)

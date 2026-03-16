@@ -1,0 +1,31 @@
+{
+    "storages": [
+        {
+            "deviceID": 2000,
+            "path": "s3:gotgt-bucket/iscsi/disk0",
+            "online": true,
+            "backendType": "s3",
+            "blockShift": 9,
+            "deviceSize": 1073741824,
+            "s3ChunkSize": 4194304,
+            "s3Endpoint": "http://localhost:9000",
+            "s3ForcePathStyle": true
+        }
+    ],
+    "iscsiportals": [
+        {
+            "id": 0,
+            "portal": "127.0.0.1:3260"
+        }
+    ],
+    "iscsitargets": {
+        "iqn.2016-09.com.gotgt.gostor:s3-target": {
+            "tpgts": {
+                "1": [0]
+            },
+            "luns": {
+                "1": 2000
+            }
+        }
+    }
+}

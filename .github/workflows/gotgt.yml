@@ -39,6 +39,9 @@ jobs:
     - name: Unit Test
       run: go test -v ./pkg/... ./mock/...
 
+    - name: S3 Backend Store Test
+      run: go test -tags s3integration -v ./pkg/scsi/backingstore/s3store/
+
     - name: Function test
       run: |
         dd if=/dev/zero of=/var/tmp/disk.img bs=1024 count=102400
