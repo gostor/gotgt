@@ -330,10 +330,17 @@ func (s *ISCSITargetDriver) LookupISCSISession(tgtName string, iniName string, i
 
 func (s *ISCSITargetDriver) UnBindISCSISession(sess *ISCSISession) {
 	target := sess.Target
+	if target == nil {
+		// Discovery sessions have no target; just release the TSIH.
+		s.ReleaseTSIH(sess.TSIH)
+		return
+	}
 	target.SessionsRWMutex.Lock()
 	defer target.SessionsRWMutex.Unlock()
 	delete(target.Sessions, sess.TSIH)
-	scsi.RemoveITNexus(sess.Target.SCSITarget, sess.ITNexus)
+	if sess.ITNexus != nil {
+		scsi.RemoveITNexus(target.SCSITarget, sess.ITNexus)
+	}
 	s.ReleaseTSIH(sess.TSIH)
 	log.Infof("session %x unbound from target %s", sess.TSIH, target.SCSITarget.Name)
 }

@@ -376,12 +376,19 @@ func (s *ISCSITargetDriver) handler(events byte, conn *iscsiConnection) {
 }
 
 func (s *ISCSITargetDriver) clearHostIP(conn *iscsiConnection) {
+	if conn.conn == nil {
+		return
+	}
 	IPMutex.Lock()
-	remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
+	defer IPMutex.Unlock()
+	addr := conn.conn.RemoteAddr()
+	if addr == nil {
+		return
+	}
+	remoteIP := strings.Split(addr.String(), ":")[0]
 	if CurrentHostIP == remoteIP {
 		CurrentHostIP = ""
 	}
-	IPMutex.Unlock()
 }
 
 func (s *ISCSITargetDriver) rxHandler(conn *iscsiConnection) {
