@@ -88,7 +88,8 @@ type iscsiConnection struct {
 	rxTask *iscsiTask
 	txTask *iscsiTask
 
-	readLock *sync.RWMutex
+	readLock    *sync.RWMutex
+	cleanupOnce sync.Once
 }
 
 type taskState int

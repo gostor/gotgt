@@ -330,10 +330,41 @@ func (s *ISCSITargetDriver) LookupISCSISession(tgtName string, iniName string, i
 
 func (s *ISCSITargetDriver) UnBindISCSISession(sess *ISCSISession) {
 	target := sess.Target
+	if target == nil {
+		// Discovery sessions have no target; just release the TSIH.
+		s.ReleaseTSIH(sess.TSIH)
+		return
+	}
 	target.SessionsRWMutex.Lock()
 	defer target.SessionsRWMutex.Unlock()
 	delete(target.Sessions, sess.TSIH)
-	scsi.RemoveITNexus(sess.Target.SCSITarget, sess.ITNexus)
+	if sess.ITNexus != nil {
+		scsi.RemoveITNexus(target.SCSITarget, sess.ITNexus)
+	}
+	s.ReleaseTSIH(sess.TSIH)
+	log.Infof("session %x unbound from target %s", sess.TSIH, target.SCSITarget.Name)
+}
+
+// removeConnectionFromSession removes a connection from its session.
+// If the session has no remaining connections, the session is unbound.
+// This is safe to call concurrently; cleanup runs at most once per connection.
+func (s *ISCSITargetDriver) removeConnectionFromSession(conn *iscsiConnection) {
+	conn.cleanupOnce.Do(func() {
+		sess := conn.session
+		if sess == nil {
+			return
+		}
+
+		sess.ConnectionsRWMutex.Lock()
+		delete(sess.Connections, conn.cid)
+		remaining := len(sess.Connections)
+		sess.ConnectionsRWMutex.Unlock()
+
+		if remaining == 0 {
+			s.UnBindISCSISession(sess)
+		}
+		conn.session = nil
+	})
 }
 
 func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
@@ -412,7 +443,13 @@ func (s *ISCSITargetDriver) BindISCSISession(conn *iscsiConnection) error {
 		if conn.loginParam.tsih == ISCSI_UNSPEC_TSIH {
 			log.Infof("Session Reinstatement initiator name:%v,target name:%v,ISID:0x%x",
 				conn.loginParam.initiator, conn.loginParam.target, conn.loginParam.isid)
-			newSess, err = s.ReInstatement(existConn.session, conn)
+			if existConn != nil {
+				newSess, err = s.ReInstatement(existConn.session, conn)
+			} else {
+				// Old connection already closed; unbind the stale session and create new
+				s.UnBindISCSISession(existSess)
+				newSess, err = s.NewISCSISession(conn)
+			}
 			if err != nil {
 				return err
 			}
