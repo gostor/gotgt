@@ -575,8 +575,9 @@ func (s *ISCSITargetDriver) iscsiExecLogout(conn *iscsiConnection) error {
 	} else {
 		conn.resp.ExpCmdSN = conn.session.ExpCmdSN
 		conn.resp.MaxCmdSN = conn.session.ExpCmdSN + conn.session.MaxQueueCommand
-		s.removeConnectionFromSession(conn)
 	}
+	// Session cleanup is deferred to CONN_STATE_CLOSE in handler(),
+	// because the logout response must be sent before the session is removed.
 	IPMutex.Lock()
 	remoteIP := strings.Split(conn.conn.RemoteAddr().String(), ":")[0]
 	if CurrentHostIP == remoteIP {
